@@ -22,6 +22,10 @@
 #include <linux/interrupt.h>
 #include <linux/version.h>
 #include <linux/soc/qcom/msm_mmrm.h>
+enum core_gdsc_dest {
+	TO_SW_CTRL = 0x0,
+	TO_HW_CTRL = 0x1
+};
 
 #define HFI_MASK_QHDR_TX_TYPE			0xFF000000
 #define HFI_MASK_QHDR_RX_TYPE			0x00FF0000
@@ -151,6 +155,12 @@ struct cvp_iface_q_info {
 /* Regular set helpers */
 #define iris_hfi_for_each_regulator(__device, __rinfo) \
 	iris_hfi_for_each_thing(__device, __rinfo, regulator)
+
+#define iris_hfi_for_each_pwr_domain(__device, __pdinfo) \
+	iris_hfi_for_each_thing(__device, __pdinfo, pd)
+
+#define iris_hfi_for_each_pwr_domain_reverse(__device, __pdinfo) \
+	iris_hfi_for_each_thing_reverse(__device, __pdinfo, pd)
 
 #define iris_hfi_for_each_regulator_reverse(__device, __rinfo) \
 	iris_hfi_for_each_thing_reverse(__device, __rinfo, regulator)
