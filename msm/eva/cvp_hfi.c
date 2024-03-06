@@ -5682,6 +5682,7 @@ static int __power_on_controller_v1(struct iris_hfi_device *device)
 	}
 
 	dprintk(CVP_PWR, "EVA controller powered on\n");
+	CVPKERNEL_ATRACE_END("__power_on_controller_v1");
 	return 0;
 
 fail_enable_freerun:

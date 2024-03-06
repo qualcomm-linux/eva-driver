@@ -546,8 +546,10 @@ static int cvp_populate_fences( struct eva_kmd_hfi_packet *in_pkt,
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	CVPKERNEL_ATRACE_BEGIN("cvp_populate_fences");
 
-	if (!offset || !num)
+	if (!offset || !num) {
+		CVPKERNEL_ATRACE_END("cvp_populate_fences");
 		return 0;
+	}
 
 	if (offset < (sizeof(struct cvp_hfi_cmd_session_hdr)/sizeof(u32))) {
 		dprintk(CVP_ERR, "%s: Incorrect offset in cmd %d\n", __func__, offset);
@@ -702,6 +704,7 @@ fence_cmd_queue:
 
 	wake_up(&inst->fence_cmd_queue.wq);
 
+	CVPKERNEL_ATRACE_END("cvp_populate_fences");
 	return fence_cnt;
 
 free_exit:
