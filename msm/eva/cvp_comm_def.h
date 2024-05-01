@@ -25,6 +25,8 @@ enum queue_state {
 	QUEUE_INVALID,
 };
 
+#define TEMP_WORKAROUND
+
 #ifdef CONFIG_EVA_TVM
 
 #else	/* LA target starts here */

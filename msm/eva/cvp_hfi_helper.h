@@ -301,10 +301,12 @@ struct cvp_hfi_cmd_session_set_property_packet {
 };
 
 struct cvp_hfi_client {
-	u32 transaction_id;
 	u32 data1;
 	u32 data2;
+	u32 data3;
+	u32 data4;
 	u64 kdata;
+	u64 transaction_id;
 	u32 reserved1;
 	u32 reserved2;
 } __packed;
@@ -340,15 +342,26 @@ struct cvp_session_release_buffers_packet {
 	u32 buffer_idx;
 } __packed;
 
-struct cvp_hfi_cmd_session_hdr {
+struct cvp_hfi_header_type {
 	u32 size;
 	u32 packet_type;
 	u32 session_id;
 	struct cvp_hfi_client client_data;
 	u32 stream_idx;
+	u32 packet_crc;
+} __packed;
+
+struct cvp_hfi_cmd_session_hdr {
+	struct cvp_hfi_header_type header;
 } __packed;
 
 struct cvp_hfi_msg_session_hdr {
+	struct cvp_hfi_header_type header;
+	u32 error_type;
+} __packed;
+
+#ifdef TEMP_WORKAROUND
+struct cvp_hfi_msg_session_hdr_old_format {
 	u32 size;
 	u32 packet_type;
 	u32 session_id;
@@ -356,13 +369,11 @@ struct cvp_hfi_msg_session_hdr {
 	struct cvp_hfi_client client_data;
 	u32 stream_idx;
 } __packed;
+#endif
 
 struct cvp_hfi_dumpmsg_session_hdr {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
+	struct cvp_hfi_header_type header;
 	u32 error_type;
-	struct cvp_hfi_client client_data;
 	u32 dump_offset;
 	u32 dump_size;
 } __packed;
@@ -383,12 +394,8 @@ enum hfi_hw_thread {
 };
 
 struct cvp_hfi_msg_session_hdr_ext {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
+	struct cvp_hfi_header_type header;
 	u32 error_type;
-	struct cvp_hfi_client client_data;
-	u32 stream_idx;
 	u32 busy_cycles;
 	u32 total_cycles;
 	u32 hw_cycles[HFI_MAX_HW_THREADS][HFI_MAX_HW_ACTIVATIONS_PER_FRAME];

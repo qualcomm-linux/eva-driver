@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitops.h>
@@ -15,6 +15,7 @@
 #include "msm_cvp_debug.h"
 #include "cvp_hfi.h"
 #include "msm_cvp_common.h"
+#include "cvp_core_hfi.h"
 
 extern struct msm_cvp_drv *cvp_driver;
 
@@ -319,10 +320,11 @@ static int hfi_process_session_abort_done(u32 device_id,
 static int hfi_process_session_set_buf_done(u32 device_id,
 		void *hdr, struct msm_cvp_cb_info *info)
 {
-	struct cvp_hfi_msg_session_hdr *pkt =
-			(struct cvp_hfi_msg_session_hdr *)hdr;
+	//TEMP_WORKAROUND
+	struct cvp_hfi_msg_session_hdr_old_format *pkt =
+			(struct cvp_hfi_msg_session_hdr_old_format *)hdr;
 	struct msm_cvp_cb_cmd_done cmd_done = {0};
-	unsigned int pkt_size = get_msg_size(pkt);
+	unsigned int pkt_size = sizeof(struct cvp_hfi_msg_session_hdr_old_format);
 
 	if (!pkt || pkt->size < pkt_size) {
 		dprintk(CVP_ERR, "bad packet/packet size %d\n",
@@ -333,8 +335,8 @@ static int hfi_process_session_set_buf_done(u32 device_id,
 			pkt->session_id);
 
 	cmd_done.device_id = device_id;
-	cmd_done.session_id = (void *)(uintptr_t)get_msg_session_id(pkt);
-	cmd_done.status = hfi_map_err_status(get_msg_errorcode(pkt));
+	cmd_done.session_id = (void *)(uintptr_t)pkt->session_id;
+	cmd_done.status = hfi_map_err_status(pkt->error_type);
 	if (cmd_done.status)
 		dprintk(CVP_ERR, "%s: status %#x hfi type %#x err %#x\n",
 			__func__, cmd_done.status, pkt->packet_type, pkt->error_type);
@@ -440,10 +442,11 @@ static int hfi_process_session_stop_done(u32 device_id,
 static int hfi_process_session_rel_buf_done(u32 device_id,
 		void *hdr, struct msm_cvp_cb_info *info)
 {
-	struct cvp_hfi_msg_session_hdr *pkt =
-			(struct cvp_hfi_msg_session_hdr *)hdr;
+	//TEMP_WORKAROUND
+	struct cvp_hfi_msg_session_hdr_old_format *pkt =
+			(struct cvp_hfi_msg_session_hdr_old_format *)hdr;
 	struct msm_cvp_cb_cmd_done cmd_done = {0};
-	unsigned int pkt_size = get_msg_size(pkt);
+	unsigned int pkt_size = sizeof(struct cvp_hfi_msg_session_hdr_old_format);
 
 	if (!pkt || pkt->size < pkt_size) {
 		dprintk(CVP_ERR, "bad packet/packet size %d\n",
@@ -454,8 +457,8 @@ static int hfi_process_session_rel_buf_done(u32 device_id,
 			pkt->session_id);
 
 	cmd_done.device_id = device_id;
-	cmd_done.session_id = (void *)(uintptr_t)get_msg_session_id(pkt);
-	cmd_done.status = hfi_map_err_status(get_msg_errorcode(pkt));
+	cmd_done.session_id = (void *)(uintptr_t)pkt->session_id;
+	cmd_done.status = hfi_map_err_status(pkt->error_type);
 	if (cmd_done.status)
 		dprintk(CVP_ERR, "%s: status %#x hfi type %#x err %#x\n",
 			__func__, cmd_done.status, pkt->packet_type, pkt->error_type);
@@ -517,8 +520,8 @@ static int hfi_process_session_dump_notify(u32 device_id,
 	if (!pkt) {
 		dprintk(CVP_ERR, "%s: invalid param\n", __func__);
 		return -EINVAL;
-	} else if (pkt->size > sizeof(struct cvp_hfi_dumpmsg_session_hdr)) {
-		dprintk(CVP_ERR, "%s: bad_pkt_size %d\n", __func__, pkt->size);
+	} else if (pkt->header.size > sizeof(struct cvp_hfi_dumpmsg_session_hdr)) {
+		dprintk(CVP_ERR, "%s: bad_pkt_size %d\n", __func__, pkt->header.size);
 		return -E2BIG;
 	}
 	session_id = get_msg_session_id(pkt);
@@ -535,11 +538,11 @@ static int hfi_process_session_dump_notify(u32 device_id,
 	dprintk(CVP_SESS, "RECEIVED: SESSION_DUMP[%x]\n", session_id);
 
 	cmd_done.device_id = device_id;
-	cmd_done.session_id = (void *)(uintptr_t)pkt->session_id;
+	cmd_done.session_id = (void *)(uintptr_t)pkt->header.session_id;
 	cmd_done.status = hfi_map_err_status(pkt->error_type);
 	if (cmd_done.status)
 		dprintk(CVP_ERR, "%s: status %#x hfi type %#x err %#x\n",
-			__func__, cmd_done.status, pkt->packet_type, pkt->error_type);
+			__func__, cmd_done.status, pkt->header.packet_type, pkt->error_type);
 	cmd_done.size = 0;
 
 	info->response_type = HAL_SESSION_DUMP_NOTIFY;
@@ -556,26 +559,28 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	struct cvp_session_msg *sess_msg;
 	struct msm_cvp_inst *inst = NULL;
 	struct msm_cvp_core *core;
+	struct iris_hfi_device *dev;
 	unsigned int session_id;
 	struct cvp_session_queue *sq;
 
 	if (!pkt) {
 		dprintk(CVP_ERR, "%s: invalid param\n", __func__);
 		return -EINVAL;
-	} else if (pkt->size > MAX_HFI_PKT_SIZE * sizeof(unsigned int)) {
-		dprintk(CVP_ERR, "%s: bad_pkt_size %d\n", __func__, pkt->size);
+	} else if (pkt->header.size > MAX_HFI_PKT_SIZE * sizeof(unsigned int)) {
+		dprintk(CVP_ERR, "%s: bad_pkt_size %d\n", __func__, pkt->header.size);
 		return -E2BIG;
 	}
 	session_id = get_msg_session_id(pkt);
 	core = cvp_driver->cvp_core;
 	inst = cvp_get_inst_from_id(core, session_id);
+	dev = core->dev_ops->hfi_device_data;
 
 	if (!inst) {
 		dprintk(CVP_ERR, "%s: invalid session\n", __func__);
 		return -EINVAL;
 	}
 
-	if (pkt->client_data.kdata & FENCE_BIT)
+	if (pkt->header.client_data.kdata & FENCE_BIT)
 		sq = &inst->session_queue_fence;
 	else
 		sq = &inst->session_queue;
@@ -590,7 +595,7 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 
 	dprintk(CVP_HFI,
 		"%s: Received msg %x cmd_done.status=%d sessionid=%x\n",
-		__func__, pkt->packet_type,
+		__func__, pkt->header.packet_type,
 		hfi_map_err_status(get_msg_errorcode(pkt)), session_id);
 
 	spin_lock(&sq->lock);
@@ -601,6 +606,11 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	list_add_tail(&sess_msg->node, &sq->msgs);
 	sq->msg_count++;
 	spin_unlock(&sq->lock);
+
+	if (get_msg_errorcode(pkt) == HFI_ERR_SESSION_HW_HANG_DETECTED) {
+		dprintk(CVP_ERR, "%s Hardware Hang Observed:\n");
+		cvp_clock_reg_print(dev);
+	}
 
 	wake_up_all(&sq->wq);
 

@@ -1258,7 +1258,7 @@ int msm_cvp_proc_oob(struct msm_cvp_inst* inst,
 		return -EINVAL;
 	}
 
-	switch (cmd_hdr->packet_type) {
+	switch (cmd_hdr->header.packet_type) {
 	case HFI_CMD_SESSION_CVP_WARP_NCC_FRAME:
 		rc = msm_cvp_proc_oob_wncc(inst, in_pkt);
 		break;
@@ -1813,7 +1813,7 @@ int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
 			continue;
 
 		ret = msm_cvp_unmap_user_persist_buf(inst, buf,
-				cmd_hdr->packet_type, i, &iova);
+				cmd_hdr->header.packet_type, i, &iova);
 		if (ret) {
 			dprintk(CVP_ERR,
 				"%s: buf %d unmap failed.\n",
@@ -1847,7 +1847,7 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 			continue;
 
 		ret = msm_cvp_map_user_persist_buf(inst, buf,
-				cmd_hdr->packet_type, i, &iova);
+				cmd_hdr->header.packet_type, i, &iova);
 		if (ret) {
 			dprintk(CVP_ERR,
 				"%s: buf %d map failed.\n",
@@ -1883,14 +1883,14 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
 	ktid &= (FENCE_BIT - 1);
-	cmd_hdr->client_data.kdata = ktid;
+	cmd_hdr->header.client_data.kdata = ktid;
 
 	dprintk(CVP_CMD, "%s:   "
 		"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
-		__func__, cmd_hdr->packet_type,
-		cmd_hdr->session_id,
-		cmd_hdr->client_data.transaction_id,
-		cmd_hdr->client_data.kdata & (FENCE_BIT - 1));
+		__func__, cmd_hdr->header.packet_type,
+		cmd_hdr->header.session_id,
+		cmd_hdr->header.client_data.transaction_id,
+		cmd_hdr->header.client_data.kdata & (FENCE_BIT - 1));
 
 	frame = cvp_kmem_cache_zalloc(&cvp_driver->frame_cache, GFP_KERNEL);
 	if (!frame)
@@ -1898,7 +1898,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 
 	frame->ktid = ktid;
 	frame->nr = 0;
-	frame->pkt_type = cmd_hdr->packet_type;
+	frame->pkt_type = cmd_hdr->header.packet_type;
 
 	for (i = 0; i < buf_num; i++) {
 		buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
@@ -1910,7 +1910,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 			continue;
 		}
 
-		iova = msm_cvp_map_frame_buf(inst, buf, frame, cmd_hdr->packet_type, i);
+		iova = msm_cvp_map_frame_buf(inst, buf, frame, cmd_hdr->header.packet_type, i);
 		if (!iova) {
 			dprintk(CVP_ERR,
 				"%s: buf %d register failed.\n",

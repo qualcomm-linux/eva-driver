@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "hfi_packetization.h"
@@ -397,6 +397,9 @@ static int get_hfi_ssr_type(enum hal_ssr_trigger_type type)
 		rc = HFI_TEST_SSR_HW_WDOG_IRQ;
 		break;
 	case SSR_SESSION_ERROR:
+		rc = HFI_TEST_SSR_SW_ERR_FATAL;
+		break;
+	case SSR_SESSION_TIMEOUT:
 		rc = HFI_TEST_SSR_SW_ERR_FATAL;
 		break;
 	default:

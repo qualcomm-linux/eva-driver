@@ -53,7 +53,7 @@ static void cvp_dump_fence_queue_v2(struct msm_cvp_inst *inst)
 
 	dprintk(CVP_WARN, "fence cmdq wait list:\n");
 	list_for_each_entry(f, &q->wait_list, list) {
-		dprintk(CVP_WARN, "frame pkt type 0x%x\n", f->pkt->packet_type);
+		dprintk(CVP_WARN, "frame pkt type 0x%x\n", f->pkt->header.packet_type);
 		for (i = 0; i < f->output_index; i++)
 			dprintk(CVP_WARN, "idx %d client hdl %d, state %d\n",
 				i, f->synx[i],
@@ -63,7 +63,7 @@ static void cvp_dump_fence_queue_v2(struct msm_cvp_inst *inst)
 
 	dprintk(CVP_WARN, "fence cmdq schedule list:\n");
 	list_for_each_entry(f, &q->sched_list, list) {
-		dprintk(CVP_WARN, "frame pkt type 0x%x\n", f->pkt->packet_type);
+		dprintk(CVP_WARN, "frame pkt type 0x%x\n", f->pkt->header.packet_type);
 		for (i = 0; i < f->output_index; i++)
 			dprintk(CVP_WARN, "idx %d client hdl %d, state %d\n",
 				i, f->synx[i],

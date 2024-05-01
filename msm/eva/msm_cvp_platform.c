@@ -481,10 +481,10 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.name = "WARP_NCC_FRAME",
 			.force_kernel_fence = false,
 		},
-	[HFI_CMD_SESSION_CVP_WARP_CONFIG - HFI_CMD_SESSION_CVP_START] =
+	[HFI_CMD_SESSION_EVA_WARP_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_WARP_CONFIG,
+			.type = HFI_CMD_SESSION_EVA_WARP_CONFIG,
 			.is_config_pkt = true,
 			.resp = HAL_NO_RESP,
 			.name = "WARP",
@@ -497,10 +497,10 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "WARP_DS_PARAMS",
 		},
-	[HFI_CMD_SESSION_CVP_WARP_FRAME - HFI_CMD_SESSION_CVP_START] =
+	[HFI_CMD_SESSION_EVA_WARP_FRAME - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_WARP_FRAME,
+			.type = HFI_CMD_SESSION_EVA_WARP_FRAME,
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "WARP_FRAME",
@@ -770,22 +770,6 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "FD_FRAME",
 		},
-	[HFI_CMD_SESSION_CVP_XRA_FRAME - HFI_CMD_SESSION_CVP_START] =
-		{
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_XRA_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "XRA_FRAME",
-		},
-	[HFI_CMD_SESSION_CVP_XRA_CONFIG - HFI_CMD_SESSION_CVP_START] =
-		{
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_XRA_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "XRA_CONFIG",
-		},
 	[HFI_CMD_SESSION_CVP_XRA_BLOB_FRAME - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = 0xFFFFFFFF,
@@ -926,6 +910,40 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "DME_FRAME",
+			.force_kernel_fence = true,
+		},
+	[HFI_CMD_SESSION_CVP_GME_CONFIG - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_CVP_GME_CONFIG,
+			.is_config_pkt = true,
+			.resp = HAL_NO_RESP,
+			.name = "GME_CONFIG",
+		},
+	[HFI_CMD_SESSION_CVP_GME_FRAME - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_CVP_GME_FRAME,
+			.is_config_pkt = false,
+			.resp = HAL_NO_RESP,
+			.name = "GME_FRAME",
+			.force_kernel_fence = true,
+		},
+	[HFI_CMD_SESSION_CVP_LME_CONFIG - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_CVP_LME_CONFIG,
+			.is_config_pkt = true,
+			.resp = HAL_NO_RESP,
+			.name = "LME_CONFIG",
+		},
+	[HFI_CMD_SESSION_CVP_LME_FRAME - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_CVP_LME_FRAME,
+			.is_config_pkt = false,
+			.resp = HAL_NO_RESP,
+			.name = "LME_FRAME",
 			.force_kernel_fence = true,
 		},
 

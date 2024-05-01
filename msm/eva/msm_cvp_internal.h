@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _MSM_CVP_INTERNAL_H_
@@ -27,6 +27,8 @@
 #include "cvp_hfi_helper.h"
 
 #define MAX_SUPPORTED_INSTANCES 16
+#define MAX_CV_INSTANCES 8
+#define MAX_DMM_INSTANCES 8
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
 #define FENCE_WAIT_SIGNAL_TIMEOUT 100
@@ -44,7 +46,7 @@
 #define SYS_MSG_INDEX(__msg) (__msg - SYS_MSG_START)
 #define SESSION_MSG_INDEX(__msg) (__msg - SESSION_MSG_START)
 
-#define SESSION_NAME_MAX_LEN 64
+#define SESSION_NAME_MAX_LEN 512
 
 #define ARP_BUF_SIZE 0x300000
 
@@ -99,13 +101,16 @@ enum vpu_version {
 
 enum cvp_session_state {
 	SESSION_NORMAL = 0x00,
-	SESSION_ERROR
+	SESSION_ERROR,
+	SECURE_SESSION_ERROR,
 };
 
 enum cvp_session_errorcode {
 	NO_ERROR = 0x00,
 	EVA_SYS_ERROR,
-	EVA_SESSION_ERROR
+	EVA_SESSION_ERROR,
+	EVA_SECURE_SESSION_ERROR,
+	EVA_SESSION_TIMEOUT
 };
 
 struct msm_cvp_ubwc_config_data {
@@ -251,7 +256,7 @@ struct cvp_session_prop {
 
 enum cvp_event_t {
 	CVP_NO_EVENT,
-	CVP_SSR_EVENT = 1,
+	EVA_EVENT = 1,
 	CVP_SYS_ERROR_EVENT,
 	CVP_MAX_CLIENTS_EVENT,
 	CVP_HW_UNSUPPORTED_EVENT,
@@ -350,6 +355,7 @@ struct msm_cvp_core {
 	struct delayed_work fw_unload_work;
 	struct work_struct ssr_work;
 	enum hal_ssr_trigger_type ssr_type;
+	u32 soc_version;
 	u32 smmu_fault_count;
 	u32 last_fault_addr;
 	u32 ssr_count;
@@ -421,4 +427,5 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst);
 void *cvp_get_drv_data(struct device *dev);
 void *cvp_kmem_cache_zalloc(struct cvp_kmem_cache *k, gfp_t flags);
 void cvp_kmem_cache_free(struct cvp_kmem_cache *k, void *obj);
+bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *instance_count);
 #endif

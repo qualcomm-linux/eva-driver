@@ -261,7 +261,6 @@ unsigned int get_msg_size(struct cvp_hfi_msg_session_hdr *hdr)
 {
 	struct msm_cvp_core *core;
 	struct iris_hfi_device *device;
-	u32 minor_ver;
 
 	core = cvp_driver->cvp_core;
 	if (core)
@@ -273,15 +272,9 @@ unsigned int get_msg_size(struct cvp_hfi_msg_session_hdr *hdr)
 		dprintk(CVP_ERR, "%s: NULL device\n", __func__);
 		return 0;
 	}
-
-	minor_ver = (device->version & HFI_VERSION_MINOR_MASK) >>
-				HFI_VERSION_MINOR_SHIFT;
-
-	if (minor_ver < 2)
-		return sizeof(struct cvp_hfi_msg_session_hdr);
-
-	if (hdr->packet_type == HFI_MSG_SESSION_CVP_FD)
-		return sizeof(struct cvp_hfi_msg_session_hdr_ext);
+	//TEMP_WORKAROUND
+	if (hdr->header.packet_type == HFI_MSG_SESSION_CVP_RELEASE_BUFFERS)
+		return sizeof(struct cvp_hfi_msg_session_hdr_old_format);
 	else
 		return sizeof(struct cvp_hfi_msg_session_hdr);
 
@@ -292,7 +285,7 @@ unsigned int get_msg_session_id(void *msg)
 	struct cvp_hfi_msg_session_hdr *hdr =
 		(struct cvp_hfi_msg_session_hdr *)msg;
 
-	return hdr->session_id;
+	return hdr->header.session_id;
 }
 
 unsigned int get_msg_errorcode(void *msg)
@@ -518,15 +511,12 @@ static int __write_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 
 	cmd_pkt = (struct cvp_hfi_cmd_session_hdr *)packet;
 
-	if (cmd_pkt->size >= sizeof(struct cvp_hfi_cmd_session_hdr))
+	if (cmd_pkt->header.size >= sizeof(struct cvp_hfi_cmd_session_hdr))
 		dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
-			__func__, cmd_pkt->packet_type,
-			cmd_pkt->session_id,
-			cmd_pkt->client_data.transaction_id,
-			cmd_pkt->client_data.kdata & (FENCE_BIT - 1));
-	else if (cmd_pkt->size >= 12)
-		dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x\n", __func__,
-			cmd_pkt->packet_type, cmd_pkt->session_id);
+			__func__, cmd_pkt->header.packet_type,
+			cmd_pkt->header.session_id,
+			cmd_pkt->header.client_data.transaction_id,
+			cmd_pkt->header.client_data.kdata & (FENCE_BIT - 1));
 
 	if (msm_cvp_debug & CVP_PKT) {
 		dprintk(CVP_PKT, "%s: %pK\n", __func__, qinfo);
@@ -724,10 +714,10 @@ static int __read_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 		msg_pkt = (struct cvp_hfi_msg_session_hdr *)packet;
 		dprintk(CVP_CMD, "%s:  "
 			"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
-			__func__, msg_pkt->packet_type,
-			msg_pkt->session_id,
-			msg_pkt->client_data.transaction_id,
-			msg_pkt->client_data.kdata & (FENCE_BIT - 1));
+			__func__, msg_pkt->header.packet_type,
+			msg_pkt->header.session_id,
+			msg_pkt->header.client_data.transaction_id,
+			msg_pkt->header.client_data.kdata & (FENCE_BIT - 1));
 	}
 
 	if ((msm_cvp_debug & CVP_PKT) &&
@@ -836,9 +826,6 @@ static int __read_gcc_register(struct iris_hfi_device *device, u32 reg)
 	}
 
 	base_addr = device->cvp_hal_data->gcc_reg_base;
-
-	if (true)
-		return rc;
 
 	rc = readl_relaxed(base_addr + reg);
 	/*
@@ -1163,6 +1150,7 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	int rc = 0;
 	u32 ctrl_init_val = 0, ctrl_status = 0, count = 0, max_tries = 5000;
 	CVPKERNEL_ATRACE_BEGIN("__boot_firmware");
+
 	/*
 	 * Hand off control of regulators to h/w _after_ enabling clocks.
 	 * Note that the GDSC will turn off when switching from normal
@@ -1270,6 +1258,7 @@ static void cvp_dump_csr(struct iris_hfi_device *dev)
 		return;
 	if (!dev->power_enabled || dev->reg_dumped)
 		return;
+
 	reg = __read_register(dev, CVP_WRAPPER_CPU_STATUS);
 	dprintk(CVP_ERR, "CVP_WRAPPER_CPU_STATUS: %x\n", reg);
 	reg = __read_register(dev, CVP_CPU_CS_SCIACMDARG0);
@@ -2992,7 +2981,7 @@ static int __power_collapse(struct iris_hfi_device *device, bool force)
 	}
 
 	rc = __dsp_suspend(device, force);
-	if (rc == -EBUSY)
+	if (rc == -EBUSY || rc == -EINVAL)
 		goto exit;
 	else if (rc)
 		goto skip_power_off;
@@ -3262,14 +3251,16 @@ static void print_msg_hdr(void *hdr)
 {
 	struct cvp_hfi_msg_session_hdr *new_hdr =
 			(struct cvp_hfi_msg_session_hdr *)hdr;
-	dprintk(CVP_HFI, "HFI MSG received: %x %x %x %x %x %x %x %#llx\n",
-			new_hdr->size, new_hdr->packet_type,
-			new_hdr->session_id,
-			new_hdr->client_data.transaction_id,
-			new_hdr->client_data.data1,
-			new_hdr->client_data.data2,
+	dprintk(CVP_HFI, "HFI MSG received: %x %x %x %x %x %x %x %x %x %#llx\n",
+			new_hdr->header.size, new_hdr->header.packet_type,
+			new_hdr->header.session_id,
+			new_hdr->header.client_data.transaction_id,
+			new_hdr->header.client_data.data1,
+			new_hdr->header.client_data.data2,
+			new_hdr->header.client_data.data3,
+			new_hdr->header.client_data.data4,
 			new_hdr->error_type,
-			new_hdr->client_data.kdata);
+			new_hdr->header.client_data.kdata);
 }
 
 static int __response_handler(struct iris_hfi_device *device)
@@ -4284,6 +4275,7 @@ fail_to_set_ubwc_config:
 
 static int __iris_power_on(struct iris_hfi_device *device)
 {
+	struct msm_cvp_core *core;
 	int rc = 0;
 
 	if (device->power_enabled)
@@ -4300,6 +4292,14 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	rc = call_iris_op(device, power_on_controller, device);
 	if (rc)
 		goto fail_enable_controller;
+
+	/* Remove below 2 register writes after HW_VERSION has valid version */
+	core = cvp_driver->cvp_core;
+	__write_register(device, CVP_WRAPPER_SPARE_0, core->soc_version);
+
+	if (core->soc_version == 0x20000)
+		/* Enable HW ECO, specifically for Pakala EVA */
+		__write_register(device, CVP_CC_SPARE1, 1);
 
 	rc = call_iris_op(device, power_on_core, device);
 	if (rc)
@@ -5732,7 +5732,6 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 		}
 		__disable_regulator(device, "cvp-core");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
-		msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
 		return 0;
 	} else if (!(value & 0x2) && msm_cvp_fw_low_power_mode) {
 		/*
@@ -5741,7 +5740,6 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 		 */
 		__disable_regulator(device, "cvp-core");
                 msm_cvp_disable_unprepare_clk(device, "core_clk");
-		msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
                 return 0;
 	}
 
@@ -5828,7 +5826,6 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 	usleep_range(100, 200);
 	__disable_regulator(device, "cvp-core");
 	msm_cvp_disable_unprepare_clk(device, "core_clk");
-	msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
 	return 0;
 }
 
@@ -5836,7 +5833,6 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 static int __power_off_controller_v1(struct iris_hfi_device *device)
 {
 	u32 lpi_status, reg_status = 0, count = 0, max_count = 1000;
-	u32 sbm_ln0_low;
 	int rc;
 
 	/* HPG 3.7 Step 4  */
@@ -5856,25 +5852,20 @@ static int __power_off_controller_v1(struct iris_hfi_device *device)
 		usleep_range(50, 100);
 		count++;
 	}
-	/* HPG 3.7 step 7 deassert */
-	__write_register(device, CVP_WRAPPER_CPU_NOC_LPI_CONTROL, 0x0);
 
-	sbm_ln0_low = __read_register(device, CVP_NOC_SBM_SENSELN0_LOW);
-	dprintk(CVP_PWR,
-		"CPU Noc: lpi_status %x noc_status %x (count %d) 0x%x\n",
-		lpi_status, reg_status, count, sbm_ln0_low);
 	if (count == max_count) {
 		u32 pc_ready, wfi_status;
-
 		wfi_status = __read_register(device, CVP_WRAPPER_CPU_STATUS);
 		pc_ready = __read_register(device, CVP_CTRL_STATUS);
-
 		dprintk(CVP_WARN,
 			"CVP NOC not in qaccept status %x %x %x %x\n",
 			reg_status, lpi_status, wfi_status, pc_ready);
-
 		call_iris_op(device, print_sbm_regs, device);
 	}
+
+	/* HPG 3.7 step 7 deassert */
+	__write_register(device, CVP_WRAPPER_CPU_NOC_LPI_CONTROL, 0x0);
+
 	/* HPG 3.7 step 8 */
 	__write_register(device, CVP_AON_WRAPPER_CTL_NOC_LPI_CONTROL, 0x1);
 
@@ -5918,6 +5909,10 @@ static int __power_off_controller_v1(struct iris_hfi_device *device)
 	 * Below sequence are missing from HPG Section 3.7.
 	 * It disables EVA_CC clks in power on sequence
 	 */
+	rc = msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
+	if (rc)
+		dprintk(CVP_ERR, "Failed to disable core_freerun_clk: %d\n", rc);
+
 	rc = msm_cvp_disable_unprepare_clk(device, "cvp_freerun_clk");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to disable cvp_freerun_clk: %d\n", rc);
@@ -6295,6 +6290,40 @@ int cvp_iris_hfi_initialize(struct cvp_hfi_ops *ops_tbl,
 
 err_iris_hfi_init:
 	return rc;
+}
+
+void cvp_clock_reg_print(struct iris_hfi_device *dev)
+{
+	u32 reg;
+
+	dprintk(CVP_ERR, "%s Clock Controller Debug Prints:\n");
+
+	reg = __read_register(dev, CVP_CC_MVS0C_GDSCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0C_GDSCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_MVS0C_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0C_CBCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_MVS0_GDSCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0_GDSCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_MVS0_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0_CBCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_AHB_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_AHB_CBCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_SLEEP_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_SLEEP_CBCR: %x\n", reg);
+
+	reg = __read_register(dev, CVP_CC_MVS0_FREERUN_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0_FREERUN_CBCR: %x\n", reg);
+	reg = __read_register(dev, CVP_CC_MVS0C_FREERUN_CBCR);
+	dprintk(CVP_ERR, "CVP_CC_MVS0C_FREERUN_CBCR: %x\n", reg);
+
+	reg = __read_gcc_register(dev, CVP_GCC_EVA_AXI0_CBCR);
+	dprintk(CVP_ERR, "CVP_GCC_EVA_AXI0_CBCR: %x\n", reg);
+	reg = __read_gcc_register(dev, CVP_GCC_EVA_AXI0C_CBCR);
+	dprintk(CVP_ERR, "CVP_GCC_EVA_AXI0C_CBCR: %x\n", reg);
+	reg = __read_gcc_register(dev, CVP_GCC_EVA_AHB_CBCR);
+	dprintk(CVP_ERR, "CVP_GCC_EVA_AHB_CBCR: %x\n", reg);
+	reg = __read_gcc_register(dev, CVP_GCC_EVA_XO_CBCR);
+	dprintk(CVP_ERR, "CVP_GCC_EVA_XO_CBCR: %x\n", reg);
 }
 
 
