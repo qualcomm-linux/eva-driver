@@ -946,7 +946,23 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.name = "LME_FRAME",
 			.force_kernel_fence = true,
 		},
-
+	[HFI_CMD_SESSION_EVA_SPSTAT_CONFIG - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_SPSTAT_CONFIG,
+			.is_config_pkt = true,
+			.resp = HAL_NO_RESP,
+			.name = "SPSTAT_CONFIG",
+		},
+	[HFI_CMD_SESSION_EVA_SPSTAT_FRAME - HFI_CMD_SESSION_CVP_START] =
+		{
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_SPSTAT_FRAME,
+			.is_config_pkt = false,
+			.resp = HAL_NO_RESP,
+			.name = "SPSTAT_FRAME",
+			.force_kernel_fence = true,
+		},
 };
 
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr)
