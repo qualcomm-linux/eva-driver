@@ -1294,7 +1294,6 @@ static void cvp_dump_csr(struct iris_hfi_device *dev)
 	dprintk(CVP_ERR, "CVP_WRAPPER_CORE_CLOCK_CONFIG: %x\n", reg);
 
 	call_iris_op(dev, dump_noc_regs, dev);
-
 	dev->reg_dumped = true;
 }
 
@@ -6243,6 +6242,7 @@ static int __set_registers_v1(struct iris_hfi_device *device)
 
 static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 {
+#ifndef USE_PRESIL42
 	u32 val = 0, config;
 	struct regulator_info *rinfo;
 	int rc = 0;
@@ -6323,6 +6323,7 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 		}
 	}
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
+#endif
 }
 
 #endif	/* End of CONFIG_EVA_PINEAPPLE */
