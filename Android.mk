@@ -32,7 +32,7 @@ LOCAL_ADDITIONAL_DEPENDENCY      := synx-driver.ko
 #KBUILD_REQUIRED_KOS += msm-mmrm.ko
 
 # Setup SynX dependency
-CONFIG_SYNX := y
+CONFIG_SYNX := n
 #ifdef CONFIG_SYNX
 ifeq ($(CONFIG_SYNX), y)
 $(warning Compiling SynX)
@@ -42,7 +42,7 @@ KBUILD_REQUIRED_KOS += synx-driver.ko
 endif
 
 # Setup fastRPC dependency
-CONFIG_FASTRPC := y
+CONFIG_FASTRPC := n
 ifeq ($(CONFIG_FASTRPC), y)
 $(warning Compiling FastRPC)
 LOCAL_REQUIRED_MODULES    += dsp-module-symvers
