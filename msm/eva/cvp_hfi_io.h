@@ -12,3 +12,7 @@
 #ifdef CONFIG_EVA_SUN
 #include "cvp_pakala_io.h"
 #endif
+
+#ifdef CONFIG_EVA_CANOE
+#include "cvp_kaanapali_io.h"
+#endif

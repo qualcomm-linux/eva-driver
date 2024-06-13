@@ -131,7 +131,7 @@ static int cvp_iommu_map(struct iommu_domain* domain, unsigned long iova, phys_a
 }
 
 
-#ifdef CONFIG_EVA_PINEAPPLE
+#ifdef CONFIG_EVA_SUN
 
 /* EVA 4.0 power sequence */
 static int __power_on_controller(struct iris_hfi_device *device);
@@ -165,7 +165,7 @@ static struct cvp_hal_ops hal_ops = {
 	.reset_control_acquire_name = __reset_control_acquire,
 	.reset_control_release_name = __reset_control_release,
 };
-#elif CONFIG_EVA_SUN
+#elif CONFIG_EVA_CANOE
 
 /* EVA 4.1 power sequence */
 static int __power_on_controller_v1(struct iris_hfi_device *device);
@@ -4803,26 +4803,6 @@ static int iris_hfi_get_core_capabilities(void *dev)
 	return 0;
 }
 
-#ifdef CONFIG_EVA_PINEAPPLE
-static const char * const mid_names[16] = {
-	"CVP_FW",
-	"ARP_DATA",
-	"CVP_MPU_PIXEL",
-	"CVP_MPU_NON_PIXEL",
-	"CVP_FDU_PIXEL",
-	"CVP_FDU_NON_PIXEL",
-	"CVP_GCE_PIXEL",
-	"CVP_GCE_NON_PIXEL",
-	"CVP_TOF_PIXEL",
-	"CVP_TOF_NON_PIXEL",
-	"CVP_VADL_PIXEL",
-	"CVP_VADL_NON_PIXEL",
-	"CVP_RGE_NON_PIXEL",
-	"CVP_CDM",
-	"Invalid",
-	"Invalid"
-};
-#elif CONFIG_EVA_SUN
 static const char * const mid_names[25] = {
 	"CVP_FW",
 	"ARP_DATA",
@@ -4850,17 +4830,13 @@ static const char * const mid_names[25] = {
 	"Invalid",
 	"CVP_RGE_NON_PIXEL",
 };
-#endif
 
 static void __print_reg_details_errlog3_low(u32 val)
 {
 	u32 mid, sid;
 
-#ifdef CONFIG_EVA_PINEAPPLE
-	mid = (val >> 5) & 0xF;
-#elif CONFIG_EVA_SUN
 	mid = (val >> 5) & 0x1F;
-#endif
+
 	sid = (val >> 2) & 0x7;
 	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_LOW:     %#x\n", val);
 	dprintk(CVP_ERR, "Sub-client:%s, SID: %d\n", mid_names[mid], sid);
@@ -5211,7 +5187,7 @@ static int iris_hfi_validate_session(void *sess, const char *func)
  *
  ***************************************************************************/
 
-#ifdef CONFIG_EVA_PINEAPPLE
+#ifdef CONFIG_EVA_SUN
 static int __check_ctl_power_on(struct iris_hfi_device *device)
 {
 	u32 reg;
@@ -5770,7 +5746,7 @@ static void __dump_noc_regs(struct iris_hfi_device *device)
 	return;
 }
 
-#elif CONFIG_EVA_SUN
+#elif CONFIG_EVA_CANOE
 static int __check_ctl_power_on_v1(struct iris_hfi_device *device)
 {
 	u32 reg;
@@ -6392,7 +6368,7 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
 }
 
-#endif	/* End of CONFIG_EVA_PINEAPPLE */
+#endif	/* End of CONFIG_EVA_SUN */
 
 static void iris_init_hfi_callbacks(struct cvp_hfi_ops *ops_tbl)
 {
