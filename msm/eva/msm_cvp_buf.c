@@ -1870,11 +1870,11 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 			return ret;
 		}
 
+		buf->fd = iova;
+
 #ifdef USE_PRESIL42
 		presil42_set_buf_fd(buf, iova, "cvp_map_user_persist");
-		return 0;
 #endif
-		buf->fd = iova;
 	}
 	return 0;
 }
