@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _MSM_CVP_BUF_H_
@@ -16,7 +16,7 @@
 #include "cvp_comm_def.h"
 
 #define MAX_FRAME_BUFFER_NUMS 40
-#define MAX_DMABUF_NUMS 64
+#define MAX_DMABUF_NUMS 256
 #define IS_CVP_BUF_VALID(buf, smem) \
 	((buf->size <= smem->size) && \
 	(buf->size <= smem->size - buf->offset))
@@ -77,6 +77,7 @@ struct cvp_dma_buf_vmap {
 };
 
 struct msm_cvp_smem {
+	struct rb_node node;
 	struct list_head list;
 	atomic_t refcount;
 	struct dma_buf *dma_buf;
@@ -84,7 +85,7 @@ struct msm_cvp_smem {
 	u32 device_addr;
 	dma_addr_t dma_handle;
 	u32 size;
-	u32 bitmap_index;
+	bool cached;
 	u32 flags;
 	u32 pkt_type;
 	u32 buf_idx;
@@ -99,23 +100,22 @@ struct msm_cvp_wncc_buffer {
 };
 
 struct cvp_dmamap_cache {
-	unsigned long usage_bitmap;
 	struct mutex lock;
-	struct msm_cvp_smem *entries[MAX_DMABUF_NUMS];
+	struct rb_root rbtree;
 	unsigned int nr;
 };
 
 static inline void INIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
 {
 	mutex_init(&cache->lock);
-	cache->usage_bitmap = 0;
+	cache->rbtree = RB_ROOT;
 	cache->nr = 0;
 }
 
 static inline void DEINIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
 {
 	mutex_destroy(&cache->lock);
-	cache->usage_bitmap = 0;
+	cache->rbtree = RB_ROOT;
 	cache->nr = 0;
 }
 
