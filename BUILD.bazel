@@ -33,6 +33,8 @@ ddk_headers(
     hdrs = [":eva_drivers_configs", ":uapi_headers", ":msm_headers"]
 )
 
+load(":canoe.bzl", "define_canoe")
+define_canoe()
 
 load(":sun.bzl", "define_sun")
 define_sun()
