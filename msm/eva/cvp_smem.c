@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-buf.h>
@@ -192,7 +192,7 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 			struct msm_cvp_smem *smem,
 			const char *str)
 {
-	int *vmid_list = NULL;
+	int *vmid_list;
 	int *perms_list;
 	int nelems = 0;
 	int i, rc = 0;
@@ -212,10 +212,10 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 
 	dma_buf = smem->dma_buf;
 /*Symbol not yet defined for canoe*/
-#ifdef CONFIG_EVA_SUN
+
 	rc = mem_buf_dma_buf_copy_vmperm(dma_buf,
 			&vmid_list, &perms_list, &nelems);
-#endif
+
 	if (rc) {
 		dprintk(CVP_ERR, "%s fail to get vmid and perms %d\n",
 			__func__, rc);
@@ -377,14 +377,14 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	if (mem->flags & SMEM_NON_PIXEL) {
 		vmids[0] = VMID_CP_NON_PIXEL;
 /*Symbol not yet defined for canoe*/
-#ifdef CONFIG_EVA_SUN
+
 		rc = mem_buf_lend(dbuf, &arg);
-#endif
+
 	} else if (mem->flags & SMEM_PIXEL) {
 		vmids[0] = VMID_CP_PIXEL;
-#ifdef CONFIG_EVA_SUN
+
 		rc = mem_buf_lend(dbuf, &arg);
-#endif
+
 	}
 
 	if (rc) {
