@@ -206,6 +206,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	inst->clk_data.ddr_bw = 0;
 	inst->clk_data.sys_cache_bw = 0;
 	inst->clk_data.bitrate = 0;
+	inst->pm_qos_latency = core->resources.pm_qos.latency_us;
 
 	for (i = SESSION_MSG_INDEX(SESSION_MSG_START);
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
@@ -353,19 +354,10 @@ exit:
 		dprintk_rl(CVP_WARN,
 			"Failed to release persist buffers\n");
 
-	if (inst->prop.type == HFI_SESSION_FD
-		|| inst->prop.type == HFI_SESSION_DMM) {
-		spin_lock(&inst->core->resources.pm_qos.lock);
-		if (inst->core->resources.pm_qos.off_vote_cnt > 0)
-			inst->core->resources.pm_qos.off_vote_cnt--;
-		else
-			dprintk(CVP_INFO, "%s Unexpected pm_qos off vote %d\n",
-				__func__,
-				inst->core->resources.pm_qos.off_vote_cnt);
-		spin_unlock(&inst->core->resources.pm_qos.lock);
-		ops_tbl = inst->core->dev_ops;
-		call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
-	}
+	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+	ops_tbl = inst->core->dev_ops;
+	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+
 	return 0;
 err_timeout:
 	cvp_put_inst(tmp);

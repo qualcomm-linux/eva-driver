@@ -1108,13 +1108,8 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	spin_unlock(&sq->lock);
 
 	ops_tbl = inst->core->dev_ops;
-	if (inst->prop.type == HFI_SESSION_FD
-		|| inst->prop.type == HFI_SESSION_DMM) {
-		spin_lock(&inst->core->resources.pm_qos.lock);
-		inst->core->resources.pm_qos.off_vote_cnt++;
-		spin_unlock(&inst->core->resources.pm_qos.lock);
-		call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
-	}
+	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+
 	/*
 	 * cvp_fence_thread_start will increment reference to instance.
 	 * It guarantees the EVA session won't be deleted. Use of session
@@ -1320,6 +1315,8 @@ stop_thread:
 	wake_up_all(&inst->session_queue.wq);
 
 	cvp_fence_thread_stop(inst);
+
+	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 
 exit:
 	cvp_put_inst(s);
@@ -1571,12 +1568,208 @@ static int cvp_session_name_copy_u32(u32 idx,
 	return rc;
 }
 
+static int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
+		struct eva_kmd_sys_property *prop_array, int i)
+{
+	struct cvp_session_prop *session_prop;
+	int rc = 0;
+
+	session_prop = &inst->prop;
+
+	switch (prop_array->prop_type) {
+		case EVA_KMD_PROP_SESSION_TYPE:
+			session_prop->type = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_KERNELMASK:
+			session_prop->kernel_mask = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_PRIORITY:
+			session_prop->priority = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_SECURITY:
+			session_prop->is_secure = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_DSPMASK:
+			session_prop->dsp_mask = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_LATENCY:
+			inst->pm_qos_latency = prop_array->data;
+			dprintk(CVP_INFO, "inst %pK - New latency value from user %d\n",
+				inst, inst->pm_qos_latency);
+			break;
+		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
+			session_prop->dump_offset = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SESSION_DUMPSIZE:
+			session_prop->dump_size = prop_array->data;
+			break;
+		case EVA_KMD_PROP_SET_NAME:
+		{
+			u32 idx = i * 4;
+
+			rc = cvp_session_name_copy_u32(idx, session_prop,
+								(u32 *)&(prop_array->data));
+			break;
+		}
+		default:
+			rc = -EFAULT;
+	}
+	return rc;
+}
+
+static int msm_cvp_set_sysprop_pwr_hw(struct msm_cvp_inst *inst,
+		struct eva_kmd_sys_property *prop_array)
+{
+	struct cvp_session_prop *session_prop;
+	int rc = 0;
+
+	session_prop = &inst->prop;
+
+	switch (prop_array->prop_type) {
+		case EVA_KMD_PROP_PWR_FDU:
+			session_prop->cycles[HFI_HW_FDU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_ICA:
+			session_prop->cycles[HFI_HW_ICA] =
+				div_by_1dot5(prop_array->data);
+			break;
+		case EVA_KMD_PROP_PWR_OD:
+			session_prop->cycles[HFI_HW_OD] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_MPU:
+			session_prop->cycles[HFI_HW_MPU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_VADL:
+			session_prop->cycles[HFI_HW_VADL] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_TOF:
+			session_prop->cycles[HFI_HW_TOF] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_RGE:
+			session_prop->cycles[HFI_HW_RGE] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_XRA:
+			session_prop->cycles[HFI_HW_XRA] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_LSR:
+			session_prop->cycles[HFI_HW_LSR] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FW:
+			session_prop->fw_cycles =
+				div_by_1dot5(prop_array->data);
+			break;
+		case EVA_KMD_PROP_PWR_DDR:
+			session_prop->ddr_bw = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_SYSCACHE:
+			session_prop->ddr_cache = prop_array->data;
+			break;
+		default:
+			rc = -EFAULT;
+	}
+	return rc;
+}
+
+static int msm_cvp_set_sysprop_pwr_op(struct msm_cvp_inst *inst,
+		struct eva_kmd_sys_property *prop_array)
+{
+	struct cvp_session_prop *session_prop;
+	int rc = 0;
+
+	session_prop = &inst->prop;
+
+	switch (prop_array->prop_type) {
+		case EVA_KMD_PROP_PWR_FDU_OP:
+			session_prop->op_cycles[HFI_HW_FDU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_ICA_OP:
+			session_prop->op_cycles[HFI_HW_ICA] =
+				div_by_1dot5(prop_array->data);
+			break;
+		case EVA_KMD_PROP_PWR_OD_OP:
+			session_prop->op_cycles[HFI_HW_OD] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_MPU_OP:
+			session_prop->op_cycles[HFI_HW_MPU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_VADL_OP:
+			session_prop->op_cycles[HFI_HW_VADL] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_TOF_OP:
+			session_prop->op_cycles[HFI_HW_TOF] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_RGE_OP:
+			session_prop->op_cycles[HFI_HW_RGE] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_XRA_OP:
+			session_prop->op_cycles[HFI_HW_XRA] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_LSR_OP:
+			session_prop->op_cycles[HFI_HW_LSR] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FW_OP:
+			session_prop->fw_op_cycles =
+				div_by_1dot5(prop_array->data);
+			break;
+		case EVA_KMD_PROP_PWR_DDR_OP:
+			session_prop->ddr_op_bw = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_SYSCACHE_OP:
+			session_prop->ddr_op_cache = prop_array->data;
+			break;
+		default:
+			rc = -EFAULT;
+	}
+	return rc;
+}
+
+static int msm_cvp_set_sysprop_pwr_fps(struct msm_cvp_inst *inst,
+		struct eva_kmd_sys_property *prop_array)
+{
+	struct cvp_session_prop *session_prop;
+	int rc = 0;
+
+	session_prop = &inst->prop;
+
+	switch (prop_array->prop_type) {
+		case EVA_KMD_PROP_PWR_FPS_FDU:
+			session_prop->fps[HFI_HW_FDU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_MPU:
+			session_prop->fps[HFI_HW_MPU] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_OD:
+			session_prop->fps[HFI_HW_OD] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_ICA:
+			session_prop->fps[HFI_HW_ICA] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_VADL:
+			session_prop->fps[HFI_HW_VADL] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_TOF:
+			session_prop->fps[HFI_HW_TOF] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_RGE:
+			session_prop->fps[HFI_HW_RGE] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_XRA:
+			session_prop->fps[HFI_HW_XRA] = prop_array->data;
+			break;
+		case EVA_KMD_PROP_PWR_FPS_LSR:
+			session_prop->fps[HFI_HW_LSR] = prop_array->data;
+			break;
+		default:
+			rc = -EFAULT;
+	}
+	return rc;
+}
+
 static int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
 	struct eva_kmd_sys_properties *props = &arg->data.sys_properties;
 	struct eva_kmd_sys_property *prop_array;
-	struct cvp_session_prop *session_prop;
 	int i, rc = 0;
 
 	if (!inst) {
@@ -1591,147 +1784,19 @@ static int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 	}
 
 	prop_array = &arg->data.sys_properties.prop_data[0];
-	session_prop = &inst->prop;
 
 	for (i = 0; i < props->prop_num; i++) {
-		switch (prop_array[i].prop_type) {
-		case EVA_KMD_PROP_SESSION_TYPE:
-			session_prop->type = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_KERNELMASK:
-			session_prop->kernel_mask = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_PRIORITY:
-			session_prop->priority = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_SECURITY:
-			session_prop->is_secure = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_DSPMASK:
-			session_prop->dsp_mask = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FDU:
-			session_prop->cycles[HFI_HW_FDU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_ICA:
-			session_prop->cycles[HFI_HW_ICA] =
-				div_by_1dot5(prop_array[i].data);
-			break;
-		case EVA_KMD_PROP_PWR_OD:
-			session_prop->cycles[HFI_HW_OD] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_MPU:
-			session_prop->cycles[HFI_HW_MPU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_VADL:
-			session_prop->cycles[HFI_HW_VADL] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_TOF:
-			session_prop->cycles[HFI_HW_TOF] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_RGE:
-			session_prop->cycles[HFI_HW_RGE] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_XRA:
-			session_prop->cycles[HFI_HW_XRA] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_LSR:
-			session_prop->cycles[HFI_HW_LSR] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FW:
-			session_prop->fw_cycles =
-				div_by_1dot5(prop_array[i].data);
-			break;
-		case EVA_KMD_PROP_PWR_DDR:
-			session_prop->ddr_bw = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_SYSCACHE:
-			session_prop->ddr_cache = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FDU_OP:
-			session_prop->op_cycles[HFI_HW_FDU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_ICA_OP:
-			session_prop->op_cycles[HFI_HW_ICA] =
-				div_by_1dot5(prop_array[i].data);
-			break;
-		case EVA_KMD_PROP_PWR_OD_OP:
-			session_prop->op_cycles[HFI_HW_OD] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_MPU_OP:
-			session_prop->op_cycles[HFI_HW_MPU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_VADL_OP:
-			session_prop->op_cycles[HFI_HW_VADL] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_TOF_OP:
-			session_prop->op_cycles[HFI_HW_TOF] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_RGE_OP:
-			session_prop->op_cycles[HFI_HW_RGE] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_XRA_OP:
-			session_prop->op_cycles[HFI_HW_XRA] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_LSR_OP:
-			session_prop->op_cycles[HFI_HW_LSR] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FW_OP:
-			session_prop->fw_op_cycles =
-				div_by_1dot5(prop_array[i].data);
-			break;
-		case EVA_KMD_PROP_PWR_DDR_OP:
-			session_prop->ddr_op_bw = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_SYSCACHE_OP:
-			session_prop->ddr_op_cache = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_FDU:
-			session_prop->fps[HFI_HW_FDU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_MPU:
-			session_prop->fps[HFI_HW_MPU] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_OD:
-			session_prop->fps[HFI_HW_OD] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_ICA:
-			session_prop->fps[HFI_HW_ICA] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_VADL:
-			session_prop->fps[HFI_HW_VADL] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_TOF:
-			session_prop->fps[HFI_HW_TOF] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_RGE:
-			session_prop->fps[HFI_HW_RGE] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_XRA:
-			session_prop->fps[HFI_HW_XRA] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_LSR:
-			session_prop->fps[HFI_HW_LSR] = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
-			session_prop->dump_offset = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SESSION_DUMPSIZE:
-			session_prop->dump_size = prop_array[i].data;
-			break;
-		case EVA_KMD_PROP_SET_NAME:
-		{
-			u32 idx = i * 4;
-
-			rc = cvp_session_name_copy_u32(idx, session_prop,
-								(u32 *)&(prop_array[i].data));
-			break;
-		}
-		default:
-			dprintk(CVP_ERR,
-				"unrecognized sys property to set %d\n",
-				prop_array[i].prop_type);
-			rc = -EFAULT;
+		if (msm_cvp_set_sysprop_sess(inst, &prop_array[i], i)) {
+			if (msm_cvp_set_sysprop_pwr_hw(inst, &prop_array[i])) {
+				if (msm_cvp_set_sysprop_pwr_op(inst, &prop_array[i])) {
+					if (msm_cvp_set_sysprop_pwr_fps(inst, &prop_array[i])) {
+						dprintk(CVP_ERR,
+							"unrecognized sys property to set %d\n",
+							prop_array[i].prop_type);
+						rc = -EFAULT;
+					}
+				}
+			}
 		}
 	}
 
