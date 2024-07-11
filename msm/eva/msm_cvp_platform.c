@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -577,7 +577,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "WARP_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_DMM_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -602,7 +602,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "DMM_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -785,7 +785,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "PYS_HCD_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_SET_MODEL_BUFFERS - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -900,7 +900,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "RGE_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_RGE_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -917,7 +917,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "ITOF_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_EVA_ITOF_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -983,7 +983,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "DME_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_GME_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -1000,7 +1000,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "GME_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_LME_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -1017,7 +1017,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "LME_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_EVA_SPSTAT_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
@@ -1034,7 +1034,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "SPSTAT_FRAME",
-			.force_kernel_fence = true,
+			.force_kernel_fence = false,
 		},
 };
 
