@@ -19,6 +19,8 @@
 #include "eva_shared_def.h"
 #include "cvp_presil.h"
 
+extern bool trigger_smmu_fault;
+
 void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr)
 {
 	#if (KERNEL_VERSION(5, 16, 0) > LINUX_VERSION_CODE)
@@ -1638,6 +1640,9 @@ exit:
 	return ret;
 }
 
+/* for trigger smmu fault */
+static u32 frame_count;
+
 static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 			struct cvp_buf_type *buf,
 			struct msm_cvp_frame *frame,
@@ -1682,6 +1687,16 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 #endif
 
 	iova = smem->device_addr + buf->offset;
+
+	if (trigger_smmu_fault) {
+		frame_count++;
+		if (frame_count % 200 == 0) {
+			iova -= 0x4000000;
+			frame_count = 0;
+			trigger_smmu_fault = false;
+			dprintk(CVP_ERR, "generating fault address %#x", iova);
+		}
+	}
 
 	return iova;
 }
@@ -1790,7 +1805,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 	mutex_unlock(&inst->frames.lock);
 
 	if (!found)
-		dprintk(CVP_WARN, "%s frame %llu not found!\n", __func__, ktid);
+		dprintk(CVP_CMD, "%s frame %llu not found!\n", __func__, ktid);
 }
 
 /*
@@ -1844,6 +1859,7 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr;
 	int i, ret;
 	u32 iova;
+	u64 ktid;
 
 	if (!offset || !buf_num)
 		return 0;
@@ -1852,7 +1868,11 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		return -EINVAL;
 	}
 
+	/*Add kernel transaction ID for persist packet*/
+	ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
+	ktid &= (FENCE_BIT - 1);
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
+	cmd_hdr->header.client_data.kdata = ktid;
 	for (i = 0; i < buf_num; i++) {
 		buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
 		offset += sizeof(*buf) >> 2;
@@ -1895,6 +1915,12 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	core = cvp_driver->cvp_core;
 	if (!core)
 		return -EINVAL;
+
+	/*Add kernel transaction ID for config packet*/
+	ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
+	ktid &= (FENCE_BIT - 1);
+	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
+	cmd_hdr->header.client_data.kdata = ktid;
 
 	if (!offset || !buf_num)
 		return 0;

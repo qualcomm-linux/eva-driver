@@ -86,7 +86,7 @@ bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core,
 
 	/* Instance count includes current instance as well. */
 
-	if ((*instance_count >= core->resources.max_inst_count) ||
+	if ((*instance_count > core->resources.max_inst_count) ||
 		(secure_instance_count >=
 			core->resources.max_secure_inst_count))
 		overload = true;
@@ -306,8 +306,6 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 	struct cvp_session_queue *sq, *sqf;
 	struct cvp_hfi_ops *ops_tbl;
 	struct msm_cvp_inst *tmp;
-	u32 error_event = NO_ERROR;
-	u32 error_state = SESSION_NORMAL;
 
 	if (!inst) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
@@ -374,35 +372,12 @@ stop_session:
 		goto exit;
 	}
 
-	error_event = (0x0FFF0000 & inst->session_error_code) >> 16;
-	error_state = (0xF0000000 & inst->session_error_code) >> 28;
-	if (!empty) {
-		if (error_state == SESSION_ERROR && error_event == EVA_SESSION_TIMEOUT) {
-			/*Flush all pending cmds for specific EVA session*/
-			rc = cvp_session_flush_all(inst);
-			if (rc) {
-				dprintk(CVP_ERR,
-					"%s: cannot flush session %llx (%#x) rc %d\n",
-					__func__, inst, hash32_ptr(inst->session), rc);
-			}
-		}
-		/* STOP SESSION to avoid SMMU fault after releasing ARP */
-		ops_tbl = inst->core->dev_ops;
-		rc = call_hfi_op(ops_tbl, session_stop, (void *)inst->session);
-		if (rc) {
-			dprintk(CVP_WARN, "%s: cannot stop session rc %d\n",
-				__func__, rc);
-			goto release_arp;
-		}
-
-		/*Fail stop session, release arp later may cause smmu fault*/
-		rc = wait_for_sess_signal_receipt(inst, HAL_SESSION_STOP_DONE);
+	if (inst->session_queue.state != QUEUE_STOP) {
+		rc = msm_cvp_session_flush_stop(inst);
 		if (rc)
-			dprintk(CVP_WARN, "%s: wait for sess_stop fail, rc %d\n",
-					__func__, rc);
+			goto err_timeout;
 		/* Continue to release ARP anyway */
 	}
-release_arp:
 	cvp_put_inst(tmp);
 exit:
 	if (cvp_release_arp_buffers(inst))
@@ -423,6 +398,9 @@ exit:
 		call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 	}
 	return 0;
+err_timeout:
+	cvp_put_inst(tmp);
+	return rc;
 }
 
 int msm_cvp_destroy(struct msm_cvp_inst *inst)
@@ -512,7 +490,7 @@ int msm_cvp_close(void *instance)
 	}
 
 	pr_info(CVP_PID_TAG
-		"to close instance: %pK session_id = %d type %d state %d\n",
+		"to close instance: %pK session_id = %#x type %d state %d\n",
 		current->pid, current->tgid, inst->proc_name, inst, hash32_ptr(inst->session),
 		inst->session_type, inst->state);
 
@@ -529,8 +507,12 @@ int msm_cvp_close(void *instance)
 
 	if (inst->session_type != MSM_CVP_BOOT) {
 		rc = msm_cvp_cleanup_instance(inst);
-		if (rc)
+		if (rc) {
+			dprintk(CVP_ERR,
+				"%s: cleanup instance failed for session %llx (%#x) rc %d\n",
+				__func__, inst, hash32_ptr(inst->session), rc);
 			return -EINVAL;
+		}
 		msm_cvp_session_deinit(inst);
 	}
 
@@ -541,8 +523,8 @@ int msm_cvp_close(void *instance)
 		rc = msm_cvp_deinit_core(inst);
 	}
 
-	msm_cvp_comm_session_clean(inst);
 exit:
+	msm_cvp_comm_session_clean(inst);
 	kref_put(&inst->kref, close_helper);
 	return 0;
 }

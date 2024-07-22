@@ -23,6 +23,7 @@
 )
 
 atomic_t cvp_error_count;
+bool trigger_smmu_fault;
 
 static void dump_hfi_queue(struct iris_hfi_device *device)
 {
@@ -368,7 +369,14 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 				SESSION_MSG_INDEX(cmd));
 		if (inst->state != MSM_CVP_CORE_INVALID)
 			print_hfi_queue_info(ops_tbl);
-		handle_session_timeout(inst);
+		if (cmd != HAL_SESSION_STOP_DONE &&
+			cmd != HAL_SESSION_FLUSH_DONE &&
+			cmd != HAL_SESSION_SET_BUFFER_DONE &&
+			cmd != HAL_SESSION_INIT_DONE &&
+			cmd != HAL_SESSION_START_DONE)
+			handle_session_timeout(inst, true);
+		else
+			handle_session_timeout(inst, false);
 		rc = -ETIMEDOUT;
 	} else if (inst->state == MSM_CVP_CORE_INVALID) {
 		rc = -ECONNRESET;
@@ -425,8 +433,7 @@ static void handle_session_init_done(enum hal_command_response cmd, void *data)
 	if (response->status)
 		dprintk(CVP_ERR,
 			"Session %#x init err response from FW : 0x%x\n",
-			 hash32_ptr(inst->session), response->status);
-
+			hash32_ptr(inst->session), response->status);
 	else
 		dprintk(CVP_SESS, "%s: cvp session %#x\n", __func__,
 			hash32_ptr(inst->session));
@@ -576,7 +583,7 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	cvp_put_inst(inst);
 }
 
-void handle_session_timeout(struct msm_cvp_inst *inst)
+void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 {
 	struct cvp_session_queue *sq;
 	unsigned long flags = 0;
@@ -604,6 +611,9 @@ void handle_session_timeout(struct msm_cvp_inst *inst)
 	spin_unlock_irqrestore(
 		&inst->event_handler.lock, flags);
 	wake_up_all(&inst->event_handler.wq);
+
+	if (stop_required)
+		msm_cvp_session_flush_stop(inst);
 }
 
 void handle_sys_error(enum hal_command_response cmd, void *data)
@@ -1142,6 +1152,26 @@ static char state_names[MSM_CVP_CORE_INVALID + 1][32] = {
 	"CORE_INVALID"
 };
 
+int msm_cvp_state_result_check(struct msm_cvp_inst *inst, int input, int state)
+{
+	if (input == -ETIMEDOUT) {
+		dprintk(CVP_ERR,
+				"Timedout move from state: %s to %s\n",
+				state_names[inst->state],
+				state_names[state]);
+		if (inst->state != MSM_CVP_CORE_INVALID)
+			msm_cvp_comm_kill_session(inst);
+		return -ETIMEDOUT;
+	}
+	/*Send invalid error code to user mode*/
+	if (input && inst->prev_hfi_error_code) {
+		dprintk(CVP_ERR,
+			"Instance has invalid msg error code from FW");
+		return -EINVAL;
+	}
+	return 0;
+}
+
 int msm_cvp_comm_try_state(struct msm_cvp_inst *inst, int state)
 {
 	int rc = 0;
@@ -1223,14 +1253,8 @@ int msm_cvp_comm_try_state(struct msm_cvp_inst *inst, int state)
 
 	mutex_unlock(&inst->sync_lock);
 
-	if (rc == -ETIMEDOUT) {
-		dprintk(CVP_ERR,
-				"Timedout move from state: %s to %s\n",
-				state_names[inst->state],
-				state_names[state]);
-		if (inst->state != MSM_CVP_CORE_INVALID)
-			msm_cvp_comm_kill_session(inst);
-	}
+	rc = msm_cvp_state_result_check(inst, rc, state);
+
 	CVPKERNEL_ATRACE_END("msm_cvp_comm_try_state");
 	return rc;
 }
@@ -1257,8 +1281,14 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core)
 	ops_tbl = core->dev_ops;
 	call_hfi_op(ops_tbl, noc_error_info, ops_tbl->hfi_device_data);
 
-	if (core->smmu_fault_count >= core->resources.max_ssr_allowed)
+	if (core->smmu_fault_count >= core->resources.max_ssr_allowed) {
+		dprintk(CVP_INFO, "msm_cvp_smmu_fault_recovery %d\n",
+				msm_cvp_smmu_fault_recovery);
+		if (msm_cvp_smmu_fault_recovery)
+			core->resources.non_fatal_pagefaults = 1;
+
 		BUG_ON(!core->resources.non_fatal_pagefaults);
+	}
 
 	return 0;
 }
@@ -1360,9 +1390,15 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 				break;
 		}
 		dprintk(CVP_ERR, "Session timeout triggered\n");
-		handle_session_timeout(inst);
+		handle_session_timeout(inst, true);
 		return;
 	}
+	if (core->ssr_type == SSR_CORE_SMMU_FAULT) {
+		trigger_smmu_fault = true;
+		dprintk(CVP_ERR, "smmu fault triggered\n");
+		return;
+	}
+
 send_again:
 	mutex_lock(&core->lock);
 	if (core->state == CVP_CORE_INIT_DONE) {
@@ -1544,11 +1580,15 @@ int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst)
 	}
 	session_prop = &inst->prop;
 
-	dprintk(tag, "%s inst stype %d %pK id = %#x ptype %#x prio %#x secure %#x kmask %#x dmask %#x, kref %#x state %#x\n",
+	dprintk(tag,
+		"%s inst stype %d %pK id = %#x ptype %#x prio %#x secure %#x kmask %#x",
 		inst->proc_name, inst->session_type, inst, hash32_ptr(inst->session),
 		inst->prop.type, inst->prop.priority, inst->prop.is_secure,
-		inst->prop.kernel_mask, inst->prop.dsp_mask,
-		kref_read(&inst->kref), inst->state);
+		inst->prop.kernel_mask);
+	dprintk(tag,
+		"dmask %#x, kref %#x state %#x session_error_code 0x%x\n",
+		inst->prop.dsp_mask, kref_read(&inst->kref), inst->state,
+		inst->session_error_code);
 	dprintk(tag, "session name %s", session_prop->session_name);
 
 	return 0;

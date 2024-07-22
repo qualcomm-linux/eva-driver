@@ -41,6 +41,7 @@ enum cvp_msg_prio {
 	CVP_SESS = 0x002000,
 	CVP_HFI  = 0x004000,
 	CVP_VM   = 0x008000,
+	CVP_TRACE = 0x0010000,
 	CVP_DBG  = CVP_MEM | CVP_SYNX | CVP_CORE | CVP_REG | CVP_CMD |
 		CVP_PWR | CVP_DSP | CVP_SESS | CVP_HFI | CVP_PKT | CVP_VM,
 };
@@ -74,6 +75,7 @@ extern bool msm_cvp_dcvs_disable;
 extern int msm_cvp_minidump_enable;
 extern int cvp_kernel_fence_enabled;
 extern int msm_cvp_hw_wd_recovery;
+extern int msm_cvp_smmu_fault_recovery;
 
 #define dprintk(__level, __fmt, arg...)	\
 	do { \
