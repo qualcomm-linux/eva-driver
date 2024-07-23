@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "msm_cvp_common.h"
@@ -119,7 +119,7 @@ int msm_cvp_mmrm_register(struct iris_hfi_device *device)
 		if (cl->has_scaling) {	/* only clk source enabled in dtsi */
 			device->mmrm_desc.client_info.desc.clk=cl->clk;
 			device->mmrm_desc.client_info.desc.client_id=cl->clk_id;
-			strlcpy(name, cl->name,
+			strscpy(name, cl->name,
 			sizeof(device->mmrm_desc.client_info.desc.name));
 		}
 	}

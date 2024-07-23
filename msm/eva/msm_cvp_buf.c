@@ -72,7 +72,7 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 	if (smem->dma_buf) {
 		i = get_pkt_index_from_type(smem->pkt_type);
 		if (i > 0)
-			strlcpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
+			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
