@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _MSM_COMM_DEF_H_
@@ -50,6 +50,7 @@ enum queue_state {
 #endif /* End of CONFIG_EVA_SUN*/
 
 #ifdef CONFIG_EVA_CANOE
+#define USE_PRESIL
 #endif /* End of CONFIG_EVA_CANOE*/
 
 
