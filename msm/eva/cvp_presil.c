@@ -63,8 +63,10 @@ int presil42_read_register(u32 reg)
 	int rc = 0;
 	u8 *base_addr;
 
-	//override with presil base addr - defined between eva kernel &
-	//cam presil API implementation
+	/*
+	 *override with presil base addr - defined between eva kernel &
+	 *cam presil API implementation
+	 */
 	base_addr = (void *)CVP_REG_BASE_ADDR;
 
 	rc = cam_presil_register_read((void *)(base_addr + reg), &data);
@@ -136,8 +138,10 @@ int presil42_iface_msgq_read(void *pkt)
 		words_read = words_read - pkt_size;
 	} else {
 		rc = -1;
-		dprintk(CVP_ERR,
-			"MSG Q: Failed to execute hfi_read_message directly on PCHOST ");
+		/*
+		 *dprintk(CVP_ERR,
+		 *"MSG Q: Failed to execute hfi_read_message directly on PCHOST ");
+		 */
 	}
 	return rc;
 }
@@ -159,8 +163,10 @@ int presil42_iface_dbgq_read(void *pkt)
 			"DBG Q: Successfully execute %s directly on Presil PCHOST ", __func__);
 	} else {
 		rc = -1;
-		dprintk(CVP_ERR,
-			"DBG Q: Failed to execute %s directly on Presil PCHOST ", __func__);
+		/*
+		 *dprintk(CVP_ERR,
+		 *"DBG Q: Failed to execute %s directly on Presil PCHOST ", __func__);
+		 */
 	}
 	return rc;
 }
@@ -215,8 +221,6 @@ void presil42_setup_ucregion_memory_map(struct iris_hfi_device *device)
 void presil42_core_clear_interrupt(struct iris_hfi_device *device)
 {
 	u32 intr_status = 0;
-	//to do: remove this temporary walkaround after fixing
-	//PC_HOST IRQ handler called issue by Rumi42
 	device->intr_status |= intr_status;
 	device->reg_count++;
 	dprintk(CVP_REG,
@@ -313,7 +317,7 @@ void presil42_cvp_iris_hfi_delete_device(struct iris_hfi_device *dev)
 {
 	bool bRetVal = false;
 
-	// CVP Presil device unhook up
+	/*CVP Presil device unhook up*/
 	bRetVal = cam_presil_unsubscribe_device_irq(dev->cvp_hal_data->irq);
 	dprintk(CVP_INFO,
 		"PRESIL_UNSUBS_IRQ: UnSubscribe for CVP IRQ: Ret=%d IRQ NUM=%dIRQ Name=iris_cvp",
@@ -406,10 +410,11 @@ void presil42_set_smem_flags(u32 smem_flags)
 int presil42_set_irq_settings(struct cvp_hal_data *hal, struct iris_hfi_device *device, int rc)
 {
 
-	//CVP IRQ Presil Set Memory
-	//set_presil_base_address(101, hal->register_base, hal->firmware_base,
-	//"iris_cvp", hal->register_size, 0); PreSil API changes due to the
-	//last Register base address. Set to 0 now.
+	/*CVP IRQ Presil Set Memory
+	 *set_presil_base_address(101, hal->register_base, hal->firmware_base,
+	 *"iris_cvp", hal->register_size, 0); PreSil API changes due to the
+	 *last Register base address. Set to 0 now.
+	 */
 
 	int bRetVal = false;
 

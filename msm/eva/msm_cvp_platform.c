@@ -927,6 +927,36 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "ITOF_CONFIG",
 		},
+	[HFI_CMD_SESSION_EVA_SCALER_FRAME - HFI_CMD_SESSION_CVP_START] = {
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_SCALER_FRAME,
+			.is_config_pkt = false,
+			.resp = HAL_NO_RESP,
+			.name = "SCALER_FRAME",
+			.force_kernel_fence = false,
+		},
+	[HFI_CMD_SESSION_EVA_SCALER_CONFIG - HFI_CMD_SESSION_CVP_START] = {
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_SCALER_CONFIG,
+			.is_config_pkt = true,
+			.resp = HAL_NO_RESP,
+			.name = "SCALER_CONFIG",
+		},
+	[HFI_CMD_SESSION_EVA_DESCRIPTOR_FRAME - HFI_CMD_SESSION_CVP_START] = {
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_DESCRIPTOR_FRAME,
+			.is_config_pkt = false,
+			.resp = HAL_NO_RESP,
+			.name = "DESCRIPTOR_FRAME",
+			.force_kernel_fence = false,
+		},
+	[HFI_CMD_SESSION_EVA_DESCRIPTOR_CONFIG - HFI_CMD_SESSION_CVP_START] = {
+			.size = 0xFFFFFFFF,
+			.type = HFI_CMD_SESSION_EVA_DESCRIPTOR_CONFIG,
+			.is_config_pkt = true,
+			.resp = HAL_NO_RESP,
+			.name = "DESCRIPTOR_CONFIG",
+		},
 	[HFI_CMD_SESSION_EVA_DLFD_FRAME - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = 0xFFFFFFFF,
