@@ -2875,38 +2875,6 @@ static int iris_hfi_session_abort(void *sess)
 	return rc;
 }
 
-static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
-{
-	unsigned long crc_value = 0;
-	unsigned int *pbuf      = NULL;
-	unsigned int idx        = 0;
-
-	if (!in_pkt) {
-		dprintk(CVP_ERR, "%s: invalid in_pkt\n", __func__);
-		return -1;
-	}
-
-	if (msm_cvp_fw_debug & HFI_DEBUG_MSG_CRC_EN) {
-		struct cvp_hfi_cmd_session_hdr *cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-
-		pbuf                                    = (unsigned int *)in_pkt;
-
-		for (idx = 0; idx < (cmd_hdr->header.size / sizeof(unsigned int)); idx++) {
-			// 0xC is the offset for reserved2 which use to store packet crc
-			if (idx == HFI_CMD_CLIENT_DATA_RESERVE_2_OFFSET_IN_UWORD32)
-				continue;
-			crc_value += *(pbuf + idx);
-		}
-
-		cmd_hdr->header.client_data.reserved2 = (unsigned int)(crc_value & 0xFFFFFFFF);
-
-		dprintk(CVP_MEM, "%s - hfi crc 0x%x", __func__,
-			cmd_hdr->header.client_data.reserved2);
-	}
-
-	return 0;
-}
-
 static int iris_hfi_session_set_buffers(void *sess, u32 iova, u32 size)
 {
 	struct cvp_hfi_cmd_session_set_buffers_packet pkt;
@@ -3030,12 +2998,6 @@ static int iris_hfi_session_send(void *sess,
 		rc = -ECONNRESET;
 		goto err_send_pkt;
 	}
-
-	rc = cvp_add_hfi_crc(in_pkt);
-	if (rc)
-		dprintk(CVP_ERR, "%s: Failed to cvp_add_hfi_crc\n",
-			__func__);
-
 	rc = call_hfi_pkt_op(device, session_send,
 			&pkt, session, in_pkt);
 	if (rc) {
