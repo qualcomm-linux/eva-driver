@@ -371,7 +371,6 @@ int cvp_create_pkt_cmd_session_release_buffers(
 }
 
 int cvp_create_pkt_cmd_session_send(
-		struct eva_kmd_hfi_packet *out_pkt,
 		struct cvp_hal_session *session,
 		struct eva_kmd_hfi_packet *in_pkt)
 {
@@ -379,7 +378,7 @@ int cvp_create_pkt_cmd_session_send(
 	struct cvp_hal_session_cmd_pkt *ptr =
 		(struct cvp_hal_session_cmd_pkt *)in_pkt;
 
-	if (!out_pkt || !in_pkt || !session)
+	if (!in_pkt || !session)
 		return -EINVAL;
 
 	if (ptr->size > MAX_HFI_PKT_SIZE * sizeof(unsigned int))
@@ -390,14 +389,11 @@ int cvp_create_pkt_cmd_session_send(
 
 	def_idx = get_pkt_index(ptr);
 	if (def_idx < 0) {
-		memcpy(out_pkt, in_pkt, ptr->size);
-		return 0;
+		goto error_hfi_packet;
 	}
 
 	if (cvp_hfi_defs[def_idx].type != ptr->packet_type)
 		goto error_hfi_packet;
-
-	memcpy(out_pkt, in_pkt, ptr->size);
 
 	return 0;
 
