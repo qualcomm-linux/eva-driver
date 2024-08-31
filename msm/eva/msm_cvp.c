@@ -357,6 +357,9 @@ static int cvp_fence_proc(struct msm_cvp_inst *inst,
 	sq = &inst->session_queue_fence;
 	ktid = pkt->header.client_data.kdata;
 
+	if (fc->signature == 0xB0BABABE)
+		goto receive_msg;
+
 	CVPKERNEL_ATRACE_BEGIN("cvp_synx_ops CVP_INPUT_SYNX");
 	rc = inst->core->synx_ftbl->cvp_synx_ops(inst, CVP_INPUT_SYNX,
 			fc, &synx_state);
@@ -376,6 +379,7 @@ static int cvp_fence_proc(struct msm_cvp_inst *inst,
 		goto exit;
 	}
 
+receive_msg:
 	timeout = msecs_to_jiffies(
 			inst->core->resources.msm_cvp_hw_rsp_timeout);
 	rc = cvp_wait_process_message(inst, sq, &ktid, timeout,
@@ -405,8 +409,9 @@ static int cvp_fence_proc(struct msm_cvp_inst *inst,
 exit:
 	CVPKERNEL_ATRACE_BEGIN("cvp_synx_ops CVP_OUTPUT_SYNX");
 	fc->msg_pkt = (struct cvp_hfi_msg_session_hdr *)(&hdr);
-	rc = inst->core->synx_ftbl->cvp_synx_ops(inst, CVP_OUTPUT_SYNX,
-			fc, &synx_state);
+	if (fc->signature == 0xFEEDFACE)
+		rc = inst->core->synx_ftbl->cvp_synx_ops(
+			inst, CVP_OUTPUT_SYNX, fc, &synx_state);
 	CVPKERNEL_ATRACE_END("cvp_synx_ops CVP_OUTPUT_SYNX");
 	CVPKERNEL_ATRACE_END("cvp_fence_proc");
 	return rc;
@@ -534,6 +539,9 @@ static int cvp_populate_fences( struct eva_kmd_hfi_packet *in_pkt,
 	struct cvp_buf_type *buf;
 	bool override;
 	unsigned int total_fence_count = 0;
+	struct cvp_hfi_ops *ops_tbl;
+
+	ops_tbl = inst->core->dev_ops;
 
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	int rc = 0;
@@ -622,8 +630,18 @@ soc_fence:
 		}
 	}
 	f->signature = 0xB0BABABE;
-	if (f->num_fences)
+	if (f->num_fences) {
+		cmd_hdr->header.client_data.kdata |= FENCE_BIT;
+		memcpy(f->pkt, cmd_hdr, sizeof(struct cvp_hfi_cmd_session_hdr));
+
+		rc = call_hfi_op(ops_tbl, session_send, (void *)inst->session, in_pkt);
+		if (rc) {
+			dprintk(CVP_ERR, "%s: Failed in call_hfi_op %d, %x\n",
+					 __func__, in_pkt->pkt_data[0], in_pkt->pkt_data[1]);
+			goto free_exit;
+		}
 		goto fence_cmd_queue;
+	}
 
 	goto free_exit;
 
@@ -684,11 +702,11 @@ kernel_fence:
 		goto free_exit;
 	}
 
-fence_cmd_queue:
-	fence_cnt = f->num_fences;
 	memcpy(f->pkt, cmd_hdr, cmd_hdr->header.size);
 	f->pkt->header.client_data.kdata |= FENCE_BIT;
 
+fence_cmd_queue:
+	fence_cnt = f->num_fences;
 	mutex_lock(&q->lock);
 	list_add_tail(&f->list, &inst->fence_cmd_queue.wait_list);
 	mutex_unlock(&q->lock);
