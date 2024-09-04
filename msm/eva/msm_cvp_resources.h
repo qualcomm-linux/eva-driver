@@ -176,6 +176,7 @@ struct msm_cvp_platform_resources {
 	uint32_t register_size;
 	uint32_t ipcc_reg_size;
 	uint32_t gcc_reg_size;
+	uint32_t ipcc_reg_base_iova;
 	struct cvp_fw_reg_mappings reg_mappings;
 	uint32_t irq;
 	uint32_t irq_wd;
