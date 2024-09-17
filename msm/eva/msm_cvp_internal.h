@@ -55,6 +55,7 @@
 #define MAX_CVP_ERROR_COUNT 65535
 
 struct msm_cvp_inst;
+struct cvp_dsp_fastrpc_driver_entry;
 
 enum cvp_core_state {
 	CVP_CORE_UNINIT = 0,
@@ -312,6 +313,7 @@ struct msm_cvp_inst {
 	struct mutex sync_lock, lock;
 	struct msm_cvp_core *core;
 	enum session_type session_type;
+	struct cvp_dsp_fastrpc_driver_entry *fastrpc_entry;
 	u32 dsp_handle;
 	struct task_struct *task;
 	atomic_t smem_count;
@@ -323,11 +325,9 @@ struct msm_cvp_inst {
 	struct msm_cvp_list freqs;
 	struct msm_cvp_list persistbufs;
 	struct cvp_dmamap_cache dma_cache;
-	struct msm_cvp_list cvpdspbufs;
 	struct msm_cvp_list cvpwnccbufs;
 	struct msm_cvp_list frames;
 	struct cvp_frame_bufs last_frame;
-	struct cvp_frame_bufs unused_dsp_bufs;
 	struct cvp_frame_bufs unused_wncc_bufs;
 	u32 cvpwnccbufs_num;
 	struct msm_cvp_wncc_buffer* cvpwnccbufs_table;

@@ -102,7 +102,8 @@ enum CVP_DSP_COMMAND {
 	DSP2CPU_START_SESSION = 21,
 	DSP2CPU_STOP_SESSION = 22,
 	DSP2CPU_SET_SESSION_NAME = 23,
-	CVP_DSP_MAX_CMD = 24,
+	DSP2CPU_PD_INIT = 24,
+	CVP_DSP_MAX_CMD = 25,
 };
 
 struct eva_power_req {
@@ -237,6 +238,11 @@ struct cvp_dsp_fastrpc_driver_entry {
 	struct completion fastrpc_probe_completion;
 	/* all dsp sessions list */
 	struct msm_cvp_list dsp_sessions;
+
+	/* dsp buffer lists*/
+	struct msm_cvp_list cvpdspbufs;
+	struct cvp_frame_bufs unused_dsp_bufs;
+	atomic_t smem_count;
 };
 
 struct cvp_dsp_apps {
@@ -292,6 +298,7 @@ struct cvp_dsp_trace_instance {
 
 struct cvp_dsp_trace_session {
 	u32                session_id;
+	u32                handle;
 	u32                buf_cnt;
 	u32                inst_cnt;
 	struct cvp_dsp_trace_instance  instance[EVA_TRACE_MAX_INSTANCE_NUM];

@@ -188,7 +188,6 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	INIT_MSM_CVP_LIST(&inst->persistbufs);
 	INIT_DMAMAP_CACHE(&inst->dma_cache);
-	INIT_MSM_CVP_LIST(&inst->cvpdspbufs);
 	INIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	INIT_MSM_CVP_LIST(&inst->frames);
 
@@ -250,7 +249,6 @@ fail_init:
 
 	DEINIT_MSM_CVP_LIST(&inst->persistbufs);
 	DEINIT_DMAMAP_CACHE(&inst->dma_cache);
-	DEINIT_MSM_CVP_LIST(&inst->cvpdspbufs);
 	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	DEINIT_MSM_CVP_LIST(&inst->frames);
 
@@ -310,26 +308,6 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 5;
 	msm_cvp_session_queue_stop(inst);
 
-wait_dsp:
-	mutex_lock(&inst->cvpdspbufs.lock);
-	empty = list_empty(&inst->cvpdspbufs.list);
-	if (!empty && max_retries > 0) {
-		mutex_unlock(&inst->cvpdspbufs.lock);
-		usleep_range(2000, 3000);
-		max_retries--;
-		goto wait_dsp;
-	}
-	mutex_unlock(&inst->cvpdspbufs.lock);
-
-	if (!empty) {
-		dprintk(CVP_WARN, "Failed sess %pK DSP frame pending\n", inst);
-		/*
-		 * A session is either DSP session or CPU session, cannot have both
-		 * DSP and frame buffers
-		 */
-		goto stop_session;
-	}
-
 	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 1;
 wait_frame:
 	mutex_lock(&inst->frames.lock);
@@ -356,7 +334,6 @@ wait_frame:
 		inst->core->synx_ftbl->cvp_dump_fence_queue(inst);
 	}
 
-stop_session:
 	tmp = cvp_get_inst_validate(inst->core, inst);
 	if (!tmp) {
 		dprintk(CVP_ERR, "%s has a invalid session %llx\n",
@@ -422,7 +399,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 
 	DEINIT_MSM_CVP_LIST(&inst->persistbufs);
 	DEINIT_DMAMAP_CACHE(&inst->dma_cache);
-	DEINIT_MSM_CVP_LIST(&inst->cvpdspbufs);
 	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	DEINIT_MSM_CVP_LIST(&inst->frames);
 

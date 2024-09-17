@@ -24,6 +24,7 @@
 struct msm_cvp_inst;
 struct msm_cvp_platform_resources;
 struct msm_cvp_list;
+struct cvp_dsp_fastrpc_driver_entry;
 
 enum smem_cache_ops {
 	SMEM_CACHE_CLEAN,
@@ -197,6 +198,9 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 			struct msm_cvp_smem *smem,
 			const char *str);
+int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
+			struct msm_cvp_smem *smem,
+			const char *str);
 struct dma_buf *msm_cvp_smem_get_dma_buf(int fd);
 void msm_cvp_smem_put_dma_buf(void *dma_buf);
 int msm_cvp_smem_cache_operations(struct dma_buf *dbuf,
@@ -242,14 +246,19 @@ int msm_cvp_register_buffer(struct msm_cvp_inst *inst,
 		struct eva_kmd_buffer *buf);
 int msm_cvp_unregister_buffer(struct msm_cvp_inst *inst,
 		struct eva_kmd_buffer *buf);
+int msm_cvp_register_dsp_buffer(struct msm_cvp_inst *inst,
+		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
+		struct eva_kmd_buffer *buf);
+int msm_cvp_unregister_dsp_buffer(struct msm_cvp_inst *inst,
+		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
+		struct eva_kmd_buffer *buf);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
-int cvp_allocate_dsp_bufs(struct msm_cvp_inst *inst,
-			struct cvp_internal_buf *buf,
+void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32 tag, bool raw);
+int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 			u32 buffer_size,
 			u32 secure_type);
-int cvp_release_dsp_buffers(struct msm_cvp_inst *inst,
-			struct cvp_internal_buf *buf);
+int cvp_release_dsp_buffers(struct cvp_internal_buf *buf);
 void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);

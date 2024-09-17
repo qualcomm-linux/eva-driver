@@ -642,6 +642,8 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	struct iris_hfi_device *hfi_device;
 	struct msm_cvp_inst *inst = NULL;
 	struct cvp_session_queue *sq;
+	struct cvp_dsp_apps *me = &gfa_cv;
+	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
 	int i, rc = 0;
 	unsigned long flags = 0;
 	enum cvp_core_state cur_state;
@@ -742,6 +744,12 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 		if (!core->trigger_ssr)
 			if (hfi_device->error != CVP_ERR_NOC_ERROR)
 				msm_cvp_print_inst_bufs(inst, false);
+	}
+
+	list_for_each_entry(frpc_node, &me->fastrpc_driver_list.list, list) {
+		if (!core->trigger_ssr)
+			if (hfi_device->error != CVP_ERR_NOC_ERROR)
+				msm_cvp_print_frpc_bufs(frpc_node, CVP_ERR, false);
 	}
 
 	/* handle the hw error before core released to get full debug info */
@@ -1671,6 +1679,21 @@ int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst)
 		inst->prop.dsp_mask, kref_read(&inst->kref), inst->state,
 		inst->session_error_code);
 	dprintk(tag, "session name %s", session_prop->session_name);
+
+	return 0;
+}
+
+int cvp_print_frpc_node(u32 tag, struct cvp_dsp_fastrpc_driver_entry *frpc_node)
+{
+	if (!frpc_node) {
+		dprintk(CVP_ERR, "%s invalid frpc node %pK\n", __func__, frpc_node);
+		return -EINVAL;
+	}
+
+	dprintk(tag,
+		"%s frpc handle %#x session count %d refcount %d smem_count %d",
+		frpc_node->handle, frpc_node->session_cnt, atomic_read(&frpc_node->refcount),
+		atomic_read(&frpc_node->smem_count));
 
 	return 0;
 }
