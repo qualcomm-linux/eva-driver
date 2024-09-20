@@ -549,6 +549,10 @@ static int cvp_populate_fences( struct eva_kmd_hfi_packet *in_pkt,
 	}
 	override = get_pkt_fenceoverride((struct cvp_hal_session_cmd_pkt*)in_pkt);
 
+#ifdef USE_PRESIL42
+	cvp_kernel_fence_enabled = 1;
+	dprintk(CVP_SYNX, "%s:Kernel Fence is 1 for Presil\n", __func__);
+#endif
 	dprintk(CVP_SYNX, "%s:Fence Override is %d\n",__func__, override);
 	dprintk(CVP_SYNX, "%s:Kernel Fence is %d\n", __func__, cvp_kernel_fence_enabled);
 

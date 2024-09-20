@@ -16,6 +16,12 @@ LOCAL_PATH := $(call my-dir)
 LOCAL_MODULE_DDK_BUILD := true		
 LOCAL_MODULE_KO_DIRS := msm/msm-eva.ko
 
+ifeq ($(CONFIG_CAM_PRESIL), y)
+ifneq ($(TARGET_BOARD_PLATFORM),)
+LOCAL_MODULE_DDK_EXTRA_ARGS := "--//vendor/qcom/opensource/camera-kernel:project_name=$(TARGET_BOARD_PLATFORM)"
+endif
+endif
+
 include $(CLEAR_VARS)
 # For incremental compilation
 LOCAL_SRC_FILES   := $(wildcard $(LOCAL_PATH)/**/*) $(wildcard $(LOCAL_PATH)/*)

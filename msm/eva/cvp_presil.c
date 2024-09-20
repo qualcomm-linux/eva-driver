@@ -331,13 +331,15 @@ void presil42_cvp_iris_hfi_delete_device(struct iris_hfi_device *dev)
 
 void presil42_send_wncc_buffer(struct msm_cvp_smem *smem, struct cvp_internal_buf *cbuf)
 {
-	dprintk(CVP_DBG, "%s: %x for cam_presil_send_buffer with MAP_ADDR_OFFSET %x",
-		__func__, (u64)(smem->device_addr) - MAP_ADDR_OFFSET, MAP_ADDR_OFFSET);
+	dprintk(CVP_DBG, "%s: %x for cam_presil_send_buffer with MAP_ADDR_OFFSET %x,
+		 smem->kvaddr 0x%p",
+		__func__, (u64)(smem->device_addr) - MAP_ADDR_OFFSET,
+		MAP_ADDR_OFFSET, smem->kvaddr);
 
 	cam_presil_send_buffer((u64)smem->dma_buf, 0,
 		(u32)cbuf->offset, (u32)cbuf->size,
 		(u64)(smem->device_addr) - MAP_ADDR_OFFSET,
-		(uintptr_t)NULL, false);
+		(uintptr_t)smem->kvaddr, false);
 }
 
 void presil42_send_map_user_persist_buffer(struct msm_cvp_smem *smem,  u32 *iova,
@@ -345,14 +347,16 @@ void presil42_send_map_user_persist_buffer(struct msm_cvp_smem *smem,  u32 *iova
 {
 	*iova = smem->device_addr;
 
-	dprintk(CVP_DBG, "%s: %x : with MAP_ADDR_OFFSET %x, buf offset is %x\n",
-		__func__, (u64)(*iova)-MAP_ADDR_OFFSET, MAP_ADDR_OFFSET, (u32)pbuf->offset);
+	dprintk(CVP_DBG, "%s: %x : with MAP_ADDR_OFFSET %x, buf offset is %x ,
+		smem->kvaddr 0x%p \n",
+		__func__, (u64)(*iova)-MAP_ADDR_OFFSET, MAP_ADDR_OFFSET,
+		(u32)pbuf->offset, smem->kvaddr);
 
 	cam_presil_send_buffer((u64)smem->dma_buf, 0,
 		0,
 		(u32)smem->dma_buf->size,
 		(u64)(*iova)-MAP_ADDR_OFFSET,
-		(uintptr_t)NULL, false);
+		(uintptr_t)smem->kvaddr, false);
 }
 
 void presil42_send_map_frame_buffer(struct msm_cvp_smem *smem,  u32 iova, struct cvp_buf_type *buf)
@@ -360,30 +364,33 @@ void presil42_send_map_frame_buffer(struct msm_cvp_smem *smem,  u32 iova, struct
 	iova = smem->device_addr;
 
 	dprintk(CVP_DBG,
-		"%s:presil_send_buffer  %x : offset %d size %d iova %x MAP_ADDR_OFFSET %d",
+		"%s:presil_send_buffer  %x : offset %d size %d iova %x MAP_ADDR_OFFSET %d
+		, smem->kvaddr 0x%p",
 		__func__, (u64)smem->dma_buf, (u32)buf->offset, (u32)buf->size,
-		(u64)iova - MAP_ADDR_OFFSET, MAP_ADDR_OFFSET);
+		(u64)iova - MAP_ADDR_OFFSET, MAP_ADDR_OFFSET, smem->kvaddr);
 
 	cam_presil_send_buffer((u64)smem->dma_buf, 0, 0,
 		(u32)smem->dma_buf->size,
 		(u64)iova - MAP_ADDR_OFFSET,
-		(uintptr_t)NULL, false);
+		(uintptr_t)smem->kvaddr, false);
 }
 
 void presil42_unmap_frame_buf(struct msm_cvp_smem *smem, struct cvp_internal_buf *buf)
 {
 	dprintk(CVP_DBG,
-		"%s: cam_presil_retrieve_buffer %x : offset %d size %d iova %x MAP_ADDR_OFFSET %d",
+		"%s: cam_presil_retrieve_buffer %x : offset %d size %d iova %x
+		MAP_ADDR_OFFSET %d, smem->kvaddr 0x%p",
 		__func__, (u64)smem->dma_buf,
 		(u32)buf->offset, (u32)buf->size,
-		(u64)smem->device_addr + buf->offset - MAP_ADDR_OFFSET, MAP_ADDR_OFFSET);
+		(u64)smem->device_addr + buf->offset - MAP_ADDR_OFFSET,
+		MAP_ADDR_OFFSET, smem->kvaddr);
 
 	cam_presil_retrieve_buffer(
 		(u64)smem->dma_buf, 0,
 		0,
 		(u32)smem->dma_buf->size,
 		(u64)smem->device_addr - MAP_ADDR_OFFSET,
-		(uintptr_t)NULL, false);
+		(uintptr_t)smem->kvaddr, false);
 }
 
 void presil42_set_buf_fd(struct cvp_buf_type *buf, u32 iova, char *name)
