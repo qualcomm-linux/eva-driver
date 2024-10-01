@@ -14,12 +14,14 @@
 #include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/pm_qos.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/version.h>
+#include <linux/pm_domain.h>
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <linux/firmware/qcom/qcom_scm.h>
 #else
@@ -110,6 +112,9 @@ static int __reset_control_assert_name(struct iris_hfi_device *device, const cha
 static int __reset_control_deassert_name(struct iris_hfi_device *device, const char *name);
 static int __reset_control_acquire(struct iris_hfi_device *device, const char *name);
 static int __reset_control_release(struct iris_hfi_device *device, const char *name);
+
+static int __enable_power_domain(struct iris_hfi_device *device, const char *name);
+static int __disable_power_domain(struct iris_hfi_device *device, const char *name);
 
 static int cvp_iommu_map(struct iommu_domain* domain, unsigned long iova, phys_addr_t paddr, size_t size, int prot)
 {
@@ -348,6 +353,36 @@ static int __dsp_shutdown(struct iris_hfi_device *device)
 	return rc;
 }
 
+/* Function to switch core GDSC bw SW control and HW control.
+ * Make sure controller GDSC and controller clock are ON before
+ * calling this function.
+ * Don't call this function from interrupt/atomic context.
+ * Call this in place of __acquire_regulator, hand_off_regulator.
+ *
+ */
+static int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest)
+{
+	int rc = 0;
+	struct power_domain_info *pd_info;
+
+	iris_hfi_for_each_pwr_domain(device, pd_info) {
+		if (pd_info->has_hw_power_collapse) {
+			dprintk(CVP_CORE, "Moving core GDSC to %s\n",
+						dest?"HW control":"SW control");
+			#ifdef USE_PRESIL
+			#rc = dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
+			#endif
+			if (rc) {
+				dprintk(CVP_ERR, "Failed to move core GDSC to %s\n",
+						dest?"HW control":"SW control");
+			}
+			break;
+		}
+	}
+
+	return rc;
+}
+
 static int __acquire_regulator(struct regulator_info *rinfo,
 				struct iris_hfi_device *device)
 {
@@ -433,14 +468,18 @@ static int __take_back_regulators(struct iris_hfi_device *device)
 	struct regulator_info *rinfo;
 	int rc = 0;
 
-	iris_hfi_for_each_regulator(device, rinfo) {
-		rc = __acquire_regulator(rinfo, device);
-		/*
-		 * if one regulator hand off failed, driver should take
-		 * the control for other regulators back.
-		 */
-		if (rc)
-			return rc;
+	if (device->res->gdsc_framework_type) {
+		rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+	} else {
+		iris_hfi_for_each_regulator(device, rinfo) {
+			rc = __acquire_regulator(rinfo, device);
+			/*
+			 * if one regulator hand off failed, driver should take
+			 * the control for other regulators back.
+			 */
+			if (rc)
+				return rc;
+		}
 	}
 
 	return rc;
@@ -747,17 +786,17 @@ static void __write_register(struct iris_hfi_device *device,
 
 	__strict_check(device);
 
+	base_addr = device->cvp_hal_data->register_base;
+	dprintk(CVP_REG, "Base addr: %pK, written to: %#x, Value: %#x...\n",
+		base_addr, hwiosymaddr, value);
+	base_addr += hwiosymaddr;
+
 	if (!device->power_enabled) {
 		dprintk(CVP_WARN,
 			"HFI Write register failed : Power is OFF\n");
 		msm_cvp_res_handle_fatal_hw_error(device->res, true);
 		return;
 	}
-
-	base_addr = device->cvp_hal_data->register_base;
-	dprintk(CVP_REG, "Base addr: %pK, written to: %#x, Value: %#x...\n",
-		base_addr, hwiosymaddr, value);
-	base_addr += hwiosymaddr;
 
 #ifdef USE_PRESIL42
 	presil42_write_register(device, reg, value);
@@ -2153,13 +2192,23 @@ static int __sys_set_power_control(struct iris_hfi_device *device,
 	bool enable)
 {
 	struct regulator_info *rinfo;
+	struct power_domain_info *pd_info;
 	bool supported = false;
 	struct cvp_hfi_cmd_sys_set_property_packet *pkt;
 
-	iris_hfi_for_each_regulator(device, rinfo) {
-		if (rinfo->has_hw_power_collapse) {
-			supported = true;
-			break;
+	if (device->res->gdsc_framework_type) {
+		iris_hfi_for_each_pwr_domain(device, pd_info) {
+			if (pd_info->has_hw_power_collapse) {
+				supported = true;
+				break;
+			}
+		}
+	} else {
+		iris_hfi_for_each_regulator(device, rinfo) {
+			if (rinfo->has_hw_power_collapse) {
+				supported = true;
+				break;
+			}
 		}
 	}
 
@@ -4024,10 +4073,14 @@ static void __deinit_regulators(struct iris_hfi_device *device)
 {
 	struct regulator_info *rinfo = NULL;
 
-	iris_hfi_for_each_regulator_reverse(device, rinfo) {
-		if (rinfo->regulator) {
-			regulator_put(rinfo->regulator);
-			rinfo->regulator = NULL;
+	if (device->res->gdsc_framework_type) {
+		dprintk(CVP_INFO, "%s, Do nothing, GenPD framework\n", __func__);
+	} else {
+		iris_hfi_for_each_regulator_reverse(device, rinfo) {
+			if (rinfo->regulator) {
+				regulator_put(rinfo->regulator);
+				rinfo->regulator = NULL;
+			}
 		}
 	}
 }
@@ -4037,22 +4090,28 @@ static int __init_regulators(struct iris_hfi_device *device)
 	int rc = 0;
 	struct regulator_info *rinfo = NULL;
 
-	iris_hfi_for_each_regulator(device, rinfo) {
-		rinfo->regulator = regulator_get(&device->res->pdev->dev,
-				rinfo->name);
-		if (IS_ERR_OR_NULL(rinfo->regulator)) {
-			rc = PTR_ERR(rinfo->regulator) ?: -EBADHANDLE;
-			dprintk(CVP_ERR, "Failed to get regulator: %s\n",
+	if (device->res->gdsc_framework_type) {
+		dprintk(CVP_INFO, "%s, Do nothing, GenPD framework\n", __func__);
+		goto do_nothing;
+	} else {
+		iris_hfi_for_each_regulator(device, rinfo) {
+			rinfo->regulator = regulator_get(&device->res->pdev->dev,
 					rinfo->name);
-			rinfo->regulator = NULL;
-			goto err_reg_get;
+			if (IS_ERR_OR_NULL(rinfo->regulator)) {
+				rc = PTR_ERR(rinfo->regulator) ?: -EBADHANDLE;
+				dprintk(CVP_ERR, "Failed to get regulator: %s\n",
+						rinfo->name);
+				rinfo->regulator = NULL;
+				goto err_reg_get;
+			}
 		}
-	}
 
-	return 0;
+		return 0;
+	}
 
 err_reg_get:
 	__deinit_regulators(device);
+do_nothing:
 	return rc;
 }
 
@@ -4248,6 +4307,36 @@ static int __disable_hw_power_collapse(struct iris_hfi_device *device)
 	return rc;
 }
 
+static int __enable_gdsc(struct iris_hfi_device *device,
+		const char *name)
+{
+	int rc = 0;
+
+	if (device->res->gdsc_framework_type) {
+		if (!strcmp(name, "controller")) {
+			rc = __enable_power_domain(device, "controller_pd");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to enable controller pd: %d\n", rc);
+		} else {
+			rc = __enable_power_domain(device, "core_pd");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to enable core pd: %d\n", rc);
+		}
+	} else {
+		if (!strcmp(name, "controller")) {
+			rc = __enable_regulator(device, "cvp");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to enable controller: %s%d\n", rc);
+		} else {
+			rc = __enable_regulator(device, "cvp-core");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to enable core: %d\n", rc);
+		}
+	}
+
+	return rc;
+}
+
 static int __enable_regulator(struct iris_hfi_device *device,
 		const char *name)
 {
@@ -4279,6 +4368,78 @@ static int __enable_regulator(struct iris_hfi_device *device,
 	return -EINVAL;
 }
 
+/* This API will enable the requested power_domain.
+ * If HW_CNTRL is supported for given pd, this API moves
+ * the power domain to HW control immediately.
+ */
+static int __enable_power_domain(struct iris_hfi_device *device,
+		const char *name)
+{
+	int rc = 0;
+	struct power_domain_info *pd_info;
+
+	iris_hfi_for_each_pwr_domain(device, pd_info) {
+		if (strcmp(pd_info->name, name))
+			continue;
+		rc = pm_runtime_get_sync(pd_info->pd_device);
+		if (rc < 0) {
+			dprintk(CVP_ERR, "Failed to enable PD for %s: %d\n",
+					pd_info->name, rc);
+			return rc;
+		}
+
+		dprintk(CVP_PWR, "Enabled Power Domain for %s\n", pd_info->name);
+
+		/* This is needed as HW may turn off the core GDSC as
+		 * there is no transaction currently on HW. With
+		 * core GDSC off, we can't turn on core clock.
+		 */
+
+		if (pd_info->has_hw_power_collapse) {
+			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+			if (rc) {
+				dprintk(CVP_ERR,
+					"Failed to acquire core gdsc control to SW: %d\n", rc);
+				return rc;
+			}
+		}
+		return 0;
+	}
+
+	dprintk(CVP_ERR, "Power Domain %s not found\n", name);
+	return -EINVAL;
+}
+
+static int __disable_gdsc(struct iris_hfi_device *device,
+		const char *name)
+{
+	int rc = 0;
+
+	if (device->res->gdsc_framework_type) {
+		if (!strcmp(name, "controller")) {
+			rc = __disable_power_domain(device, "controller_pd");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to disable controller pd: %d\n", rc);
+		} else {
+			rc = __disable_power_domain(device, "core_pd");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to disable core pd: %d\n", rc);
+		}
+	} else {
+		if (!strcmp(name, "controller")) {
+			rc = __disable_regulator(device, "cvp");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to disable controller: %s%d\n", rc);
+		} else {
+			rc = __disable_regulator(device, "cvp-core");
+			if (rc)
+				dprintk(CVP_ERR, "Failed to disable core: %d\n", rc);
+		}
+	}
+
+	return rc;
+}
+
 static int __disable_regulator(struct iris_hfi_device *device,
 		const char *name)
 {
@@ -4295,6 +4456,33 @@ static int __disable_regulator(struct iris_hfi_device *device,
 	}
 
 	dprintk(CVP_ERR, "%s regulator %s not found\n", __func__, name);
+	return -EINVAL;
+}
+
+/* This API will move the requested power_domain
+ * to SW control(if HW_CNTRL is supported) and disable it immediately.
+ */
+static int __disable_power_domain(struct iris_hfi_device *device,
+		const char *name)
+{
+	int rc = 0;
+	struct power_domain_info *pd_info;
+
+	iris_hfi_for_each_pwr_domain(device, pd_info) {
+		if (strcmp(pd_info->name, name))
+			continue;
+		rc = pm_runtime_put_sync(pd_info->pd_device);
+		if (rc < 0) {
+			dprintk(CVP_ERR, "Failed to disable PD for %s: %d\n",
+					pd_info->name, rc);
+			return rc;
+		}
+
+		dprintk(CVP_PWR, "Disabled power domain for %s\n", pd_info->name);
+		return 0;
+	}
+
+	dprintk(CVP_ERR, "Power Domain %s not found\n", name);
 	return -EINVAL;
 }
 
@@ -5277,7 +5465,7 @@ static int __power_on_controller_v1(struct iris_hfi_device *device)
 	int rc = 0;
 	CVPKERNEL_ATRACE_BEGIN("__power_on_controller_v1");
 
-	rc = __enable_regulator(device, "cvp");
+	rc = __enable_gdsc(device, "controller");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable ctrler: %d\n", rc);
 		return rc;
@@ -5344,7 +5532,7 @@ fail_enable_axi0c:
 fail_enable_axi0:
 	msm_cvp_disable_unprepare_clk(device, "sleep_clk");
 fail_reset_sleep:
-	__disable_regulator(device, "cvp");
+	__disable_gdsc(device, "controller");
 	CVPKERNEL_ATRACE_END("__power_on_controller_v1");
 	return rc;
 }
@@ -5354,7 +5542,7 @@ static int __power_on_core_v1(struct iris_hfi_device *device)
 	int rc = 0;
 	CVPKERNEL_ATRACE_BEGIN("__power_on_core_v1");
 
-	rc = __enable_regulator(device, "cvp-core");
+	rc = __enable_gdsc(device, "core");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable core: %d\n", rc);
 		return rc;
@@ -5397,7 +5585,7 @@ fail_enable_freerun:
 fail_enable_core:
 	msm_cvp_disable_unprepare_clk(device, "eva_cc_mvs0_clk_src");
 fail_enable_clk_src:
-	__disable_regulator(device, "cvp-core");
+	__disable_gdsc(device, "core");
 	return rc;
 }
 
@@ -5420,7 +5608,7 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 				value);
 			call_iris_op(device, print_sbm_regs, device);
 		}
-		__disable_regulator(device, "cvp-core");
+		__disable_gdsc(device, "core");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	} else if (!(value & 0x2) && msm_cvp_fw_low_power_mode) {
@@ -5428,8 +5616,9 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 		 * HW_CONTROL PC disabled, then core is powered on for
 		 * CVP NoC access
 		 */
-		__disable_regulator(device, "cvp-core");
-                msm_cvp_disable_unprepare_clk(device, "core_clk");
+		__disable_gdsc(device, "core");
+		msm_cvp_disable_unprepare_clk(device, "core_clk");
+		msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
                 return 0;
 	}
 
@@ -5479,7 +5668,7 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 	/* HPG 3.4.4 step 6-7 */
 	__disable_hw_power_collapse(device);
 	usleep_range(100, 200);
-	__disable_regulator(device, "cvp-core");
+	__disable_gdsc(device, "core");
 	msm_cvp_disable_unprepare_clk(device, "core_clk");
 	return 0;
 }
@@ -5540,7 +5729,7 @@ static int __power_off_controller_v1(struct iris_hfi_device *device)
 	}
 
 	/* HPG 3.7 Step 13 and 14 */
-	__disable_regulator(device, "cvp");
+	__disable_gdsc(device, "controller");
 
 	/* Below sequence are missing from HPG Section 3.7.
 	 * It disables GCC clks in power on sequence
@@ -5670,7 +5859,11 @@ static int __enable_hw_power_collapse_v1(struct iris_hfi_device *device)
 		return 0;
 	}
 
-	rc = __hand_off_regulators(device);
+	if (device->res->gdsc_framework_type) {
+		rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+	} else {
+		rc = __hand_off_regulators(device);
+	}
 	if (rc) {
 		dprintk(CVP_WARN,
 			"%s : Failed to enable HW power collapse %d\n",
@@ -5773,15 +5966,19 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 	int rc = 0;
 
 	if (msm_cvp_fw_low_power_mode) {
-		iris_hfi_for_each_regulator(device, rinfo) {
-			if (strcmp(rinfo->name, "cvp-core"))
-				continue;
-			rc = __acquire_regulator(rinfo, device);
-			if (rc)
-				dprintk(CVP_WARN,
-						"%s, Failed to acquire regulator control: %s\n",
-						__func__, rinfo->name);
+		if (device->res->gdsc_framework_type) {
+			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+		} else {
+			iris_hfi_for_each_regulator(device, rinfo) {
+				if (strcmp(rinfo->name, "cvp-core"))
+					continue;
+				rc = __acquire_regulator(rinfo, device);
+			}
 		}
+		if (rc)
+			dprintk(CVP_WARN,
+					"%s, Failed to acquire core gdsc control to SW\n",
+					__func__);
 	}
 	val = __read_register(device, CVP_CC_MVS0_GDSCR);
 	dprintk(CVP_ERR, "%s, CVP_CC_MVS0_GDSCR: 0x%x", __func__, val);
@@ -5841,11 +6038,19 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 	__write_register(device, CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS, 0x1);
 
 	if (msm_cvp_fw_low_power_mode) {
-		iris_hfi_for_each_regulator(device, rinfo) {
-			if (strcmp(rinfo->name, "cvp-core"))
-				continue;
-			rc = __hand_off_regulator(rinfo);
+		if (device->res->gdsc_framework_type) {
+			rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+		} else {
+			iris_hfi_for_each_regulator(device, rinfo) {
+				if (strcmp(rinfo->name, "cvp-core"))
+					continue;
+				rc = __hand_off_regulator(rinfo);
+			}
 		}
+		if (rc)
+			dprintk(CVP_WARN,
+					"%s, Failed to hand off core gdsc control to HW\n",
+					__func__);
 	}
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
 #endif

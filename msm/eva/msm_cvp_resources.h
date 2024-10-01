@@ -43,6 +43,17 @@ struct context_bank_info {
 	struct iommu_domain *domain;
 };
 
+struct power_domain_info {
+	struct device *pd_device;
+	bool has_hw_power_collapse;
+	const char *name;
+};
+
+struct power_domain_set {
+	struct power_domain_info *pd_tbl;
+	u32 count;
+};
+
 struct regulator_info {
 	struct regulator *regulator;
 	bool has_hw_power_collapse;
@@ -215,6 +226,8 @@ struct msm_cvp_platform_resources {
 	uint32_t vpu_ver;
 	uint32_t fw_cycles;
 	struct msm_cvp_ubwc_config_data *ubwc_config;
+	uint32_t gdsc_framework_type;
+	struct power_domain_set pd_set;
 };
 
 static inline bool is_iommu_present(struct msm_cvp_platform_resources *res)

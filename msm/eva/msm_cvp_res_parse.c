@@ -8,6 +8,7 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
+#include <linux/pm_domain.h>
 #include <linux/of_reserved_mem.h>
 #include "msm_cvp_debug.h"
 #include "msm_cvp_resources.h"
@@ -69,6 +70,12 @@ static inline void msm_cvp_free_reg_table(
 	res->reg_set.reg_tbl = NULL;
 }
 
+static inline void err_load_load_PD_table(
+			struct msm_cvp_platform_resources *res)
+{
+	res->pd_set.pd_tbl = NULL;
+}
+
 static inline void msm_cvp_free_qdss_addr_table(
 			struct msm_cvp_platform_resources *res)
 {
@@ -97,6 +104,23 @@ static inline void msm_cvp_free_regulator_table(
 
 	res->regulator_set.regulator_tbl = NULL;
 	res->regulator_set.count = 0;
+}
+
+static inline void msm_cvp_free_pd_table(
+			struct msm_cvp_platform_resources *res)
+{
+	int i = 0;
+
+	for (i = 0; i < res->pd_set.count; ++i) {
+		struct power_domain_info *pd_info =
+			&res->pd_set.pd_tbl[i];
+
+		pd_info->name = NULL;
+		pd_info->pd_device = NULL;
+	}
+
+	res->pd_set.pd_tbl = NULL;
+	res->pd_set.count = 0;
 }
 
 static inline void msm_cvp_free_clock_table(
@@ -640,6 +664,92 @@ err_reg_tbl_alloc:
 	return rc;
 }
 
+static int msm_cvp_load_PD_table(
+		struct msm_cvp_platform_resources *res)
+{
+	int rc = 0;
+	struct platform_device *pdev = res->pdev;
+	struct power_domain_set *pd_set = &res->pd_set;
+	struct device_node *dt_of_node = NULL;
+
+	pd_set->count = 0;
+	pd_set->pd_tbl = NULL;
+
+	dt_of_node = pdev->dev.of_node;
+	pd_set->count = of_property_count_strings(dt_of_node, "power-domain-names");
+	if (pd_set->count <= 0) {
+		dprintk(CVP_ERR,
+			"Can't parse power domain, count %d\n", pd_set->count);
+		rc = -EINVAL;
+		goto err_pd_tbl_alloc;
+	} else {
+		// const char *pd_names[pd_set->count];
+		int *gdsc_has_hw_pc = NULL;
+		int i = 0;
+
+		pd_set->pd_tbl = devm_kzalloc(&pdev->dev,
+			sizeof(*pd_set->pd_tbl) *
+			pd_set->count, GFP_KERNEL);
+
+		if (!pd_set->pd_tbl) {
+			rc = -ENOMEM;
+			dprintk(CVP_ERR,
+				"Failed to alloc memory for power domain table\n");
+			goto err_pd_tbl_alloc;
+		}
+
+		gdsc_has_hw_pc = devm_kzalloc(&pdev->dev, pd_set->count *
+				sizeof(*gdsc_has_hw_pc), GFP_KERNEL);
+		if (!gdsc_has_hw_pc) {
+			dprintk(CVP_ERR, "No memory to read gdsc_has_hw_pc properties\n");
+			rc = -ENOMEM;
+			goto err_has_hw_pc_alloc;
+		}
+
+		rc = of_property_read_u32_array(dt_of_node,
+				"gdsc_has_hw_pc", gdsc_has_hw_pc,
+				pd_set->count);
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to read gdsc_has_hw_pc properties: %d\n", rc);
+			goto err_has_hw_pc_alloc;
+		}
+
+		for (i = 0; i < pd_set->count; i++) {
+			struct power_domain_info *pd_info = &pd_set->pd_tbl[i];
+
+			pd_info->has_hw_power_collapse = gdsc_has_hw_pc[i];
+
+			rc = of_property_read_string_index(dt_of_node,
+				"power-domain-names", i, &pd_info->name);
+			if (rc) {
+				dprintk(CVP_ERR, "Failed to read pd name: %d\n", rc);
+				goto err_has_hw_pc_alloc;
+			}
+
+			pd_info->pd_device = dev_pm_domain_attach_by_name(&pdev->dev,
+									pd_info->name);
+			if (IS_ERR_OR_NULL(pd_info->pd_device)) {
+				rc = PTR_ERR(pd_info->pd_device);
+				dprintk(CVP_ERR,
+					"dev_pm_domain_attach_by_name failed: i %d, rc %d\n",
+					i, rc);
+				goto err_has_hw_pc_alloc;
+			} else {
+				dprintk(CVP_CORE,
+					"%s: dev_pm_domain_attach_by_name success for %s\n",
+					__func__, pd_info->name);
+			}
+		}
+
+		return 0;
+
+err_has_hw_pc_alloc:
+		msm_cvp_free_pd_table(res);
+err_pd_tbl_alloc:
+		return rc;
+	}
+}
+
 static int msm_cvp_load_clock_table(
 		struct msm_cvp_platform_resources *res)
 {
@@ -931,10 +1041,27 @@ int cvp_read_platform_resources_from_dt(
 
 	rc = msm_cvp_load_gcc_regs(res);
 
-	rc = msm_cvp_load_regulator_table(res);
+	rc = of_property_read_u32(res->pdev->dev.of_node, "framework-type",
+					&res->gdsc_framework_type);
 	if (rc) {
-		dprintk(CVP_ERR, "Failed to load list of regulators %d\n", rc);
+		dprintk(CVP_ERR, "Failed to read framework type for GDSC: %d\n", rc);
 		goto err_load_regulator_table;
+	}
+
+	if (res->gdsc_framework_type == 0) {
+		dprintk(CVP_CORE, "Framework type to control GDSC %d\n", res->gdsc_framework_type);
+		rc = msm_cvp_load_regulator_table(res);
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to load list of regulators %d\n", rc);
+			goto err_load_regulator_table;
+		}
+	} else if (res->gdsc_framework_type == 1) {
+		dprintk(CVP_CORE, "Framework type to control GDSC %d\n", res->gdsc_framework_type);
+		rc = msm_cvp_load_PD_table(res);
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to load list of power domains %d\n", rc);
+			goto err_load_load_PD_table;
+		}
 	}
 
 	rc = msm_cvp_load_clock_table(res);
@@ -976,7 +1103,11 @@ err_load_reset_table:
 err_load_allowed_clocks_table:
 	msm_cvp_free_clock_table(res);
 err_load_clock_table:
-	msm_cvp_free_regulator_table(res);
+	if (!res->gdsc_framework_type)
+		msm_cvp_free_regulator_table(res);
+err_load_load_PD_table:
+	if (res->gdsc_framework_type)
+		err_load_load_PD_table(res);
 err_load_regulator_table:
 	msm_cvp_free_reg_table(res);
 err_load_reg_table:
