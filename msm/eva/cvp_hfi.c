@@ -369,9 +369,10 @@ static int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_
 		if (pd_info->has_hw_power_collapse) {
 			dprintk(CVP_CORE, "Moving core GDSC to %s\n",
 						dest?"HW control":"SW control");
-			#ifdef USE_PRESIL
-			#rc = dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
+			#if 0
+			rc = dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
 			#endif
+			dprintk(CVP_ERR, "dev_pm_genpd_set_hwmode() is a stub function\n");
 			if (rc) {
 				dprintk(CVP_ERR, "Failed to move core GDSC to %s\n",
 						dest?"HW control":"SW control");
