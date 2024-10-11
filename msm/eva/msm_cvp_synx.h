@@ -8,6 +8,7 @@
 #define _MSM_CVP_SYNX_H_
 
 #include <linux/types.h>
+#include <linux/refcount.h>
 #include <media/msm_eva_private.h>
 #include "cvp_comm_def.h"
 
@@ -31,6 +32,7 @@ struct cvp_fence_queue {
 	struct list_head wait_list;
 	wait_queue_head_t wq;
 	struct list_head sched_list;
+	atomic_t send_count;
 };
 
 struct cvp_fence_command {
