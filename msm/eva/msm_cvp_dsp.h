@@ -52,6 +52,7 @@ struct fastrpc_driver {
 #define CVP_DSP_RESPONSE_TIMEOUT 600
 #define CVP_INVALID_RPMSG_TYPE 0xBADDFACE
 #define MAX_FRAME_BUF_NUM 16
+#define CVP_HW_THREADS_RESERVED 20
 
 #define BITPTRSIZE32 (4)
 #define BITPTRSIZE64 (8)
@@ -106,20 +107,31 @@ enum CVP_DSP_COMMAND {
 
 struct eva_power_req {
 	uint32_t clock_fdu;
-	uint32_t clock_ica;
-	uint32_t clock_od;
 	uint32_t clock_mpu;
+	uint32_t clock_od;
+	uint32_t clock_ica;
+	uint32_t clock_vadl;
+	uint32_t clock_tof;
+	uint32_t clock_rge;
+	uint32_t clock_xra;
+	uint32_t clock_lsr;
 	uint32_t clock_fw;
 	uint32_t bw_ddr;
 	uint32_t bw_sys_cache;
 	uint32_t op_clock_fdu;
-	uint32_t op_clock_ica;
-	uint32_t op_clock_od;
 	uint32_t op_clock_mpu;
+	uint32_t op_clock_od;
+	uint32_t op_clock_ica;
+	uint32_t op_clock_vadl;
+	uint32_t op_clock_tof;
+	uint32_t op_clock_rge;
+	uint32_t op_clock_xra;
+	uint32_t op_clock_lsr;
 	uint32_t op_clock_fw;
 	uint32_t op_bw_ddr;
 	uint32_t op_bw_sys_cache;
-};
+	uint32_t reserved[CVP_HW_THREADS_RESERVED];
+} __packed;
 
 struct eva_mem_remote {
 	uint32_t type;
@@ -130,7 +142,7 @@ struct eva_mem_remote {
 	uint32_t iova;
 	uint32_t dsp_remote_map;
 	uint64_t v_dsp_addr;
-};
+} __packed;
 
 /*
  * command: defined as a packet initiated from one party.
@@ -167,7 +179,7 @@ struct cvp_dsp_cmd_msg {
 
 	uint32_t reserved1;
 	uint32_t reserved2;
-};
+} __packed;
 
 /* cvp_dsp_rsp_msg contains the message sent from DSP to CPU */
 struct cvp_dsp_rsp_msg {
@@ -175,7 +187,7 @@ struct cvp_dsp_rsp_msg {
 	int32_t ret;
 	uint32_t dsp_state;
 	uint32_t reserved[CVP_DSP_MAX_RESERVED - 1];
-};
+} __packed;
 
 /* cvp_dsp2cpu_cmd contains the command sent from DSP to cpu*/
 struct cvp_dsp2cpu_cmd {
@@ -201,7 +213,7 @@ struct cvp_dsp2cpu_cmd {
 	char session_name[SESSION_NAME_MAX_LEN];
 
 	uint32_t data[CVP_DSP2CPU_RESERVED];
-};
+} __packed;
 
 struct driver_name {
     uint32_t status;
@@ -270,13 +282,13 @@ struct cvp_dsp_trace_buf {
 	u32	buf_idx;
 	u32	transaction_id;
 	u32	fd;
-};
+} __packed;
 
 // Saving config packet for each intance
 struct cvp_dsp_trace_instance {
 	u32    feature_type;
 	u32    config_pkt[CONFIG_SIZE_IN_WORDS];
-};
+} __packed;
 
 struct cvp_dsp_trace_session {
 	u32                session_id;
@@ -284,11 +296,11 @@ struct cvp_dsp_trace_session {
 	u32                inst_cnt;
 	struct cvp_dsp_trace_instance  instance[EVA_TRACE_MAX_INSTANCE_NUM];
 	struct cvp_dsp_trace_buf       buf[EVA_TRACE_MAX_BUF_NUM];
-};
+} __packed;
 
 struct cvp_dsp_trace {
 	struct cvp_dsp_trace_session   sessions[EVA_TRACE_MAX_SESSION_NUM];
-};
+} __packed;
 
 extern struct cvp_dsp_apps gfa_cv;
 /*
