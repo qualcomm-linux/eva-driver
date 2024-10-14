@@ -463,14 +463,19 @@ static int msm_cvp_probe(struct platform_device *pdev)
 	return -EINVAL;
 }
 
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static void msm_cvp_remove(struct platform_device *pdev)
+#else
 static int msm_cvp_remove(struct platform_device *pdev)
+#endif
 {
 	int rc = 0;
 	struct msm_cvp_core *core;
 
 	if (!pdev) {
 		dprintk(CVP_ERR, "%s invalid input %pK", __func__, pdev);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto exit;
 	}
 
 	if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp"))
@@ -480,7 +485,8 @@ static int msm_cvp_remove(struct platform_device *pdev)
 
 	if (!core) {
 		dprintk(CVP_ERR, "%s invalid core", __func__);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto exit;
 	}
 
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
@@ -490,7 +496,10 @@ static int msm_cvp_remove(struct platform_device *pdev)
 	mutex_destroy(&core->lock);
 	mutex_destroy(&core->clk_lock);
 	kfree(core);
+exit:
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return rc;
+#endif
 }
 
 static int msm_cvp_pm_suspend(struct device *dev)
