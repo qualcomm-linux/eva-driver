@@ -493,7 +493,7 @@ static int cvp_dsp_rpmsg_callback(struct rpmsg_device *rpdev,
 			sizeof(struct cvp_dsp2cpu_cmd));
 		complete(&me->completions[CPU2DSP_MAX_CMD]);
 	} else {
-		dprintk(CVP_ERR, "%s: Invalid type: %d\n", __func__, rsp->type);
+		dprintk(CVP_ERR, "%s: Invalid type: %d, cmd len: %d\n", __func__, rsp->type, len);
 		return 0;
 	}
 
@@ -1378,17 +1378,25 @@ static void *get_inst_from_dsp(uint32_t session_cpu_high, uint32_t session_cpu_l
 static void print_power(const struct eva_power_req *pwr_req)
 {
 	if (pwr_req) {
-		dprintk(CVP_DSP, "Clock: Fdu %d Ica %d Od %d Mpu %d Fw %d",
-				pwr_req->clock_fdu, pwr_req->clock_ica,
-				pwr_req->clock_od, pwr_req->clock_mpu,
+		dprintk(CVP_DSP, "Clock: Fdu %d Mpu %d Od %d Ica %d Vadl %d",
+				pwr_req->clock_fdu, pwr_req->clock_mpu,
+				pwr_req->clock_od, pwr_req->clock_ica,
+				pwr_req->clock_vadl);
+		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Fw %d\n",
+				pwr_req->clock_tof, pwr_req->clock_rge,
+				pwr_req->clock_xra, pwr_req->clock_lsr,
 				pwr_req->clock_fw);
-		dprintk(CVP_DSP, "OpClock: Fdu %d Ica %d Od %d Mpu %d Fw %d",
-				pwr_req->op_clock_fdu, pwr_req->op_clock_ica,
-				pwr_req->op_clock_od, pwr_req->op_clock_mpu,
+		dprintk(CVP_DSP, "OpClock: Fdu %d Mpu %d Od %d Ica %d Vadl %d",
+				pwr_req->op_clock_fdu, pwr_req->op_clock_mpu,
+				pwr_req->op_clock_od, pwr_req->op_clock_ica,
+				pwr_req->op_clock_vadl);
+		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Fw %d\n",
+				pwr_req->op_clock_tof, pwr_req->op_clock_rge,
+				pwr_req->op_clock_xra, pwr_req->op_clock_lsr,
 				pwr_req->op_clock_fw);
 		dprintk(CVP_DSP, "Actual Bw: Ddr %d, SysCache %d",
 				pwr_req->bw_ddr, pwr_req->bw_sys_cache);
-		dprintk(CVP_DSP, "OpBw: Ddr %d, SysCache %d",
+		dprintk(CVP_DSP, "OpBw: Ddr %d, SysCache %d\n",
 				pwr_req->op_bw_ddr, pwr_req->op_bw_sys_cache);
 	}
 }
@@ -1615,16 +1623,26 @@ void __dsp_cvp_power_req(struct cvp_dsp_cmd_msg *cmd)
 	print_power(&dsp2cpu_cmd->power_req);
 
 	inst->prop.cycles[HFI_HW_FDU] = dsp2cpu_cmd->power_req.clock_fdu;
-	inst->prop.cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.clock_ica;
-	inst->prop.cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.clock_od;
 	inst->prop.cycles[HFI_HW_MPU] = dsp2cpu_cmd->power_req.clock_mpu;
+	inst->prop.cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.clock_od;
+	inst->prop.cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.clock_ica;
+	inst->prop.cycles[HFI_HW_VADL] = dsp2cpu_cmd->power_req.clock_vadl;
+	inst->prop.cycles[HFI_HW_TOF] = dsp2cpu_cmd->power_req.clock_tof;
+	inst->prop.cycles[HFI_HW_RGE] = dsp2cpu_cmd->power_req.clock_rge;
+	inst->prop.cycles[HFI_HW_XRA] = dsp2cpu_cmd->power_req.clock_xra;
+	inst->prop.cycles[HFI_HW_LSR] = dsp2cpu_cmd->power_req.clock_lsr;
 	inst->prop.fw_cycles = dsp2cpu_cmd->power_req.clock_fw;
 	inst->prop.ddr_bw = dsp2cpu_cmd->power_req.bw_ddr;
 	inst->prop.ddr_cache = dsp2cpu_cmd->power_req.bw_sys_cache;
 	inst->prop.op_cycles[HFI_HW_FDU] = dsp2cpu_cmd->power_req.op_clock_fdu;
-	inst->prop.op_cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.op_clock_ica;
-	inst->prop.op_cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.op_clock_od;
 	inst->prop.op_cycles[HFI_HW_MPU] = dsp2cpu_cmd->power_req.op_clock_mpu;
+	inst->prop.op_cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.op_clock_od;
+	inst->prop.op_cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.op_clock_ica;
+	inst->prop.op_cycles[HFI_HW_VADL] = dsp2cpu_cmd->power_req.op_clock_vadl;
+	inst->prop.op_cycles[HFI_HW_TOF] = dsp2cpu_cmd->power_req.op_clock_tof;
+	inst->prop.op_cycles[HFI_HW_RGE] = dsp2cpu_cmd->power_req.op_clock_rge;
+	inst->prop.op_cycles[HFI_HW_XRA] = dsp2cpu_cmd->power_req.op_clock_xra;
+	inst->prop.op_cycles[HFI_HW_LSR] = dsp2cpu_cmd->power_req.op_clock_lsr;
 	inst->prop.fw_op_cycles = dsp2cpu_cmd->power_req.op_clock_fw;
 	inst->prop.ddr_op_bw = dsp2cpu_cmd->power_req.op_bw_ddr;
 	inst->prop.ddr_op_cache = dsp2cpu_cmd->power_req.op_bw_sys_cache;
