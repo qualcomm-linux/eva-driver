@@ -16,7 +16,7 @@
 #undef TRACE_INCLUDE_FILE
 #define TRACE_INCLUDE_FILE msm_cvp_events
 
-// #define USE_PERFETTO
+#define USE_PERFETTO
 
 #ifdef USE_PERFETTO
 
