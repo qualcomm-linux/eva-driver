@@ -82,13 +82,13 @@ extern int msm_cvp_smmu_fault_recovery;
 		if (msm_cvp_debug & __level) { \
 			if (msm_cvp_debug_out == CVP_OUT_PRINTK) { \
 				if (__level == CVP_ERR || __level == CVP_WARN) { \
-					pr_alert(CVP_PID_TAG __fmt, \
+					pr_info(CVP_PID_TAG __fmt, \
 						current->pid, current->tgid, \
 						get_debug_level_str(__level), \
 						## arg); \
 				} \
 				else { \
-					pr_alert(CVP_DBG_TAG __fmt, \
+					pr_info(CVP_DBG_TAG __fmt, \
 						get_debug_level_str(__level), \
 						## arg); \
 				} \
