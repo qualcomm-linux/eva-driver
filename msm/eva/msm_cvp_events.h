@@ -55,7 +55,11 @@ TRACE_EVENT(tracing_mark_write,
 	),
 	TP_fast_assign(
 		__entry->pid = pid;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+		__assign_str(trace_name);
+#else
 		__assign_str(trace_name, name);
+#endif
 		__entry->trace_begin = trace_begin;
 		),
 	TP_printk("%s|%d|%s", __entry->trace_begin ? "B" : "E",
@@ -84,7 +88,11 @@ TRACE_EVENT(tracing_eva_frame_from_sw,
 	),
 	TP_fast_assign(
 		__entry->aon_cycles = aon_cycles;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+		__assign_str(trace_name);
+#else
 		__assign_str(trace_name, name);
+#endif
 		__entry->session_id = session_id;
 		__entry->stream_id  = stream_id;
 		__entry->packet_id  = packet_id;
@@ -108,7 +116,11 @@ TRACE_EVENT(tracing_eva_frame_from_fw,
 	),
 
 	TP_fast_assign(
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+		__assign_str(trace_name);
+#else
 		__assign_str(trace_name, trace);
+#endif
 	),
 
 	TP_printk("%s", __get_str(trace_name))

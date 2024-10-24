@@ -499,6 +499,8 @@ static int msm_cvp_remove(struct platform_device *pdev)
 exit:
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return rc;
+#else
+	return;
 #endif
 }
 
