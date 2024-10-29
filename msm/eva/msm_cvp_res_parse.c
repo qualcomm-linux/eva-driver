@@ -10,6 +10,7 @@
 #include <linux/sort.h>
 #include <linux/pm_domain.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/of_address.h>
 #include "msm_cvp_debug.h"
 #include "msm_cvp_resources.h"
 #include "msm_cvp_res_parse.h"
@@ -166,24 +167,51 @@ static int msm_cvp_load_ipcc_regs(struct msm_cvp_platform_resources *res)
 	return ret;
 }
 
+static int msm_cvp_ipclite_mappings(struct device *dev,
+				struct msm_cvp_platform_resources *res)
+{
+	struct device_node *mem_node;
+	struct resource r;
+	int ret = 0;
+	u32 iova_start;
+
+	mem_node = of_parse_phandle(dev->of_node, "memory-region", 0);
+	if (mem_node) {
+		ret =  of_address_to_resource(mem_node, 0, &r);
+		of_node_put(mem_node);
+		if (ret) {
+			dprintk(CVP_ERR, "%s: Failed to get ipclite mem region resource\n",
+					__func__);
+			return ret;
+		}
+		res->reg_mappings.ipclite_phyaddr = (u32)r.start;
+		res->reg_mappings.ipclite_size = resource_size(&r);
+	} else {
+		dprintk(CVP_ERR, "%s: Failed to get ipclite memory region\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "iova-region-start", &iova_start);
+	if (ret) {
+		dprintk(CVP_ERR, "%s: Failed to read iova-region-start\n", __func__);
+		return ret;
+	}
+	res->reg_mappings.ipclite_iova = iova_start;
+
+	dprintk(CVP_CORE, "ipclite reg mappings %#x %#x %#x\n",
+		res->reg_mappings.ipclite_iova, res->reg_mappings.ipclite_size,
+		res->reg_mappings.ipclite_phyaddr);
+
+	return ret;
+}
+
 static int msm_cvp_load_regspace_mapping(struct msm_cvp_platform_resources *res)
 {
 	int ret = 0;
-	unsigned int ipclite_mapping_config[3] = {0};
 	unsigned int hwmutex_mapping_config[3] = {0};
 	unsigned int aon_mapping_config[3] = {0};
 	unsigned int timer_config[3] = {0};
 	struct platform_device *pdev = res->pdev;
-
-	ret = of_property_read_u32_array(pdev->dev.of_node, "ipclite_mappings",
-		ipclite_mapping_config, 3);
-	if (ret) {
-		dprintk(CVP_ERR, "Failed to read ipclite reg: %d\n", ret);
-		return ret;
-	}
-	res->reg_mappings.ipclite_iova = ipclite_mapping_config[0];
-	res->reg_mappings.ipclite_size = ipclite_mapping_config[1];
-	res->reg_mappings.ipclite_phyaddr = ipclite_mapping_config[2];
 
 	ret = of_property_read_u32_array(pdev->dev.of_node, "hwmutex_mappings",
 		hwmutex_mapping_config, 3);
@@ -1347,6 +1375,29 @@ int cvp_read_bus_resources_from_dt(struct platform_device *pdev)
 	}
 
 	return msm_cvp_populate_bus(&pdev->dev, &core->resources);
+}
+
+int cvp_read_ipclite_mappings_from_dt(struct platform_device *pdev)
+{
+	struct msm_cvp_core *core;
+
+	if (!pdev) {
+		dprintk(CVP_ERR, "Invalid platform device\n");
+		return -EINVAL;
+	} else if (!pdev->dev.parent) {
+		dprintk(CVP_ERR, "Failed to find a parent for %s\n",
+				dev_name(&pdev->dev));
+		return -ENODEV;
+	}
+
+	core = dev_get_drvdata(pdev->dev.parent);
+	if (!core) {
+		dprintk(CVP_ERR, "Failed to find cookie in parent device %s",
+				dev_name(pdev->dev.parent));
+		return -EINVAL;
+	}
+
+	return msm_cvp_ipclite_mappings(&pdev->dev, &core->resources);
 }
 
 int cvp_read_mem_cdsp_resources_from_dt(struct platform_device *pdev)

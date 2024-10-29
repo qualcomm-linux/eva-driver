@@ -277,6 +277,7 @@ static const struct of_device_id msm_cvp_plat_match[] = {
 	{.compatible = "qcom,msm-cvp,context-bank"},
 	{.compatible = "qcom,msm-cvp,bus"},
 	{.compatible = "qcom,msm-cvp,mem-cdsp"},
+	{.compatible = "qcom,msm-cvp,ipclite"},
 	{}
 };
 
@@ -436,6 +437,11 @@ static int msm_cvp_probe_bus(struct platform_device *pdev)
 	return cvp_read_bus_resources_from_dt(pdev);
 }
 
+static int msm_cvp_probe_ipclite_mappings(struct platform_device *pdev)
+{
+	return cvp_read_ipclite_mappings_from_dt(pdev);
+}
+
 static int msm_cvp_probe(struct platform_device *pdev)
 {
 	if (!msm_cvp_probe_allowed)
@@ -456,6 +462,9 @@ static int msm_cvp_probe(struct platform_device *pdev)
 	} else if (of_device_is_compatible(pdev->dev.of_node,
 		"qcom,msm-cvp,mem-cdsp")) {
 		return msm_cvp_probe_mem_cdsp(pdev);
+	} else if (of_device_is_compatible(pdev->dev.of_node,
+		"qcom,msm-cvp,ipclite")) {
+		return msm_cvp_probe_ipclite_mappings(pdev);
 	}
 
 	/* How did we end up here? */
