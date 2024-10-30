@@ -859,23 +859,6 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "XRA_BLOB_CONFIG",
 		},
-	[HFI_CMD_SESSION_CVP_XRA_PATCH_FRAME - HFI_CMD_SESSION_CVP_START] =
-		{
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_XRA_PATCH_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "XRA_PATCH_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_XRA_PATCH_CONFIG - HFI_CMD_SESSION_CVP_START] =
-		{
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_XRA_PATCH_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "XRA_PATCH_CONFIG",
-		},
 	[HFI_CMD_SESSION_CVP_XRA_MATCH_FRAME - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = 0xFFFFFFFF,
