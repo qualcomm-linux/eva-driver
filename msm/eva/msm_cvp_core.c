@@ -64,10 +64,9 @@ int msm_cvp_private(void *cvp_inst, unsigned int cmd,
 }
 EXPORT_SYMBOL(msm_cvp_private);
 
-bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core,
-		u32 *instance_count)
+static bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *instance_count)
 {
-	u32 secure_instance_count = 0, cam_count = 0, cv_count = 0;
+	u32 secure_instance_count = 0;
 	struct msm_cvp_inst *inst = NULL;
 	bool overload = false;
 
@@ -77,25 +76,18 @@ bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core,
 		/* This flag is not updated yet for the current instance */
 		if (inst->flags & CVP_SECURE)
 			secure_instance_count++;
-		if (inst->prop.type == HFI_SESSION_DMM)
-			cam_count++;
-		else
-			cv_count++;
 	}
 	mutex_unlock(&core->lock);
 
 	/* Instance count includes current instance as well. */
 
-	if ((*instance_count > core->resources.max_inst_count) ||
-		(secure_instance_count >=
-			core->resources.max_secure_inst_count))
+	if (*instance_count >= core->resources.max_inst_count) {
 		overload = true;
-	if (cam_count > MAX_DMM_INSTANCES) {
-		dprintk(CVP_WARN, "Reached 8 DMM session limit\n");
+		dprintk(CVP_WARN, "Reached %d generic CV session limit\n", MAX_CV_INSTANCES);
+	} else if (secure_instance_count >= core->resources.max_secure_inst_count) {
 		overload = true;
-	} else if (cv_count > MAX_CV_INSTANCES) {
-		dprintk(CVP_WARN, "Reached 8 generic CV session limit\n");
-		overload = true;
+		dprintk(CVP_WARN, "Reached %d secure CV session limit\n",
+				core->resources.max_secure_inst_count);
 	}
 
 	return overload;
@@ -157,7 +149,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	struct msm_cvp_core *core = NULL;
 	int rc = 0;
 	int i = 0;
-	u32 instance_count;
+	u32 instance_count = 0;
 
 	core = cvp_driver->cvp_core;
 	if (!core) {
