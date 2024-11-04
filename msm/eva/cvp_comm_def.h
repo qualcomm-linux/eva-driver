@@ -52,6 +52,7 @@ enum queue_state {
 #ifdef CONFIG_EVA_CANOE
 #define USE_PRESIL
 #define CVP_FASTRPC_ENABLED 1
+#define CVP_SYNX_ENABLED 1
 #endif /* End of CONFIG_EVA_CANOE*/
 
 
