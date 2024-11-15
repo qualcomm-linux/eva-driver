@@ -1,9 +1,7 @@
 load(
     "//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
-    "ddk_submodule",
-    "kernel_module",
-    "kernel_modules_install",
+    "kernel_module_group",
 )
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 
@@ -81,13 +79,20 @@ def create_module_registry(hdrs = []):
 
 def define_target_variant_modules(target, variant, registry, modules, config_options = []):
     kernel_build = "{}_{}".format(target, variant)
-    kernel_build_label = "//msm-kernel:{}".format(kernel_build)
+    kernel_build_label = "//soc-repo:{}_base_kernel".format(kernel_build)
     modules = [registry.get(module_name) for module_name in modules]
     options = _get_kernel_build_options(modules, config_options)
     build_print = lambda message: print("{}: {}".format(kernel_build, message))
     formatter = lambda s: s.replace("%b", kernel_build).replace("%t", target)
 
-    headers = ["//msm-kernel:all_headers"] + registry.hdrs
+    headers = ["//soc-repo:all_headers",
+               "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(kernel_build),
+               "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(kernel_build),
+               "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(kernel_build),
+               "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(kernel_build),
+               "//soc-repo:{}/drivers/virt/gunyah/gh_rm_drv".format(kernel_build),
+               "//soc-repo:{}/drivers/virt/gunyah/gh_msgq".format(kernel_build),
+              ] + registry.hdrs
     all_module_rules = []
 
     for module in modules:
@@ -97,26 +102,26 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
         if not module_srcs:
             continue
 
-        ddk_submodule(
+        ddk_module(
             name = rule_name,
             srcs = module_srcs,
             out = "{}.ko".format(module.name),
-			copts = ["-Wno-format","-Wno-array-bounds"],
+            kernel_build = kernel_build_label,
+            copts = ["-Wno-format","-Wno-array-bounds"],
             deps = headers + _get_kernel_build_module_deps(module, options, formatter),
             local_defines = options.keys(),
         )
 
         all_module_rules.append(rule_name)
 
-    ddk_module(
-        name = "{}_modules".format(kernel_build),
-        kernel_build = kernel_build_label,
-        deps = all_module_rules,
+    kernel_module_group(
+        name = "{}_eva_modules".format(kernel_build),
+        srcs = all_module_rules,
     )
 
     copy_to_dist_dir(
         name = "{}_modules_dist".format(kernel_build),
-        data = [":{}_modules".format(kernel_build)],
+        data = [":{}_eva_modules".format(kernel_build)],
         dist_dir = "out/target/product/{}/dlkm/lib/modules/".format(kernel_build),
         flat = True,
         wipe_dist_dir = False,
