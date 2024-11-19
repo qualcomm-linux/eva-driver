@@ -358,6 +358,19 @@ void presil42_send_map_user_persist_buffer(struct msm_cvp_smem *smem,  u32 *iova
 		(u64)(*iova)-MAP_ADDR_OFFSET,
 		(uintptr_t)smem->kvaddr, false);
 }
+void presil42_retrieve_sfr_buffer(struct iris_hfi_device *device)
+{
+	struct cvp_hfi_sfr_struct *vsfr = NULL;
+
+	vsfr = (struct cvp_hfi_sfr_struct *)device->sfr.align_virtual_addr;
+
+	cam_presil_retrieve_buffer(
+	(u64)vsfr, 0,
+	0,
+	(u32)vsfr->bufSize,
+	(u64)device->sfr.align_device_addr-MAP_ADDR_OFFSET,
+	(uintptr_t)device->sfr.align_virtual_addr, false);
+}
 
 void presil42_send_map_frame_buffer(struct msm_cvp_smem *smem,  u32 iova, struct cvp_buf_type *buf)
 {

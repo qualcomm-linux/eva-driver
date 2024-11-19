@@ -3378,6 +3378,9 @@ static void __process_sys_error(struct iris_hfi_device *device)
 		if (p == NULL)
 			vsfr->rg_data[vsfr->bufSize - 1] = '\0';
 
+#ifdef USE_PRESIL42
+		presil42_retrieve_sfr_buffer(device);
+#endif
 		dprintk(CVP_ERR, "SFR Message from FW: %s\n",
 				vsfr->rg_data);
 	}
