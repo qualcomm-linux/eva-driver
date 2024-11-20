@@ -731,7 +731,7 @@ static int __read_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 }
 
 static int __smem_alloc(struct iris_hfi_device *dev, struct cvp_mem_addr *mem,
-			u32 size, u32 align, u32 flags)
+			u32 size, u32 align, u32 flags, int user_access)
 {
 	struct msm_cvp_smem *alloc = &mem->mem_data;
 	int rc = 0;
@@ -743,7 +743,7 @@ static int __smem_alloc(struct iris_hfi_device *dev, struct cvp_mem_addr *mem,
 
 	dprintk(CVP_INFO, "start to alloc size: %d, flags: %d\n", size, flags);
 	alloc->flags = flags;
-	rc = msm_cvp_smem_alloc(size, align, 1, (void *)dev->res, alloc);
+	rc = msm_cvp_smem_alloc(size, align, 1, (void *)dev->res, alloc, user_access);
 	if (rc) {
 		dprintk(CVP_ERR, "Alloc failed\n");
 		rc = -ENOMEM;
@@ -1790,6 +1790,9 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 	int num_entries = device->res->qdss_addr_set.count;
 	unsigned long mem_map_table_base_addr;
 	struct context_bank_info *cb;
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct msm_cvp_core *core = NULL;
+#endif
 
 	if (device->qdss.align_virtual_addr) {
 		qdss = (struct cvp_hfi_mem_map_table *)
@@ -1821,7 +1824,9 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 
 	__smem_free(device, &device->iface_q_table.mem_data);
 	__smem_free(device, &device->sfr.mem_data);
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	__smem_free(device, &device->sw_dbg_buf.mem_data);
+#endif
 	for (i = 0; i < CVP_IFACEQ_NUMQ; i++) {
 		device->iface_queues[i].q_hdr = NULL;
 		device->iface_queues[i].q_array.align_virtual_addr = NULL;
@@ -1836,7 +1841,15 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 
 	device->sfr.align_virtual_addr = NULL;
 	device->sfr.align_device_addr = 0;
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	device->sw_dbg_buf.align_virtual_addr = NULL;
+	device->sw_dbg_buf.align_device_addr = 0;
+	core = cvp_driver->cvp_core;
+	if (!core)
+		dprintk(CVP_ERR, "%s: Core is null\n", __func__);
+	else
+		mutex_destroy(&core->kmd_dbg.dbg_lock);
+#endif
 	device->mem_addr.align_virtual_addr = NULL;
 	device->mem_addr.align_device_addr = 0;
 #endif
@@ -2015,7 +2028,9 @@ static int __interface_queues_init(struct iris_hfi_device *dev)
 	size_t q_size;
 	unsigned long mem_map_table_base_addr;
 	struct context_bank_info *cb;
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct msm_cvp_core *core = NULL;
+#endif
 	q_size = SHARED_QSIZE - ALIGNED_SFR_SIZE - ALIGNED_QDSS_SIZE;
 	mem_addr = &dev->mem_addr;
 	if (!is_iommu_present(dev->res))
@@ -2026,7 +2041,7 @@ static int __interface_queues_init(struct iris_hfi_device *dev)
 				0, q_size);
 		goto hfi_queue_init;
 	}
-	rc = __smem_alloc(dev, mem_addr, q_size, 1, SMEM_UNCACHED);
+	rc = __smem_alloc(dev, mem_addr, q_size, 1, SMEM_UNCACHED, 0);
 	if (rc) {
 		dprintk(CVP_ERR, "iface_q_table_alloc_fail\n");
 		goto fail_alloc_queue;
@@ -2046,7 +2061,7 @@ hfi_queue_init:
 				0, ALIGNED_SFR_SIZE);
 		goto sfr_init;
 	}
-	rc = __smem_alloc(dev, mem_addr, ALIGNED_SFR_SIZE, 1, SMEM_UNCACHED);
+	rc = __smem_alloc(dev, mem_addr, ALIGNED_SFR_SIZE, 1, SMEM_UNCACHED, 0);
 	if (rc) {
 		dprintk(CVP_WARN, "sfr_alloc_fail: SFR not will work\n");
 		dev->sfr.align_device_addr = 0;
@@ -2057,6 +2072,31 @@ hfi_queue_init:
 		dev->sfr.mem_size = ALIGNED_SFR_SIZE;
 		dev->sfr.mem_data = mem_addr->mem_data;
 	}
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	if (dev->sw_dbg_buf.align_virtual_addr) {
+		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
+				0, ALIGNED_SFR_SIZE);
+		goto sfr_init;
+	}
+	rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1, SMEM_UNCACHED, O_RDWR);
+	if (rc) {
+		dprintk(CVP_WARN, "sfr_alloc_fail: sw_dbg_buf not will work\n");
+		dev->sw_dbg_buf.align_device_addr = 0;
+	} else {
+		dev->sw_dbg_buf.align_device_addr = mem_addr->align_device_addr;
+		dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
+		dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
+		dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
+		core = cvp_driver->cvp_core;
+		if (!core)
+			dprintk(CVP_ERR, "%s: Core is null\n", __func__);
+		else {
+			mutex_init(&core->kmd_dbg.dbg_lock);
+			core->kmd_dbg.kmd_buf_offset = 0;
+			core->kmd_dbg.kmd_buf_cnt = 0;
+		}
+	}
+#endif
 sfr_init:
 	__sfr_init(dev);
 
@@ -2065,7 +2105,7 @@ sfr_init:
 
 	if ((msm_cvp_fw_debug_mode & HFI_DEBUG_MODE_QDSS) && num_entries) {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_QDSS_SIZE, 1,
-				SMEM_UNCACHED);
+				SMEM_UNCACHED, 0);
 		if (rc) {
 			dprintk(CVP_WARN,
 				"qdss_alloc_fail: QDSS messages logging will not work\n");
@@ -3581,10 +3621,14 @@ int __response_handler(struct iris_hfi_device *device)
 	int packet_count = 0;
 	u8 *raw_packet = NULL;
 	bool requeue_pm_work = true;
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct msm_cvp_core *core = NULL;
+#endif
 	if (!device || device->state != IRIS_STATE_INIT)
 		return 0;
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	core = cvp_driver->cvp_core;
+#endif
 	packets = device->response_pkt;
 
 	raw_packet = device->raw_packet;
@@ -3597,12 +3641,25 @@ int __response_handler(struct iris_hfi_device *device)
 	}
 
 	if (device->intr_status & CVP_FATAL_INTR_BMSK) {
-		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CPU_NOC_BMSK)
+		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CPU_NOC_BMSK) {
 			pr_err_ratelimited(CVP_PID_TAG "Received Xtensa NOC error\n",
-				current->pid, current->tgid, "err");
-		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CORE_NOC_BMSK)
+					current->pid, current->tgid, "err");
+#ifdef CVP_SW_DBG_BUF_ENABLED
+			if (core)
+				core->kmd_trace.kmd_debug_log.smmu_debug.noc_error_type
+					= SMMU_XTENSA_NOC_ERROR;
+#endif
+		}
+
+		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CORE_NOC_BMSK) {
 			pr_err_ratelimited(CVP_PID_TAG "Received CVP core NOC error\n",
-				current->pid, current->tgid, "err");
+					current->pid, current->tgid, "err");
+#ifdef CVP_SW_DBG_BUF_ENABLED
+			if (core)
+				core->kmd_trace.kmd_debug_log.smmu_debug.noc_error_type
+					= SMMU_CORE_NOC_ERROR;
+#endif
+		}
 	}
 
 	/* Bleed the msg queue dry of packets */
@@ -5131,10 +5188,11 @@ static void __noc_error_info_iris2(struct iris_hfi_device *device)
 
 	core = cvp_driver->cvp_core;
 
-	if (!core->ssr_count && core->resources.max_ssr_allowed > 1)
+	if (!core->ssr_count && core->resources.max_ssr_allowed >= 1)
 		log_required = true;
 
-	noc_log = &core->log.noc_log;
+
+	noc_log = &core->kmd_trace.kmd_debug_log.log.noc_log;
 
 	if (noc_log->used) {
 		dprintk(CVP_WARN, "Data already in NoC log, skip logging\n");

@@ -274,6 +274,11 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 	}
 	print_smem(CVP_MEM, str, inst, smem);
 	atomic_inc(&inst->smem_count);
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
+		eva_kmd_buf_dump(inst, smem, 0);
+#endif
+
 	goto success;
 exit:
 	smem->device_addr = 0x0;
@@ -322,7 +327,10 @@ int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 		dprintk(CVP_ERR, "Failed to put device address: %d\n", rc);
 		goto exit;
 	}
-
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
+		eva_kmd_buf_dump(inst, smem, 1);
+#endif
 	smem->device_addr = 0x0;
 	atomic_dec(&inst->smem_count);
 
@@ -331,7 +339,8 @@ exit:
 }
 
 static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
-	struct msm_cvp_platform_resources *res, struct msm_cvp_smem *mem)
+	struct msm_cvp_platform_resources *res, struct msm_cvp_smem *mem,
+	int user_access)
 {
 	dma_addr_t iova = 0;
 	int rc = 0;
@@ -360,7 +369,7 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		size, align);
 	}
 
-	dbuf = dma_heap_buffer_alloc(heap, size, 0, 0);
+	dbuf = dma_heap_buffer_alloc(heap, size, user_access, 0);
 	if (IS_ERR_OR_NULL(dbuf)) {
 		dprintk(CVP_ERR,
 			"Failed to allocate shared memory = %x bytes, %x %x\n",
@@ -469,7 +478,7 @@ static int free_dma_mem(struct msm_cvp_smem *mem)
 }
 
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
-		void *res, struct msm_cvp_smem *smem)
+		void *res, struct msm_cvp_smem *smem, int user_access)
 {
 	int rc = 0;
 
@@ -480,7 +489,7 @@ int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
 	}
 
 	rc = alloc_dma_mem(size, align, map_kernel,
-		(struct msm_cvp_platform_resources *)res, smem);
+		(struct msm_cvp_platform_resources *)res, smem, user_access);
 
 	return rc;
 }
