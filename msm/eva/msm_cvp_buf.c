@@ -1942,11 +1942,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		return -EINVAL;
 	}
 
-	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-	ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
-	ktid &= (FENCE_BIT - 1);
-	cmd_hdr->header.client_data.kdata = ktid;
-
 	dprintk(CVP_CMD, "%s:   "
 		"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
 		__func__, cmd_hdr->header.packet_type,
