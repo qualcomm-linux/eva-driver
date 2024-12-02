@@ -1324,6 +1324,9 @@ stop_thread:
 exit:
 	cvp_put_inst(s);
 	CVPKERNEL_ATRACE_END("msm_cvp_session_stop");
+	pr_info_ratelimited(CVP_PID_TAG "Stop session done for session_id = %#x\n",
+			current->pid, current->tgid, "sess",
+			hash32_ptr(inst->session));
 	return rc;
 }
 
