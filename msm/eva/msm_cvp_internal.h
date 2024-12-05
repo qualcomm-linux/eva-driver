@@ -276,7 +276,7 @@ struct smem_data {
 	u32 size;
 	u32 flags;
 	u32 device_addr;
-	u32 bitmap_index;
+	u32 cached;
 	u32 refcount;
 	u32 pkt_type;
 	u32 buf_idx;

@@ -30,22 +30,6 @@ void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr)
 	#endif
 }
 
-#define CLEAR_USE_BITMAP(idx, inst) \
-	do { \
-		clear_bit(idx, &inst->dma_cache.usage_bitmap); \
-		dprintk(CVP_MEM, "clear %x bit %d dma_cache bitmap 0x%llx\n", \
-			hash32_ptr(inst->session), smem->bitmap_index, \
-			inst->dma_cache.usage_bitmap); \
-	} while (0)
-
-#define SET_USE_BITMAP(idx, inst) \
-	do { \
-		set_bit(idx, &inst->dma_cache.usage_bitmap); \
-		dprintk(CVP_MEM, "Set %x bit %d dma_cache bitmap 0x%llx\n", \
-			hash32_ptr(inst->session), idx, \
-			inst->dma_cache.usage_bitmap); \
-	} while (0)
-
 struct cvp_oob_pool wncc_buf_pool;
 
 static void _wncc_print_cvpwnccbufs_table(struct msm_cvp_inst* inst);
@@ -76,18 +60,25 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 		if (i > 0)
 			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
 
-		if (!atomic_read(&smem->refcount))
+		if (!atomic_read(&smem->refcount)) {
 			dprintk(tag,
-				" UNUSED mapping %s: 0x%llx size %d iova %#x idx %d pkt_type %s buf_idx %#x fd %d\n",
-				str, smem->dma_buf,
-				smem->size, smem->device_addr, smem->bitmap_index, name, smem->buf_idx, smem->fd);
-		else
+				"UNUSED mapping %s: 0x%llx size %d iova %#x\n",
+				str, smem->dma_buf, smem->size, smem->device_addr);
+
 			dprintk(tag,
-				"%s: %x : 0x%llx size %d flags %#x iova %#x idx %d ref %d pkt_type %s buf_idx %#x fd %d\n",
+				"pkt_type %s buf_idx %#x fd %d cached %d\n",
+				 name, smem->buf_idx, smem->fd, smem->cached);
+		} else {
+			dprintk(tag,
+				"%s: %x : 0x%llx size %d flags %#x iova %#x\n",
 				str, hash32_ptr(inst->session), smem->dma_buf,
-				smem->size, smem->flags, smem->device_addr,
-				smem->bitmap_index, atomic_read(&smem->refcount),
-				name, smem->buf_idx, smem->fd);
+				smem->size, smem->flags, smem->device_addr);
+
+			dprintk(tag,
+				"ref %d pkt_type %s buf_idx %#x fd %d cached %d\n",
+				atomic_read(&smem->refcount), name, smem->buf_idx,
+				smem->fd, smem->cached);
+		}
 	}
 	return 0;
 }
@@ -138,9 +129,9 @@ static void _log_smem(struct inst_snapshot *snapshot, struct msm_cvp_inst *inst,
 		s = &snapshot->smem_log[snapshot->smem_index];
 		snapshot->smem_index++;
 		s->size = smem->size;
+		s->cached = smem->cached;
 		s->flags = smem->flags;
 		s->device_addr = smem->device_addr;
-		s->bitmap_index = smem->bitmap_index;
 		s->refcount = atomic_read(&smem->refcount);
 		s->pkt_type = smem->pkt_type;
 		s->buf_idx = smem->buf_idx;
@@ -322,7 +313,7 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst, struct eva_kmd_buffer *buf)
 	}
 
 	smem->dma_buf = dma_buf;
-	smem->bitmap_index = MAX_DMABUF_NUMS;
+	smem->cached = false;
 	smem->pkt_type = 0;
 	smem->buf_idx = 0;
 	smem->fd = buf->fd;
@@ -490,7 +481,7 @@ int msm_cvp_map_buf_wncc(struct msm_cvp_inst *inst,
 	}
 
 	smem->dma_buf = dma_buf;
-	smem->bitmap_index = MAX_DMABUF_NUMS;
+	smem->cached = false;
 	smem->pkt_type = 0;
 	smem->buf_idx = 0;
 	smem->fd = buf->fd;
@@ -1286,38 +1277,42 @@ void msm_cvp_cache_operations(struct msm_cvp_smem *smem, u32 type,
 		__func__, smem->dma_buf, cache_op, offset, size);
 	msm_cvp_smem_cache_operations(smem->dma_buf, cache_op, offset, size);
 }
+static struct msm_cvp_smem *find_smem_rb_node(struct msm_cvp_inst *inst, struct dma_buf *dma_buf)
+{
+	struct rb_node *entry_node = inst->dma_cache.rbtree.rb_node;
 
+	while (entry_node) {
+		struct msm_cvp_smem *data = rb_entry(entry_node, struct msm_cvp_smem, node);
+
+		if (dma_buf < data->dma_buf)
+			entry_node = entry_node->rb_left;
+		else if (dma_buf > data->dma_buf)
+			entry_node = entry_node->rb_right;
+		else
+			return data;
+	}
+	return NULL;
+}
 static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 				struct dma_buf *dma_buf,
 				u32 pkt_type)
 {
-	struct msm_cvp_smem *smem;
+	struct msm_cvp_smem *smem = NULL;
 	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef;
 	struct cvp_internal_buf *buf = (struct cvp_internal_buf *)0xdeadbeef;
 	int i;
 
-	if (inst->dma_cache.nr > MAX_DMABUF_NUMS)
-		return NULL;
-
 	mutex_lock(&inst->dma_cache.lock);
-	for (i = 0; i < inst->dma_cache.nr; i++)
-		if (inst->dma_cache.entries[i]->dma_buf == dma_buf) {
-			SET_USE_BITMAP(i, inst);
-			smem = inst->dma_cache.entries[i];
-			smem->bitmap_index = i;
-			smem->pkt_type = pkt_type;
-			atomic_inc(&smem->refcount);
-			/*
-			 * If we find it, it means we already increased
-			 * refcount before, so we put it to avoid double
-			 * incremental.
-			 */
-			msm_cvp_smem_put_dma_buf(smem->dma_buf);
-			mutex_unlock(&inst->dma_cache.lock);
-			print_smem(CVP_MEM, "found in cache", inst, smem);
-			return smem;
-		}
-
+	smem = find_smem_rb_node(inst, dma_buf);
+	if (smem) {
+		smem->pkt_type = pkt_type;
+		smem->cached = true;
+		atomic_inc(&smem->refcount);
+		msm_cvp_smem_put_dma_buf(smem->dma_buf);
+		print_smem(CVP_MEM, "found in cache", inst, smem);
+		mutex_unlock(&inst->dma_cache.lock);
+		return smem;
+	}
 	mutex_unlock(&inst->dma_cache.lock);
 
 	/* earch persist list */
@@ -1355,42 +1350,37 @@ static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				struct msm_cvp_smem *smem)
 {
-	unsigned int i;
 	struct msm_cvp_smem *smem2;
+	struct rb_node **node, *parent = NULL;
 
 	mutex_lock(&inst->dma_cache.lock);
 	if (inst->dma_cache.nr < MAX_DMABUF_NUMS) {
-		inst->dma_cache.entries[inst->dma_cache.nr] = smem;
-		SET_USE_BITMAP(inst->dma_cache.nr, inst);
-		smem->bitmap_index = inst->dma_cache.nr;
-		inst->dma_cache.nr++;
-		i = smem->bitmap_index;
-	} else {
-		i = find_first_zero_bit(&inst->dma_cache.usage_bitmap,
-				MAX_DMABUF_NUMS);
-		if (i < MAX_DMABUF_NUMS) {
-			smem2 = inst->dma_cache.entries[i];
-			msm_cvp_unmap_smem(inst, smem2, "unmap cpu");
-			msm_cvp_smem_put_dma_buf(smem2->dma_buf);
-			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem2);
+		node = &inst->dma_cache.rbtree.rb_node;
+		while (*node != NULL) {
+			parent = *node;
+			smem2 = rb_entry(parent, struct msm_cvp_smem, node);
 
-			inst->dma_cache.entries[i] = smem;
-			smem->bitmap_index = i;
-			SET_USE_BITMAP(i, inst);
-		} else {
+			if (smem->dma_buf < smem2->dma_buf)
+				node = &parent->rb_left;
+			else
+				node = &parent->rb_right;
+		}
+		smem->cached = true;
+		/* Insert node as a child at the bottom of the tree and then sort tree*/
+		rb_link_node(&smem->node, parent, node);
+		rb_insert_color(&smem->node, &inst->dma_cache.rbtree);
+		inst->dma_cache.nr++;
+	} else {
 			dprintk(CVP_WARN,
-			"%s: reached limit, fallback to buf mapping list\n"
+			"%s: reached cache limit, fallback to buf mapping list\n"
 			, __func__);
 			atomic_inc(&smem->refcount);
 			mutex_unlock(&inst->dma_cache.lock);
 			return -ENOMEM;
 		}
-	}
-
 	atomic_inc(&smem->refcount);
 	mutex_unlock(&inst->dma_cache.lock);
-	dprintk(CVP_MEM, "Add entry %d into cache\n", i);
-
+	dprintk(CVP_MEM, "Added entry into cache\n");
 	return 0;
 }
 
@@ -1420,8 +1410,8 @@ static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 			return NULL;
 
 		smem->dma_buf = dma_buf;
-		smem->bitmap_index = MAX_DMABUF_NUMS;
 		smem->pkt_type = pkt_type;
+		smem->cached = false;
 		smem->flags |= SMEM_PERSIST;
 		smem->fd = buf->fd;
 		atomic_inc(&smem->refcount);
@@ -1436,7 +1426,6 @@ static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 		}
 		return smem;
 	}
-
 	smem = msm_cvp_session_find_smem(inst, dma_buf, pkt_type);
 	if (!smem) {
 		found = 0;
@@ -1445,7 +1434,7 @@ static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 			return NULL;
 
 		smem->dma_buf = dma_buf;
-		smem->bitmap_index = MAX_DMABUF_NUMS;
+		smem->cached = false;
 		smem->pkt_type = pkt_type;
 		smem->fd = buf->fd;
 		if (is_params_pkt(pkt_type))
@@ -1465,7 +1454,6 @@ static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 			goto exit2;
 		return smem;
 	}
-
 	if (!IS_CVP_BUF_VALID(buf, smem)) {
 		dprintk(CVP_ERR, "%s: invalid offset %d or size %d found\n",
 			__func__, buf->offset, buf->size);
@@ -1715,11 +1703,12 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 }
 
 static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
-			struct msm_cvp_frame *frame)
+			struct msm_cvp_frame *frame, bool deinit_all)
 {
 	u32 i;
 	u32 type;
 	struct msm_cvp_smem *smem = NULL;
+	struct msm_cvp_smem *smem_cache_entry = NULL;
 	struct cvp_internal_buf *buf;
 
 	type = EVA_KMD_BUFTYPE_OUTPUT;
@@ -1732,9 +1721,26 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 #ifdef USE_PRESIL42
 	presil42_unmap_frame_buf(smem, buf);
 #endif
-
-		if (smem->bitmap_index >= MAX_DMABUF_NUMS) {
-			/* smem not in dmamap cache */
+		if (!deinit_all) {
+			mutex_lock(&inst->dma_cache.lock);
+			if (atomic_dec_and_test(&smem->refcount)) {
+				if (smem->cached == true) {
+					smem_cache_entry = find_smem_rb_node(inst, smem->dma_buf);
+					if (smem_cache_entry) {
+						rb_erase(&smem_cache_entry->node,
+							&inst->dma_cache.rbtree);
+						smem->cached = false;
+						inst->dma_cache.nr--;
+					}
+				}
+				msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+				msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				smem->buf_idx |= 0xdead0000;
+				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+				buf->smem = NULL;
+			}
+			mutex_unlock(&inst->dma_cache.lock);
+		} else {
 			if (atomic_dec_and_test(&smem->refcount)) {
 				msm_cvp_unmap_smem(inst, smem, "unmap cpu");
 				dma_heap_buffer_free(smem->dma_buf);
@@ -1742,18 +1748,8 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 				buf->smem = NULL;
 			}
-		} else {
-			mutex_lock(&inst->dma_cache.lock);
-			if (atomic_dec_and_test(&smem->refcount)) {
-				CLEAR_USE_BITMAP(smem->bitmap_index, inst);
-				print_smem(CVP_MEM, "Map dereference",
-					inst, smem);
-				smem->buf_idx |= 0x10000000;
-			}
-			mutex_unlock(&inst->dma_cache.lock);
 		}
 	}
-
 	cvp_kmem_cache_free(&cvp_driver->frame_cache, frame);
 }
 
@@ -1771,7 +1767,7 @@ static void backup_frame_buffers(struct msm_cvp_inst *inst,
 
 	do {
 		i--;
-		if (frame->bufs[i].smem->bitmap_index < MAX_DMABUF_NUMS) {
+		if (frame->bufs[i].smem->cached) {
 			/*
 			 * Frame buffer info can be found in dma_cache table,
 			 * Skip saving
@@ -1811,7 +1807,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 				frame->ktid);
 			/* Save the previous frame mappings for debug */
 			backup_frame_buffers(inst, frame);
-			msm_cvp_unmap_frame_buf(inst, frame);
+			msm_cvp_unmap_frame_buf(inst, frame, false);
 			break;
 		}
 	}
@@ -1978,7 +1974,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 				msm_cvp_print_inst_bufs(instance, false);
 			}
 			mutex_unlock(&core->lock);
-			msm_cvp_unmap_frame_buf(inst, frame);
+			msm_cvp_unmap_frame_buf(inst, frame, false);
 			return -EINVAL;
 		}
 
@@ -1999,8 +1995,9 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 {
-	int rc = 0, i;
+	int rc = 0;
 	struct cvp_internal_buf *cbuf, *dummy;
+	struct rb_node *node;
 	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef, *dummy1;
 	struct msm_cvp_smem *smem;
 	struct cvp_hal_session *session;
@@ -2010,10 +2007,23 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 
 	session = (struct cvp_hal_session *)inst->session;
 
+	mutex_lock(&inst->dma_cache.lock);
+	node = rb_first(&inst->dma_cache.rbtree);
+
+	while (node && inst->dma_cache.nr > 0) {
+		smem = rb_entry(node, struct msm_cvp_smem, node);
+		smem->cached = false;
+		atomic_dec(&smem->refcount);
+		rb_erase(&smem->node, &inst->dma_cache.rbtree);
+		node = rb_first(&inst->dma_cache.rbtree);
+		inst->dma_cache.nr--;
+	}
+	mutex_unlock(&inst->dma_cache.lock);
+
 	mutex_lock(&inst->frames.lock);
 	list_for_each_entry_safe(frame, dummy1, &inst->frames.list, list) {
 		list_del(&frame->list);
-		msm_cvp_unmap_frame_buf(inst, frame);
+		msm_cvp_unmap_frame_buf(inst, frame, true);
 	}
 	mutex_unlock(&inst->frames.lock);
 
@@ -2034,7 +2044,7 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 			"free user persistent", hash32_ptr(inst->session), cbuf->fd,
 			smem->dma_buf, cbuf->size);
 			list_del(&cbuf->list);
-			if (smem->bitmap_index >= MAX_DMABUF_NUMS) {
+			if (smem->cached == false) {
 				/*
 				 * don't care refcount, has to remove mapping
 				 * this is user persistent buffer
@@ -2060,21 +2070,6 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 		}
 	}
 	mutex_unlock(&inst->persistbufs.lock);
-
-	mutex_lock(&inst->dma_cache.lock);
-	for (i = 0; i < inst->dma_cache.nr; i++) {
-		smem = inst->dma_cache.entries[i];
-		if (atomic_read(&smem->refcount) == 0) {
-			print_smem(CVP_MEM, "free", inst, smem);
-		} else if (!(smem->flags & SMEM_PERSIST)) {
-			print_smem(CVP_WARN, "in use", inst, smem);
-		}
-		msm_cvp_unmap_smem(inst, smem, "unmap cpu");
-		msm_cvp_smem_put_dma_buf(smem->dma_buf);
-		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-		inst->dma_cache.entries[i] = NULL;
-	}
-	mutex_unlock(&inst->dma_cache.lock);
 
 	cbuf = (struct cvp_internal_buf *)0xdeadbeef;
 	mutex_lock(&inst->cvpdspbufs.lock);
@@ -2159,9 +2154,11 @@ void msm_cvp_populate_dsp_buf_info(struct cvp_internal_buf *buf,
 #define MAX_NUM_FRAMES_DUMP 4
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 {
+	struct msm_cvp_smem *smem;
 	struct cvp_internal_buf *buf = (struct cvp_internal_buf *)0xdeadbeef;
 	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef;
 	struct msm_cvp_core *core;
+	struct rb_node *node;
 	struct inst_snapshot *snap = NULL;
 	int i = 0, c = 0;
 
@@ -2189,11 +2186,15 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 			"---Buffer details for inst: %pK %s of type: %d---\n",
 			inst, inst->proc_name, inst->session_type);
 
-	dprintk(CVP_ERR, "dma_cache entries %d\n", inst->dma_cache.nr);
+	dprintk(CVP_ERR, "dma_cache entries for logging %d\n", inst->dma_cache.nr);
+
 	mutex_lock(&inst->dma_cache.lock);
-	if (inst->dma_cache.nr <= MAX_DMABUF_NUMS)
-		for (i = 0; i < inst->dma_cache.nr; i++)
-			_log_smem(snap, inst, inst->dma_cache.entries[i], log);
+
+	for (node = rb_first(&inst->dma_cache.rbtree); node; node = rb_next(node)) {
+		smem = rb_entry(node, struct msm_cvp_smem, node);
+		if (smem)
+			_log_smem(snap, inst, smem, log);
+	}
 	mutex_unlock(&inst->dma_cache.lock);
 
 	i = 0;
