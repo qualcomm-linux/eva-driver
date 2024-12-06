@@ -369,10 +369,7 @@ static int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_
 		if (pd_info->has_hw_power_collapse) {
 			dprintk(CVP_CORE, "Moving core GDSC to %s\n",
 						dest?"HW control":"SW control");
-			#if 0
 			rc = dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
-			#endif
-			dprintk(CVP_ERR, "dev_pm_genpd_set_hwmode() is a stub function\n");
 			if (rc) {
 				dprintk(CVP_ERR, "Failed to move core GDSC to %s\n",
 						dest?"HW control":"SW control");
@@ -954,7 +951,7 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
 
 static void __enter_core_noc_lpi(struct iris_hfi_device *device)
 {
-	u32 lpi_status, count = 0, max_count = 2000;
+	u32 lpi_status, value, count = 0, max_count = 2000;
 
 	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
 
@@ -996,6 +993,18 @@ static void __enter_core_noc_lpi(struct iris_hfi_device *device)
 		/* Added for debug info purpose, not part of HPG */
 		call_iris_op(device, print_sbm_regs, device);
 	}
+
+    /* HPG 3.4.4 Step 4-5 */
+	count = 0;
+	do {
+		value = __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_STATUS);
+		if (value & 0x0)
+			break;
+		usleep_range(1000, 2000);
+		count++;
+	} while (count < 10);
+
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, 0x0);
 }
 
 static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
@@ -5661,7 +5670,49 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
 	__enter_core_noc_lpi(device);
 
-	/* HPG 3.4.4 step 5 */
+#ifdef CONFIG_EVA_CANOE
+	/* New sequence additions for canoe */
+	/* HPG Section 3.4.4 Steps 6-10 in canoe*/
+	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
+
+	__write_register(device, CVP_NOC_RESET_REQ, 0xffff5fbf);
+
+	count = 0;
+	do {
+		value = __read_register(device, CVP_NOC_RESET_ACK);
+		if (value & 0x5fbf)
+			break;
+		usleep_range(1000, 2000);
+		count++;
+	} while (count < max_count);
+
+	if (count == max_count)
+		dprintk(CVP_WARN, "Failed to get Partial Reset Ack %x\n", value);
+
+	__write_register(device, CVP_NOC_RESET_SYNCRST, 0x5fbf);
+	__write_register(device, CVP_NOC_RESET_SYNCRST, 0x0);
+
+	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
+
+
+	count = 0;
+	do {
+		value = __read_register(device, CVP_NOC_RESET_ACK);
+		if (value & 0x0)
+			break;
+		usleep_range(1000, 2000);
+		count++;
+	} while (count < max_count);
+
+	if (count == max_count)
+		dprintk(CVP_WARN, "Failed to get Partial Reset Ack %x\n", value);
+
+	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
+	__write_register(device, CVP_NOC_RESET_REQ, 0x0);
+#endif
+
+	/* HPG 3.4.4 step 5 in sun */
+	/* HPG 3.4.4 step 11 in canoe */
 	/* Reset both sides of 2 ahb2ahb_bridges (TZ and non-TZ) */
 	__write_register(device, CVP_AHB_BRIDGE_SYNC_RESET, 0x3);
 	__write_register(device, CVP_AHB_BRIDGE_SYNC_RESET, 0x2);

@@ -322,7 +322,7 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 #ifdef USE_PRESIL
 		.value = 0,
 #else
-		.value = 0,
+		.value = 1,
 #endif
 	},
 	{
