@@ -186,7 +186,7 @@ int print_smem(u32 tag, const char *str,
 
 /*Kernel DMA buffer and IOMMU mapping functions*/
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
-			void  *res, struct msm_cvp_smem *smem);
+			void  *res, struct msm_cvp_smem *smem, int user_access);
 int msm_cvp_smem_free(struct msm_cvp_smem *smem);
 struct context_bank_info *msm_cvp_smem_get_context_bank(
 				struct msm_cvp_platform_resources *res,

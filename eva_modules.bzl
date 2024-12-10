@@ -30,6 +30,7 @@ register_eva_module(
         "eva/msm_cvp_platform.c",
         "eva/msm_cvp_res_parse.c",
         "eva/msm_cvp_synx.c",
+        "eva/msm_cvp_sw_dbg.c",
         "eva/vm/cvp_vm_main.c",
         "eva/vm/cvp_vm_msgq.c",
         "eva/vm/cvp_vm_resource.c",

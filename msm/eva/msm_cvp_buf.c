@@ -2170,10 +2170,11 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 	session_id = hash32_ptr(session);
 
 	core = cvp_driver->cvp_core;
-	if (log && core->log.snapshot_index < 16) {
-		snap = &core->log.snapshot[core->log.snapshot_index];
+	if (log && core->kmd_trace.kmd_debug_log.log.snapshot_index < 16) {
+		snap = &core->kmd_trace.kmd_debug_log.log.snapshot[
+			core->kmd_trace.kmd_debug_log.log.snapshot_index];
 		snap->session = inst->session;
-		core->log.snapshot_index++;
+		core->kmd_trace.kmd_debug_log.log.snapshot_index++;
 	}
 
 	if (!inst) {
@@ -2290,7 +2291,7 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 
 	buf->smem->flags = smem_flags;
 	rc = msm_cvp_smem_alloc(buffer_size, 1, 0, /* 0: no mapping in kernel space */
-		&(inst->core->resources), buf->smem);
+		&(inst->core->resources), buf->smem, 0);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to allocate ARP memory\n");
 		goto err_no_mem;
@@ -2433,7 +2434,7 @@ int cvp_allocate_dsp_bufs(struct msm_cvp_inst *inst,
 
 	buf->smem->flags = smem_flags;
 	rc = msm_cvp_smem_alloc(buffer_size, 1, 0,
-			&(inst->core->resources), buf->smem);
+			&(inst->core->resources), buf->smem, 0);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to allocate DSP buf\n");
 		goto err_no_mem;

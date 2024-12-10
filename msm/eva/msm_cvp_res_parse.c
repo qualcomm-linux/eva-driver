@@ -1208,10 +1208,13 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 	}
 	mutex_lock(&core->lock);
 	core->smmu_fault_count++;
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	core->kmd_trace.kmd_debug_log.smmu_debug.fauting_addr = iova;
+#endif
 	if (!core->last_fault_addr)
 		core->last_fault_addr = iova;
 
-	log = (core->log.snapshot_index > 0)? false : true;
+	log = (core->kmd_trace.kmd_debug_log.log.snapshot_index > 0) ? false : true;
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
 		msm_cvp_print_inst_bufs(inst, log);

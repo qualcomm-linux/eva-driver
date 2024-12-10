@@ -13,6 +13,7 @@
 #include "cvp_hfi.h"
 #include "msm_cvp_resources.h"
 #include "hfi_packetization.h"
+#include "cvp_comm_def.h"
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/mutex.h>
@@ -107,6 +108,7 @@ struct cvp_hfi_mem_map {
 
 #define ALIGNED_QDSS_SIZE ALIGN(QDSS_SIZE, SZ_4K)
 #define ALIGNED_SFR_SIZE ALIGN(SFR_SIZE, SZ_4K)
+#define ALIGNED_SW_DBG_BUF_SIZE ALIGN(SW_DBG_BUF_SIZE, SZ_4K)
 #define ALIGNED_QUEUE_SIZE ALIGN(QUEUE_SIZE, SZ_4K)
 #define SHARED_QSIZE ALIGN(ALIGNED_SFR_SIZE + ALIGNED_QUEUE_SIZE + \
 			ALIGNED_QDSS_SIZE, SZ_1M)
@@ -299,6 +301,9 @@ struct iris_hfi_device {
 	unsigned int skip_pc_count;
 	struct msm_cvp_capability *sys_init_capabilities;
 	struct cvp_hal_ops *hal_ops;
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct cvp_mem_addr sw_dbg_buf;
+#endif
 };
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev);
