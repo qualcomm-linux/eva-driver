@@ -78,21 +78,32 @@ def create_module_registry(hdrs = []):
     )
 
 def define_target_variant_modules(target, variant, registry, modules, config_options = []):
+
     kernel_build = "{}_{}".format(target, variant)
-    kernel_build_label = "//soc-repo:{}_base_kernel".format(kernel_build)
+
+    kernel_build_label = select({
+        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_{}_base_kernel".format(target, variant),
+        "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}_{}".format(target, variant),
+    })
+
     modules = [registry.get(module_name) for module_name in modules]
     options = _get_kernel_build_options(modules, config_options)
     build_print = lambda message: print("{}: {}".format(kernel_build, message))
     formatter = lambda s: s.replace("%b", kernel_build).replace("%t", target)
 
-    headers = ["//soc-repo:all_headers",
-               "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(kernel_build),
-               "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(kernel_build),
-               "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(kernel_build),
-               "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(kernel_build),
-               "//soc-repo:{}/drivers/virt/gunyah/gh_rm_drv".format(kernel_build),
-               "//soc-repo:{}/drivers/virt/gunyah/gh_msgq".format(kernel_build),
-              ] + registry.hdrs
+    headers = select({
+         "//build/kernel/kleaf:socrepo_true": [
+            "//soc-repo:all_headers",
+            "//soc-repo:{}_{}/drivers/firmware/qcom/qcom-scm".format(target, variant),
+            "//soc-repo:{}_{}/drivers/soc/qcom/mdt_loader".format(target, variant),
+            "//soc-repo:{}_{}/drivers/soc/qcom/llcc-qcom".format(target, variant),
+            "//soc-repo:{}_{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(target, variant),
+            "//soc-repo:{}_{}/drivers/virt/gunyah/gh_rm_drv".format(target, variant),
+            "//soc-repo:{}_{}/drivers/virt/gunyah/gh_msgq".format(target, variant),
+            ],
+         "//build/kernel/kleaf:socrepo_false":["//msm-kernel:all_headers"],
+    })
+
     all_module_rules = []
 
     for module in modules:
@@ -108,7 +119,7 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
             out = "{}.ko".format(module.name),
             kernel_build = kernel_build_label,
             copts = ["-Wno-format","-Wno-array-bounds"],
-            deps = headers + _get_kernel_build_module_deps(module, options, formatter),
+            deps = headers + _get_kernel_build_module_deps(module, options, formatter) + registry.hdrs,
             local_defines = options.keys(),
         )
 
