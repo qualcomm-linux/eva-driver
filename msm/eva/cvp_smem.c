@@ -265,11 +265,6 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 		}
 	}
 
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
-		eva_kmd_buf_dump(inst, smem, 0);
-#endif
-
 	goto success;
 exit:
 	smem->device_addr = 0x0;
@@ -297,6 +292,10 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 		print_smem(CVP_MEM, str, inst, smem);
 		atomic_inc(&inst->smem_count);
 	}
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
+		eva_kmd_buf_dump(inst, smem, 0);
+#endif
 
 	return rc;
 }
@@ -331,10 +330,7 @@ static int msm_cvp_unmap_smem_helper(struct msm_cvp_smem *smem)
 		dprintk(CVP_ERR, "Failed to put device address: %d\n", rc);
 		return rc;
 	}
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
-		eva_kmd_buf_dump(inst, smem, 1);
-#endif
+
 	smem->device_addr = 0x0;
 	return rc;
 }
@@ -356,6 +352,11 @@ int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 
 	if (!rc)
 		atomic_dec(&inst->smem_count);
+
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	if (msm_cvp_sw_dbg_buf_dump & BIT(1))
+		eva_kmd_buf_dump(inst, smem, 1);
+#endif
 
 	return rc;
 }

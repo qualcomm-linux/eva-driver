@@ -2081,33 +2081,34 @@ hfi_queue_init:
 		dev->sfr.mem_size = ALIGNED_SFR_SIZE;
 		dev->sfr.mem_data = mem_addr->mem_data;
 	}
+sfr_init:
+	__sfr_init(dev);
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	if (dev->sw_dbg_buf.align_virtual_addr) {
 		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
-				0, ALIGNED_SFR_SIZE);
-		goto sfr_init;
-	}
-	rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1, SMEM_UNCACHED, O_RDWR);
-	if (rc) {
-		dprintk(CVP_WARN, "sfr_alloc_fail: sw_dbg_buf not will work\n");
-		dev->sw_dbg_buf.align_device_addr = 0;
+				0, ALIGNED_SW_DBG_BUF_SIZE);
 	} else {
-		dev->sw_dbg_buf.align_device_addr = mem_addr->align_device_addr;
-		dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
-		dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
-		dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
-		core = cvp_driver->cvp_core;
-		if (!core)
-			dprintk(CVP_ERR, "%s: Core is null\n", __func__);
-		else {
-			mutex_init(&core->kmd_dbg.dbg_lock);
-			core->kmd_dbg.kmd_buf_offset = 0;
-			core->kmd_dbg.kmd_buf_cnt = 0;
+		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
+				SMEM_UNCACHED, O_RDWR);
+		if (rc) {
+			dprintk(CVP_WARN, "sfr_alloc_fail: sw_dbg_buf not will work\n");
+			dev->sw_dbg_buf.align_device_addr = 0;
+		} else {
+			dev->sw_dbg_buf.align_device_addr = mem_addr->align_device_addr;
+			dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
+			dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
+			dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
+			core = cvp_driver->cvp_core;
+			if (!core)
+				dprintk(CVP_ERR, "%s: Core is null\n", __func__);
+			else {
+				mutex_init(&core->kmd_dbg.dbg_lock);
+				core->kmd_dbg.kmd_buf_offset = 0;
+				core->kmd_dbg.kmd_buf_cnt = 0;
+			}
 		}
 	}
 #endif
-sfr_init:
-	__sfr_init(dev);
 
 	if (dev->qdss.align_virtual_addr)
 		goto dsp_hfi_queue_init;
