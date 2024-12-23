@@ -1310,7 +1310,10 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 	struct list_head *ptr;
 	struct list_head *next;
 	struct cvp_internal_buf *pbuf;
+	struct msm_cvp_smem *smem = NULL;
+	struct msm_cvp_smem *smem_cache_entry = NULL;
 	struct dma_buf *dma_buf;
+	int ret = -EINVAL;
 
 	if (!inst) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
@@ -1322,35 +1325,49 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 		return -EINVAL;
 
 	mutex_lock(&inst->persistbufs.lock);
+	mutex_lock(&inst->dma_cache.lock);
 	list_for_each_safe(ptr, next, &inst->persistbufs.list) {
-		if (!ptr) {
-			mutex_unlock(&inst->persistbufs.lock);
-			return -EINVAL;
-		}
 		pbuf = list_entry(ptr, struct cvp_internal_buf, list);
-		if (dma_buf == pbuf->smem->dma_buf && (pbuf->smem->flags & SMEM_PERSIST)) {
-			*iova = pbuf->smem->device_addr;
-			dprintk(CVP_MEM,
-				"Unmap persist fd %d, dma_buf %#llx iova %#x\n",
-				pbuf->fd, pbuf->smem->dma_buf, *iova);
-			list_del(&pbuf->list);
-			if (*iova) {
-				msm_cvp_unmap_smem(inst, pbuf->smem, "unmap user persist");
-				msm_cvp_smem_put_dma_buf(pbuf->smem->dma_buf);
-				pbuf->smem->device_addr = 0;
+		smem = pbuf->smem;
+		if (dma_buf == smem->dma_buf && (smem->flags & SMEM_PERSIST)) {
+			if (atomic_dec_and_test(&smem->refcount)) {
+				*iova = smem->device_addr;
+				dprintk(CVP_MEM,
+					"Unmap persist fd %d, dma_buf %#llx iova %#x\n",
+					pbuf->fd, smem->dma_buf, *iova);
+				list_del(&pbuf->list);
+				/* Remove from 64 bit cache entry for DMM & WARP_DS PARAMS */
+				if (is_params_pkt(pkt_type) && (smem->cached == true)) {
+					smem_cache_entry = find_smem_rb_node(inst, smem->dma_buf);
+					if (smem_cache_entry) {
+						rb_erase(&smem_cache_entry->node,
+							&inst->dma_cache.rbtree);
+						smem->cached = false;
+						inst->dma_cache.nr--;
+					}
+				}
+				msm_cvp_unmap_smem(inst, smem, "unmap user persist");
+				msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				smem->buf_idx |= 0xdead0000;
+				smem->device_addr = 0;
+				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+				smem = NULL;
+				cvp_kmem_cache_free(&cvp_driver->buf_cache, pbuf);
+				ret = 0;
+				goto exit;
 			}
-			cvp_kmem_cache_free(&cvp_driver->smem_cache, pbuf->smem);
-			pbuf->smem = NULL;
-			cvp_kmem_cache_free(&cvp_driver->buf_cache, pbuf);
-			mutex_unlock(&inst->persistbufs.lock);
-			dma_buf_put(dma_buf);
-			return 0;
+			dprintk(CVP_INFO, "%s - pbuf in use, smem refcount: %d",
+					__func__, pbuf->smem->refcount);
+			ret = -EAGAIN;
+			goto exit;
 		}
 	}
+exit:
+	mutex_unlock(&inst->dma_cache.lock);
 	mutex_unlock(&inst->persistbufs.lock);
 	dma_buf_put(dma_buf);
 
-	return -EINVAL;
+	return ret;
 }
 
 static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
