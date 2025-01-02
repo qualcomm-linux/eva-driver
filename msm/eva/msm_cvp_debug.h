@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __MSM_CVP_DEBUG__
@@ -76,6 +76,7 @@ extern int msm_cvp_minidump_enable;
 extern int cvp_kernel_fence_enabled;
 extern int msm_cvp_hw_wd_recovery;
 extern int msm_cvp_smmu_fault_recovery;
+extern int msm_cvp_session_error_recovery;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 extern int msm_cvp_sw_dbg_buf_dump;
 #endif
