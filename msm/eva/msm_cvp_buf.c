@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/pid.h>
@@ -1173,37 +1173,67 @@ static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 	return NULL;
 }
 
+static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
+			struct msm_cvp_smem *smem)
+{
+	struct rb_node **node, *parent = NULL;
+	struct msm_cvp_smem *smem2;
+
+	node = &inst->dma_cache.rbtree.rb_node;
+	while (*node != NULL) {
+		parent = *node;
+		smem2 = rb_entry(parent, struct msm_cvp_smem, node);
+
+		if (smem->dma_buf < smem2->dma_buf)
+			node = &parent->rb_left;
+		else
+			node = &parent->rb_right;
+	}
+	smem->cached = true;
+	/* Insert node as a child at the bottom of the tree and then sort tree*/
+	rb_link_node(&smem->node, parent, node);
+	rb_insert_color(&smem->node, &inst->dma_cache.rbtree);
+	inst->dma_cache.nr++;
+}
+
 static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				struct msm_cvp_smem *smem)
 {
 	struct msm_cvp_smem *smem2;
-	struct rb_node **node, *parent = NULL;
+	struct rb_node *node;
+	int index;
 
 	mutex_lock(&inst->dma_cache.lock);
 	if (inst->dma_cache.nr < MAX_DMABUF_NUMS) {
-		node = &inst->dma_cache.rbtree.rb_node;
-		while (*node != NULL) {
-			parent = *node;
-			smem2 = rb_entry(parent, struct msm_cvp_smem, node);
-
-			if (smem->dma_buf < smem2->dma_buf)
-				node = &parent->rb_left;
-			else
-				node = &parent->rb_right;
-		}
-		smem->cached = true;
-		/* Insert node as a child at the bottom of the tree and then sort tree*/
-		rb_link_node(&smem->node, parent, node);
-		rb_insert_color(&smem->node, &inst->dma_cache.rbtree);
-		inst->dma_cache.nr++;
+		msm_cvp_add_smem_rb_node(inst, smem);
 	} else {
-			dprintk(CVP_WARN,
-			"%s: reached cache limit, fallback to buf mapping list\n"
-			, __func__);
-			atomic_inc(&smem->refcount);
-			mutex_unlock(&inst->dma_cache.lock);
-			return -ENOMEM;
+		node = rb_first(&inst->dma_cache.rbtree);
+		index = 0;
+
+		while (node && index < inst->dma_cache.nr) {
+			smem2 = rb_entry(node, struct msm_cvp_smem, node);
+
+			if (smem2 && smem2->cached == false) {
+				rb_erase(&smem2->node,
+					&inst->dma_cache.rbtree);
+				inst->dma_cache.nr--;
+				msm_cvp_unmap_smem(inst, smem2, "unmap cpu");
+				msm_cvp_smem_put_dma_buf(smem2->dma_buf);
+				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem2);
+				msm_cvp_add_smem_rb_node(inst, smem);
+				goto exit;
+			}
+			node = rb_next(node);
+			index++;
 		}
+		dprintk(CVP_WARN,
+		"%s: reached cache limit, fallback to buf mapping list\n"
+		, __func__);
+		atomic_inc(&smem->refcount);
+		mutex_unlock(&inst->dma_cache.lock);
+		return -ENOMEM;
+	}
+exit:
 	atomic_inc(&smem->refcount);
 	mutex_unlock(&inst->dma_cache.lock);
 	dprintk(CVP_MEM, "Added entry into cache\n");
@@ -1550,7 +1580,6 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 	u32 i;
 	u32 type;
 	struct msm_cvp_smem *smem = NULL;
-	struct msm_cvp_smem *smem_cache_entry = NULL;
 	struct cvp_internal_buf *buf;
 
 	type = EVA_KMD_BUFTYPE_OUTPUT;
@@ -1564,24 +1593,24 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 	presil42_unmap_frame_buf(smem, buf);
 #endif
 		if (!deinit_all) {
-			mutex_lock(&inst->dma_cache.lock);
-			if (atomic_dec_and_test(&smem->refcount)) {
-				if (smem->cached == true) {
-					smem_cache_entry = find_smem_rb_node(inst, smem->dma_buf);
-					if (smem_cache_entry) {
-						rb_erase(&smem_cache_entry->node,
-							&inst->dma_cache.rbtree);
-						smem->cached = false;
-						inst->dma_cache.nr--;
-					}
+			if (smem->cached == true) {
+				mutex_lock(&inst->dma_cache.lock);
+				if (atomic_dec_and_test(&smem->refcount)) {
+					smem->cached = false;
+					print_smem(CVP_MEM, "Map dereference",
+						inst, smem);
+					smem->buf_idx |= 0x10000000;
 				}
-				msm_cvp_unmap_smem(inst, smem, "unmap cpu");
-				msm_cvp_smem_put_dma_buf(smem->dma_buf);
-				smem->buf_idx |= 0xdead0000;
-				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-				buf->smem = NULL;
+				mutex_unlock(&inst->dma_cache.lock);
+			} else {
+				if (atomic_dec_and_test(&smem->refcount)) {
+					msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+					dma_heap_buffer_free(smem->dma_buf);
+					smem->buf_idx |= 0xdead0000;
+					cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+					buf->smem = NULL;
+				}
 			}
-			mutex_unlock(&inst->dma_cache.lock);
 		} else {
 			if (atomic_dec_and_test(&smem->refcount)) {
 				msm_cvp_unmap_smem(inst, smem, "unmap cpu");
@@ -1869,9 +1898,12 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 
 	while (node && inst->dma_cache.nr > 0) {
 		smem = rb_entry(node, struct msm_cvp_smem, node);
-		smem->cached = false;
+		smem->cached = true;
 		atomic_dec(&smem->refcount);
 		rb_erase(&smem->node, &inst->dma_cache.rbtree);
+		msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+		msm_cvp_smem_put_dma_buf(smem->dma_buf);
+		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 		node = rb_first(&inst->dma_cache.rbtree);
 		inst->dma_cache.nr--;
 	}
