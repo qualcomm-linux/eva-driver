@@ -25,7 +25,7 @@ EXPORT_SYMBOL(msm_cvp_debug_out);
 #ifdef USE_PRESIL
 int msm_cvp_fw_low_power_mode = !1;
 #else
-int msm_cvp_fw_low_power_mode = !1;
+int msm_cvp_fw_low_power_mode = 1;
 #endif
 #ifdef USE_PRESIL42
 bool msm_cvp_auto_pil = !true;
