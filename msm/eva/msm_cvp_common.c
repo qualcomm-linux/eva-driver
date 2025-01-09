@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/jiffies.h>
@@ -365,8 +365,8 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 		msecs_to_jiffies(
 			inst->core->resources.msm_cvp_hw_rsp_timeout));
 	if (!rc) {
-		dprintk(CVP_WARN, "Wait interrupted or timed out: %d\n",
-				SESSION_MSG_INDEX(cmd));
+		dprintk(CVP_WARN, "Wait interrupted or timed out: %d session_id = %#x\n",
+				SESSION_MSG_INDEX(cmd), hash32_ptr(inst->session));
 		if (inst->state != MSM_CVP_CORE_INVALID)
 			print_hfi_queue_info(ops_tbl);
 		if (cmd != HAL_SESSION_STOP_DONE &&
@@ -590,6 +590,7 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 		wake_up_all(&inst->event_handler.wq);
 	}
 
+	BUG_ON(!msm_cvp_session_error_recovery);
 	cvp_put_inst(inst);
 }
 
@@ -630,6 +631,7 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 		&inst->event_handler.lock, flags);
 	wake_up_all(&inst->event_handler.wq);
 
+	BUG_ON(!msm_cvp_session_error_recovery);
 	if (stop_required)
 		msm_cvp_session_flush_stop(inst);
 }
