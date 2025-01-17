@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/rpmsg.h>
@@ -2283,20 +2283,24 @@ static bool __is_buf_valid(struct msm_cvp_inst *inst,
 static struct file *msm_cvp_fget(unsigned int fd, struct task_struct *task,
 			fmode_t mask, unsigned int refs)
 {
-	struct files_struct *files = task->files;
 	struct file *file;
+
+#if (KERNEL_VERSION(5, 13, 0) > LINUX_VERSION_CODE)
+	struct files_struct *files = task->files;
 
 	if (!files)
 		return NULL;
 
 	rcu_read_lock();
-
-#if (KERNEL_VERSION(5, 13, 0) > LINUX_VERSION_CODE)
 	file = fcheck_files(files, fd);
-#else
-	file = lookup_fdget_rcu(fd);
-#endif
 	rcu_read_unlock();
+#else
+	unsigned int ret_fd = fd;
+	file = task_lookup_next_fdget_rcu(task, &ret_fd);
+	if (ret_fd != fd)
+		dprintk(CVP_ERR, "%s FAILED to get file from fd = %u, %u\n",
+			__func__, fd, ret_fd);
+#endif
 
 	return file;
 }
@@ -2398,6 +2402,7 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 	list_add_tail(&cbuf->list, &frpc_node->cvpdspbufs.list);
 	mutex_unlock(&frpc_node->cvpdspbufs.lock);
 
+	fput(file);
 	return rc;
 
 exit:
