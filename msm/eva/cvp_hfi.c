@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/memory.h>
@@ -4492,9 +4492,19 @@ static int __disable_gdsc(struct iris_hfi_device *device,
 			if (rc)
 				dprintk(CVP_ERR, "Failed to disable controller pd: %d\n", rc);
 		} else {
-			rc = __disable_power_domain(device, "core_pd");
-			if (rc)
-				dprintk(CVP_ERR, "Failed to disable core pd: %d\n", rc);
+			/* Take back the gdsc control to SW before disabling the GDSC.
+			 * Not doing so, would not remove the votes from mmcx rail and
+			 * may lead to power issues.
+			 */
+			rc = __disable_hw_power_collapse(device);
+			if (!rc) {
+				rc = __disable_power_domain(device, "core_pd");
+				if (rc)
+					dprintk(CVP_ERR, "Failed to disable core pd: %d\n", rc);
+			} else {
+				/* Bring attention to this issue */
+				msm_cvp_res_handle_fatal_hw_error(device->res, true);
+			}
 		}
 	} else {
 		if (!strcmp(name, "controller")) {
@@ -5780,8 +5790,6 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
 
 	/* HPG 3.4.4 step 6-7 */
-	__disable_hw_power_collapse(device);
-	usleep_range(100, 200);
 	__disable_gdsc(device, "core");
 	msm_cvp_disable_unprepare_clk(device, "core_clk");
 	return 0;
