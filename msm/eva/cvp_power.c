@@ -155,13 +155,14 @@ static int adjust_bw_freqs(unsigned int max_bw, unsigned int min_bw)
 		nrt_pwr.core_sum, nrt_pwr.op_core_sum,
 		rt_pwr.core_sum, rt_pwr.op_core_sum);
 
-	if (rt_pwr.core_sum > cvp_max_rate) {
+	core_sum = rt_pwr.core_sum + nrt_pwr.core_sum;
+
+	if (core_sum > cvp_max_rate) {
 		dprintk(CVP_WARN, "%s clk vote out of range %lld\n",
-			__func__, rt_pwr.core_sum);
+			__func__, core_sum);
 		return -ENOTSUPP;
 	}
 
-	core_sum = rt_pwr.core_sum + nrt_pwr.core_sum;
 	op_core_sum = (rt_pwr.op_core_sum >= nrt_pwr.op_core_sum) ?
 		rt_pwr.op_core_sum : nrt_pwr.op_core_sum;
 
