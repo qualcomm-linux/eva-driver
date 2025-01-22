@@ -77,6 +77,7 @@ extern int cvp_kernel_fence_enabled;
 extern int msm_cvp_hw_wd_recovery;
 extern int msm_cvp_smmu_fault_recovery;
 extern int msm_cvp_session_error_recovery;
+extern int msm_cvp_hw_hang_recovery;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 extern int msm_cvp_sw_dbg_buf_dump;
 #endif

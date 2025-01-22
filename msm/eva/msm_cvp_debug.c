@@ -54,6 +54,7 @@ int cvp_kernel_fence_enabled = 2;
 int msm_cvp_hw_wd_recovery = 1;
 int msm_cvp_smmu_fault_recovery = !1;
 int msm_cvp_session_error_recovery = 1;
+int msm_cvp_hw_hang_recovery = 1;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 int msm_cvp_sw_dbg_buf_dump = 1;
 #endif
@@ -289,6 +290,8 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 			&msm_cvp_dcvs_disable);
 	debugfs_create_u32("session_error_recovery", 0644, dir,
 			&msm_cvp_session_error_recovery);
+	debugfs_create_u32("hw_hang_recovery", 0644, dir,
+			&msm_cvp_hw_hang_recovery);
 
 	debugfs_create_file("cvp_power", 0644, dir, NULL, &cvp_pwr_fops);
 
