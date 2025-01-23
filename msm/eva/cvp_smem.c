@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-buf.h>
@@ -373,6 +373,7 @@ int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
 		return rc;
 	}
 
+	print_smem_no_instance(CVP_MEM, str, smem);
 	rc = msm_cvp_unmap_smem_helper(smem);
 
 	if (!rc)
