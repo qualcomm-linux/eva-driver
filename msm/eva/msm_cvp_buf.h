@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _MSM_CVP_BUF_H_
@@ -184,7 +184,8 @@ void print_client_buffer(u32 tag, const char *str,
 int print_smem(u32 tag, const char *str,
 		struct msm_cvp_inst *inst,
 		struct msm_cvp_smem *smem);
-
+int print_smem_no_instance(u32 tag, const char *str,
+		struct msm_cvp_smem *smem);
 /*Kernel DMA buffer and IOMMU mapping functions*/
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
 			void  *res, struct msm_cvp_smem *smem, int user_access);

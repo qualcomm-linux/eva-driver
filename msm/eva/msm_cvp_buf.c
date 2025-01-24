@@ -83,6 +83,49 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 	return 0;
 }
 
+int print_smem_no_instance(u32 tag, const char *str,
+		struct msm_cvp_smem *smem)
+{
+	int i;
+	char name[PKT_NAME_LEN] = "Unknown";
+
+
+	if (!(tag & msm_cvp_debug))
+		return 0;
+
+	if (!smem) {
+		dprintk(CVP_ERR, "Invalid smem 0x%llx\n", smem);
+		return -EINVAL;
+	}
+
+	if (smem->dma_buf) {
+		i = get_pkt_index_from_type(smem->pkt_type);
+		if (i > 0)
+			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
+
+		if (!atomic_read(&smem->refcount)) {
+			dprintk(tag,
+				"UNUSED mapping %s: 0x%llx size %d iova %#x\n",
+				str, smem->dma_buf, smem->size, smem->device_addr);
+
+			dprintk(tag,
+				"pkt_type %s buf_idx %#x fd %d cached %d\n",
+				 name, smem->buf_idx, smem->fd, smem->cached);
+		} else {
+			dprintk(tag,
+				"%s: 0x%llx size %d flags %#x iova %#x\n",
+				str, smem->dma_buf, smem->size,
+				smem->flags, smem->device_addr);
+
+			dprintk(tag,
+				"ref %d pkt_type %s buf_idx %#x fd %d cached %d\n",
+				atomic_read(&smem->refcount), name, smem->buf_idx,
+				smem->fd, smem->cached);
+		}
+	}
+	return 0;
+}
+
 int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session *dsp_trace_sess,
 		struct msm_cvp_smem *smem)
 {
@@ -106,17 +149,14 @@ int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session *dsp_t
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
-				" UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x cached %d pkt_type %s buf_idx %#x fd %d\n",
-				str, smem->dma_buf, dsp_trace_sess->handle,
-				smem->size, smem->device_addr, smem->cached,
-				name, smem->buf_idx, smem->fd);
+				" UNUSED mapping %s: 0x%llx session id %#x size %d iova %#x cached %d pkt_type %s buf_idx %#x fd %d\n",
+				str, smem->dma_buf, dsp_trace_sess->session_id, smem->size,
+				smem->device_addr, smem->cached, name, smem->buf_idx, smem->fd);
 		else
 			dprintk(tag,
-				"%s: session id %x, PD %#x: 0x%llx size %d flags %#x iova %#x cached %d ref %d pkt_type %s buf_idx %#x fd %d\n",
-				str, dsp_trace_sess->session_id, smem->dma_buf,
-				dsp_trace_sess->handle, smem->size, smem->flags,
-				smem->device_addr, smem->cached,
-				atomic_read(&smem->refcount), name, smem->buf_idx, smem->fd);
+				"%s: session id %x: 0x%llx size %d flags %#x iova %#x cached %d ref %d pkt_type %s buf_idx %#x fd %d\n",
+				str, dsp_trace_sess->session_id, smem->dma_buf, smem->size, smem->flags, smem->device_addr,
+				smem->cached, atomic_read(&smem->refcount), name, smem->buf_idx, smem->fd);
 	}
 	return 0;
 }
