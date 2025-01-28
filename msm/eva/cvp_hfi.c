@@ -6164,8 +6164,12 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_LOW: 0x%x", val);
 	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH);
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH: 0x%x", val);
+	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW);
+	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW: 0x%x", val);
 	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH);
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH: 0x%x", val);
+	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW);
+	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW: 0x%x", val);
 
 	dprintk(CVP_ERR, "Dumping Core NoC registers\n");
 	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_LOW_OFFS);
