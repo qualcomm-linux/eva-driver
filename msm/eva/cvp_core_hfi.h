@@ -304,6 +304,7 @@ struct iris_hfi_device {
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	struct cvp_mem_addr sw_dbg_buf;
 #endif
+	u32 global_pm_qos_latency_us;
 };
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev);

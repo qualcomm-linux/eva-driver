@@ -158,8 +158,6 @@ struct msm_cvp_mem_cdsp {
 struct cvp_pm_qos {
 	u32 silver_count;
 	u32 latency_us;
-	u32 off_vote_cnt;
-	spinlock_t lock;
 	int silver_cores[MAX_SILVER_CORE_NUM];
 	struct dev_pm_qos_request *pm_qos_hdls;
 };

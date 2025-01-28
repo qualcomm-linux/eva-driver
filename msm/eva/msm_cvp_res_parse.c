@@ -974,8 +974,6 @@ int cvp_read_platform_resources_from_drv_data(
 	}
 	for (i = 0; i < res->pm_qos.silver_count; i++)
 		res->pm_qos.silver_cores[i] = i;
-	res->pm_qos.off_vote_cnt = 0;
-	spin_lock_init(&res->pm_qos.lock);
 
 	res->max_secure_inst_count = find_key_value(platform_data,
 			"qcom,max-secure-instances");

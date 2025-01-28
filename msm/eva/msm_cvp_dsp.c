@@ -237,16 +237,8 @@ static int delete_dsp_session(struct msm_cvp_inst *inst,
 
 	task = inst->task;
 
-	spin_lock(&inst->core->resources.pm_qos.lock);
-	if (inst->core->resources.pm_qos.off_vote_cnt > 0)
-		inst->core->resources.pm_qos.off_vote_cnt--;
-	else
-		dprintk(CVP_WARN, "%s Unexpected pm_qos off vote %d\n",
-			__func__,
-			inst->core->resources.pm_qos.off_vote_cnt);
-	spin_unlock(&inst->core->resources.pm_qos.lock);
-
 	ops_tbl = inst->core->dev_ops;
+	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
 	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 
 	rc = msm_cvp_close(inst);
@@ -1596,9 +1588,6 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 		__func__, cmd->session_id, cmd->session_cpu_low,
 		cmd->session_cpu_high, inst, inst->session);
 
-	spin_lock(&inst->core->resources.pm_qos.lock);
-	inst->core->resources.pm_qos.off_vote_cnt++;
-	spin_unlock(&inst->core->resources.pm_qos.lock);
 	ops_tbl = inst->core->dev_ops;
 	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 
@@ -1657,16 +1646,8 @@ void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 
 	task = inst->task;
 
-	spin_lock(&inst->core->resources.pm_qos.lock);
-	if (inst->core->resources.pm_qos.off_vote_cnt > 0)
-		inst->core->resources.pm_qos.off_vote_cnt--;
-	else
-		dprintk(CVP_WARN, "%s Unexpected pm_qos off vote %d\n",
-			__func__,
-			inst->core->resources.pm_qos.off_vote_cnt);
-	spin_unlock(&inst->core->resources.pm_qos.lock);
-
 	ops_tbl = inst->core->dev_ops;
+	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
 	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 
 	rc = msm_cvp_close(inst);
