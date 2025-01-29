@@ -2389,7 +2389,6 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 	list_add_tail(&cbuf->list, &frpc_node->cvpdspbufs.list);
 	mutex_unlock(&frpc_node->cvpdspbufs.lock);
 
-	fput(file);
 	return rc;
 
 exit:
