@@ -198,7 +198,8 @@ struct msm_cvp_inst *cvp_get_inst_validate(struct msm_cvp_core *core,
 
 	s = cvp_get_inst(core, session_id);
 	if (!s) {
-		WARN(true, "%s session doesn't exit\n", __func__);
+		dprintk_rl(CVP_WARN, "%s session 0x%llx doesn't exist\n",
+			__func__, session_id);
 		return NULL;
 	}
 

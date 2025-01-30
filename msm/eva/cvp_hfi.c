@@ -96,6 +96,7 @@ static int __release_subcaches(struct iris_hfi_device *device);
 static int __disable_subcaches(struct iris_hfi_device *device);
 static int __power_collapse(struct iris_hfi_device *device, bool force);
 static int iris_hfi_noc_error_info(void *dev);
+static void __deinit_resources(struct iris_hfi_device *device);
 
 static void interrupt_init_iris2(struct iris_hfi_device *device);
 static void setup_dsp_uc_memmap_vpu5(struct iris_hfi_device *device);
@@ -2523,7 +2524,7 @@ static int iris_hfi_core_init(void *device)
 	if (rc) {
 		dprintk(CVP_ERR, "failed to init queues\n");
 		rc = -ENOMEM;
-		goto err_core_init;
+		goto err_init_queues;
 	}
 	cvp_register_va_md_region();
 
@@ -2624,6 +2625,10 @@ pm_qos_bail:
 
 	return 0;
 
+err_init_queues:
+	__interface_queues_release(dev);
+	power_off_iris2(dev);
+	__deinit_resources(dev);
 err_core_init:
 	__set_state(dev, IRIS_STATE_DEINIT);
 	__unload_fw(dev);
