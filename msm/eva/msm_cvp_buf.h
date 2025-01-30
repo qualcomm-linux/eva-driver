@@ -16,7 +16,7 @@
 #include "cvp_comm_def.h"
 
 #define MAX_FRAME_BUFFER_NUMS 40
-#define MAX_DMABUF_NUMS 256
+#define MAX_DMABUF_NUMS 64
 #define IS_CVP_BUF_VALID(buf, smem) \
 	((buf->size <= smem->size) && \
 	(buf->size <= smem->size - buf->offset))
