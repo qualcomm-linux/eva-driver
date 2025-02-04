@@ -2392,15 +2392,14 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 	return rc;
 
 exit:
-	fput(file);
 	if (smem) {
 		if (smem->device_addr)
 			msm_cvp_unmap_smem(inst, smem, "unmap dsp");
-		msm_cvp_smem_put_dma_buf(smem->dma_buf);
 		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 	}
 	if (cbuf)
 		cvp_kmem_cache_free(&cvp_driver->buf_cache, cbuf);
+	fput(file);
 	return rc;
 }
 
