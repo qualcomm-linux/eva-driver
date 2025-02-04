@@ -43,6 +43,13 @@ enum smem_prop {
 	SMEM_PERSIST = 0x100,
 };
 
+enum cp_context_bank {
+	CP_CB_0 = 0,
+	CP_CB_3 = 3,
+	CP_CB_4 = 4,
+	CP_CB_7 = 7,
+};
+
 struct msm_cvp_list {
 	struct list_head list;
 	struct mutex lock;
@@ -263,6 +270,7 @@ int cvp_release_dsp_buffers(struct cvp_internal_buf *buf);
 void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
+enum cp_context_bank msm_cvp_get_cb(u32 flags);
 
 
 #endif

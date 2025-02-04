@@ -1440,6 +1440,25 @@ exit:
 	return ret;
 }
 
+enum cp_context_bank msm_cvp_get_cb(u32 flags)
+{
+	enum cp_context_bank buf_cb;
+	switch (flags) {
+		case (SMEM_SECURE | SMEM_PIXEL):
+			buf_cb = CP_CB_3;
+			break;
+		case (SMEM_SECURE | SMEM_NON_PIXEL):
+			buf_cb = CP_CB_4;
+			break;
+		case (SMEM_SECURE | SMEM_CAMERA):
+			buf_cb = CP_CB_7;
+			break;
+		default:
+			buf_cb = CP_CB_0;
+	}
+	return buf_cb;
+}
+
 static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 				struct cvp_buf_type *buf,
 				u32 pkt_type, u32 buf_idx, u32 *iova)
@@ -1503,6 +1522,8 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 		ret = -ENOMEM;
 		goto exit;
 	}
+
+	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 
 	smem->pkt_type = pkt_type;
 	smem->buf_idx = buf_idx;
@@ -1577,6 +1598,8 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 	smem = msm_cvp_session_get_smem(inst, buf, false, pkt_type);
 	if (!smem)
 		return 0;
+
+	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 
 	smem->buf_idx = buf_idx;
 
