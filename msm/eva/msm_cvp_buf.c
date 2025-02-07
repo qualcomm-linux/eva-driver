@@ -1253,7 +1253,7 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 		while (node && index < inst->dma_cache.nr) {
 			smem2 = rb_entry(node, struct msm_cvp_smem, node);
 
-			if (smem2 && smem2->cached == false) {
+			if (smem2 && !atomic_read(&smem2->refcount)) {
 				rb_erase(&smem2->node,
 					&inst->dma_cache.rbtree);
 				inst->dma_cache.nr--;
@@ -1638,7 +1638,7 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 }
 
 static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
-			struct msm_cvp_frame *frame, bool deinit_all)
+			struct msm_cvp_frame *frame)
 {
 	u32 i;
 	u32 type;
@@ -1655,18 +1655,16 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 #ifdef USE_PRESIL42
 	presil42_unmap_frame_buf(smem, buf);
 #endif
-		if (!deinit_all) {
 			if (smem->cached == true) {
 				mutex_lock(&inst->dma_cache.lock);
 				if (atomic_dec_and_test(&smem->refcount)) {
-					smem->cached = false;
 					print_smem(CVP_MEM, "Map dereference",
 						inst, smem);
 					smem->buf_idx |= 0x10000000;
 				}
 				mutex_unlock(&inst->dma_cache.lock);
 			} else {
-				if (atomic_dec_and_test(&smem->refcount)) {
+				if (smem && atomic_dec_and_test(&smem->refcount)) {
 					msm_cvp_unmap_smem(inst, smem, "unmap cpu");
 					dma_heap_buffer_free(smem->dma_buf);
 					smem->buf_idx |= 0xdead0000;
@@ -1674,15 +1672,6 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 					buf->smem = NULL;
 				}
 			}
-		} else {
-			if (atomic_dec_and_test(&smem->refcount)) {
-				msm_cvp_unmap_smem(inst, smem, "unmap cpu");
-				dma_heap_buffer_free(smem->dma_buf);
-				smem->buf_idx |= 0xdead0000;
-				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-				buf->smem = NULL;
-			}
-		}
 	}
 	cvp_kmem_cache_free(&cvp_driver->frame_cache, frame);
 }
@@ -1741,7 +1730,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 				frame->ktid);
 			/* Save the previous frame mappings for debug */
 			backup_frame_buffers(inst, frame);
-			msm_cvp_unmap_frame_buf(inst, frame, false);
+			msm_cvp_unmap_frame_buf(inst, frame);
 			break;
 		}
 	}
@@ -1923,7 +1912,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 			}
 			mutex_unlock(&me->fastrpc_driver_list.lock);
 
-			msm_cvp_unmap_frame_buf(inst, frame, false);
+			msm_cvp_unmap_frame_buf(inst, frame);
 			return -EINVAL;
 		}
 
@@ -1956,26 +1945,10 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 
 	session = (struct cvp_hal_session *)inst->session;
 
-	mutex_lock(&inst->dma_cache.lock);
-	node = rb_first(&inst->dma_cache.rbtree);
-
-	while (node && inst->dma_cache.nr > 0) {
-		smem = rb_entry(node, struct msm_cvp_smem, node);
-		smem->cached = true;
-		atomic_dec(&smem->refcount);
-		rb_erase(&smem->node, &inst->dma_cache.rbtree);
-		msm_cvp_unmap_smem(inst, smem, "unmap cpu");
-		msm_cvp_smem_put_dma_buf(smem->dma_buf);
-		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-		node = rb_first(&inst->dma_cache.rbtree);
-		inst->dma_cache.nr--;
-	}
-	mutex_unlock(&inst->dma_cache.lock);
-
 	mutex_lock(&inst->frames.lock);
 	list_for_each_entry_safe(frame, dummy1, &inst->frames.list, list) {
 		list_del(&frame->list);
-		msm_cvp_unmap_frame_buf(inst, frame, true);
+		msm_cvp_unmap_frame_buf(inst, frame);
 	}
 	mutex_unlock(&inst->frames.lock);
 
@@ -2022,6 +1995,27 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 		}
 	}
 	mutex_unlock(&inst->persistbufs.lock);
+
+	mutex_lock(&inst->dma_cache.lock);
+	node = rb_first(&inst->dma_cache.rbtree);
+
+	while (node && inst->dma_cache.nr > 0) {
+		smem = rb_entry(node, struct msm_cvp_smem, node);
+
+		if (atomic_read(&smem->refcount) == 0)
+			print_smem(CVP_MEM, "free", inst, smem);
+
+		else if (!(smem->flags & SMEM_PERSIST))
+			print_smem(CVP_WARN, "in use", inst, smem);
+
+		rb_erase(&smem->node, &inst->dma_cache.rbtree);
+		msm_cvp_unmap_smem(inst, smem, "unmap cpu cache");
+		msm_cvp_smem_put_dma_buf(smem->dma_buf);
+		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+		node = rb_first(&inst->dma_cache.rbtree);
+		inst->dma_cache.nr--;
+	}
+	mutex_unlock(&inst->dma_cache.lock);
 
 	mutex_lock(&inst->cvpwnccbufs.lock);
 	if (inst->cvpwnccbufs_num != 0)
