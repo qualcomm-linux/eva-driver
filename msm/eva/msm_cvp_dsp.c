@@ -2228,7 +2228,7 @@ static bool __is_buf_valid(struct msm_cvp_inst *inst,
 	struct cvp_internal_buf *cbuf = (struct cvp_internal_buf *)0xdeadbeef;
 	bool found = false;
 
-	if (!inst || !inst->core || !buf) {
+	if (!inst || !inst->core || !buf || !frpc_node) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
 		return false;
 	}
@@ -2412,7 +2412,7 @@ int msm_cvp_unmap_buf_dsp(struct msm_cvp_inst *inst,
 	struct cvp_hal_session *session;
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
 
-	if (!inst || !inst->core || !buf || !frpc_node) {
+	if (!inst || !inst->core || !buf) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
 		return -EINVAL;
 	}
