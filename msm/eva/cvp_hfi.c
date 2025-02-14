@@ -2329,6 +2329,7 @@ static int iris_pm_qos_aggregate(void *device)
 
 	dev = device;
 	core = cvp_driver->cvp_core;
+	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		sq = &inst->session_queue;
 		spin_lock(&sq->lock);
@@ -2338,6 +2339,7 @@ static int iris_pm_qos_aggregate(void *device)
 							min_pm_qos_latency:inst->pm_qos_latency;
 		spin_unlock(&sq->lock);
 	}
+	mutex_unlock(&core->lock);
 
 	if (min_pm_qos_latency != dev->global_pm_qos_latency_us) {
 		mutex_lock(&dev->lock);
