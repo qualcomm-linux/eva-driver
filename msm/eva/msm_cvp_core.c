@@ -143,6 +143,17 @@ static void __deinit_session_queue(struct msm_cvp_inst *inst)
 	wake_up_all(&inst->session_queue.wq);
 }
 
+static void close_helper(struct kref *kref)
+{
+	struct msm_cvp_inst *inst;
+
+	if (!kref)
+		return;
+	inst = container_of(kref, struct msm_cvp_inst, kref);
+
+	msm_cvp_destroy(inst);
+}
+
 struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 {
 	struct msm_cvp_inst *inst = NULL;
@@ -240,21 +251,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	return inst;
 fail_init:
-	__deinit_session_queue(inst);
-	__deinit_fence_queue(inst);
-	mutex_lock(&core->lock);
-	list_del(&inst->list);
-	mutex_unlock(&core->lock);
-	mutex_destroy(&inst->sync_lock);
-	mutex_destroy(&inst->lock);
-
-	DEINIT_MSM_CVP_LIST(&inst->persistbufs);
-	DEINIT_DMAMAP_CACHE(&inst->dma_cache);
-	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
-	DEINIT_MSM_CVP_LIST(&inst->frames);
-
-	kfree(inst);
-	inst = NULL;
+	kref_put(&inst->kref, close_helper);
 err_invalid_core:
 	return inst;
 }
@@ -426,17 +423,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		atomic_read(&cvp_driver->buf_cache.nr_objs),
 		atomic_read(&cvp_driver->smem_cache.nr_objs));
 	return 0;
-}
-
-static void close_helper(struct kref *kref)
-{
-	struct msm_cvp_inst *inst;
-
-	if (!kref)
-		return;
-	inst = container_of(kref, struct msm_cvp_inst, kref);
-
-	msm_cvp_destroy(inst);
 }
 
 int msm_cvp_close(void *instance)
