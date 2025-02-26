@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cvp_comm_def.h"
@@ -144,13 +144,21 @@ struct cvp_hfi_enable {
 #define HFI_RESOURCE_SYSCACHE 0x00000002
 
 struct cvp_hfi_resource_subcache_type {
-	u32 size;
+	u32 target_hw;
 	u32 sc_id;
 };
 
 struct cvp_hfi_resource_syscache_info_type {
 	u32 num_entries;
 	struct cvp_hfi_resource_subcache_type rg_subcache_entries[];
+};
+
+enum HFI_SYSCACHE_TARGET_TYPE {
+	HFI_SYSCACHE_TARGET_EVA_CPU,
+	HFI_SYSCACHE_TARGET_FDU,
+	HFI_SYSCACHE_TARGET_MPU,
+	HFI_SYSCACHE_TARGET_GCE,
+	HFI_SYSCACHE_TARGET_FDX,
 };
 
 #define HFI_CMD_SYS_COMMON_START			\

@@ -4665,11 +4665,30 @@ static int __set_subcaches(struct iris_hfi_device *device)
 	sc_res_info = (struct cvp_hfi_resource_syscache_info_type *)resource;
 	sc_res = &(sc_res_info->rg_subcache_entries[0]);
 
+	/* Mapping of cache slices as:
+	 * cvp slice (scid:8):    HFI_SYSCACHE_TARGET_FDU, HFI_SYSCACHE_TARGET_MPU
+	 * cvpfw slice (scid:19): HFI_SYSCACHE_TARGET_EVA_CPU
+	 */
 	iris_hfi_for_each_subcache(device, sinfo) {
 		if (sinfo->isactive) {
-			sc_res[c].size = sinfo->subcache->slice_size;
-			sc_res[c].sc_id = sinfo->subcache->slice_id;
-			c++;
+			if (!strcmp("cvp", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+
+				/* Will enable MPU once DV team confirms that
+				 * same slice id can be shared
+				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
+				 * c++;
+				 */
+			} else if (!strcmp("cvpfw", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+			} else {
+				dprintk(CVP_ERR, "Invalid subcache %s\n", sinfo->name);
+			}
 		}
 	}
 
@@ -4723,13 +4742,31 @@ static int __release_subcaches(struct iris_hfi_device *device)
 	sc_res_info = (struct cvp_hfi_resource_syscache_info_type *)resource;
 	sc_res = &(sc_res_info->rg_subcache_entries[0]);
 
-	/* Release resource command to Iris */
+	/* Release resource command to Iris
+	 * Mapping of cache slices as:
+	 * cvp slice (scid:8):    HFI_SYSCACHE_TARGET_FDU, HFI_SYSCACHE_TARGET_MPU
+	 * cvpfw slice (scid:19): HFI_SYSCACHE_TARGET_EVA_CPU
+	 */
 	iris_hfi_for_each_subcache_reverse(device, sinfo) {
 		if (sinfo->isset) {
-			/* Update the entry */
-			sc_res[c].size = sinfo->subcache->slice_size;
-			sc_res[c].sc_id = sinfo->subcache->slice_id;
-			c++;
+			if (!strcmp("cvp", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+
+				/* Will enable MPU once DV team confirms that
+				 * same slice id can be shared
+				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
+				 * c++;
+				 */
+			} else if (!strcmp("cvpfw", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+			} else {
+				dprintk(CVP_ERR, "Invalid subcache %s\n", sinfo->name);
+			}
 			sinfo->isset = false;
 		}
 	}
