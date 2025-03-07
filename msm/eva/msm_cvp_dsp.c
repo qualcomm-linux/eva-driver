@@ -1266,8 +1266,8 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 					dprintk(CVP_ERR,
 						"%s Fail to unmap smem 0x%x, error %d\n",
 						__func__, smem, rc);
-				}
-				msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				} else
+					msm_cvp_smem_put_dma_buf(smem->dma_buf);
 			} else if (cbuf->ownership == DSP) {
 				int rc = cvp_release_dsp_buffers(cbuf);
 
@@ -2393,8 +2393,12 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 
 exit:
 	if (smem) {
-		if (smem->device_addr)
-			msm_cvp_unmap_smem(inst, smem, "unmap dsp");
+		if (smem->device_addr) {
+			rc = msm_cvp_unmap_smem(inst, smem, "unmap dsp");
+			if (rc)
+				dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+					__func__, smem, rc);
+		}
 		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 	}
 	if (cbuf)
@@ -2453,8 +2457,12 @@ int msm_cvp_unmap_buf_dsp(struct msm_cvp_inst *inst,
 			MAX_FRAME_BUFFER_NUMS : frpc_node->unused_dsp_bufs.nr;
 		frpc_node->unused_dsp_bufs.ktid = ++idx % MAX_FRAME_BUFFER_NUMS;
 
-		msm_cvp_unmap_smem(inst, cbuf->smem, "unmap dsp");
-		msm_cvp_smem_put_dma_buf(cbuf->smem->dma_buf);
+		rc = msm_cvp_unmap_smem(inst, cbuf->smem, "unmap dsp");
+		if (rc)
+			dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+				__func__, cbuf->smem, rc);
+		else
+			msm_cvp_smem_put_dma_buf(cbuf->smem->dma_buf);
 		atomic_dec(&cbuf->smem->refcount);
 	}
 	list_del(&cbuf->list);
