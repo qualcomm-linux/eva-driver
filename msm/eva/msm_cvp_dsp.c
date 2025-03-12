@@ -244,6 +244,7 @@ static int delete_dsp_session(struct msm_cvp_inst *inst,
 	rc = msm_cvp_close(inst);
 	if (rc)
 		dprintk(CVP_ERR, "Warning: Failed to close cvp instance\n");
+		return rc;
 
 	if (task)
 		put_task_struct(task);
@@ -620,24 +621,27 @@ static void cvp_remove_dsp_sessions(void)
 	struct list_head *s = NULL, *next_s = NULL;
 
 	while ((frpc_node = pop_frpc_node())) {
+		mutex_lock(&frpc_node->dsp_sessions.lock);
 		s = &frpc_node->dsp_sessions.list;
-		if (!s || !(s->next))
+		if (!s || !(s->next)) {
+			mutex_unlock(&frpc_node->dsp_sessions.lock);
 			return;
+		}
 		list_for_each_safe(s, next_s,
 				&frpc_node->dsp_sessions.list) {
 			if (!s || !next_s)
-				return;
+				break;
 			inst = list_entry(s, struct msm_cvp_inst,
 					dsp_list);
 			if (inst) {
-				mutex_lock(&frpc_node->dsp_sessions.lock);
 				list_del(&inst->dsp_list);
 				frpc_node->session_cnt--;
 				mutex_unlock(&frpc_node->dsp_sessions.lock);
 				delete_dsp_session(inst, frpc_node);
+				mutex_lock(&frpc_node->dsp_sessions.lock);
 			}
 		}
-
+		mutex_unlock(&frpc_node->dsp_sessions.lock);
 		eva_fastrpc_remove_buffers(frpc_node);
 
 		dprintk(CVP_DSP, "%s DEINIT_MSM_CVP_LIST 0x%x\n",
@@ -1088,7 +1092,6 @@ int cvp_dsp_del_sess(uint32_t handle, struct msm_cvp_inst *inst)
 		list_del(&inst->dsp_list);
 		frpc_node->session_cnt--;
 	}
-
 	mutex_unlock(&frpc_node->dsp_sessions.lock);
 
 	cvp_put_fastrpc_node(frpc_node);
@@ -1225,7 +1228,8 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		return;
 	}
 
-	// Session delete
+	// Session delete;
+	mutex_lock(&frpc_node->dsp_sessions.lock);
 	s = &frpc_node->dsp_sessions.list;
 	if (s && (s->next)) {
 		list_for_each_safe(s, next_s,
@@ -1235,16 +1239,16 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 			inst = list_entry(s, struct msm_cvp_inst,
 					dsp_list);
 			if (inst) {
-				mutex_lock(&frpc_node->dsp_sessions.lock);
 				list_del(&inst->dsp_list);
 				frpc_node->session_cnt--;
 				mutex_unlock(&frpc_node->dsp_sessions.lock);
-
 				/* Delete DSP session */
 				delete_dsp_session(inst, frpc_node);
+				mutex_lock(&frpc_node->dsp_sessions.lock);
 			}
 		}
 	}
+	mutex_unlock(&frpc_node->dsp_sessions.lock);
 
 	if ((frpc_node->session_cnt == 0) || force_exit) {
 		dprintk(CVP_DSP, "%s session cnt %d, force %d\n",
@@ -1491,7 +1495,7 @@ static void print_power(const struct eva_power_req *pwr_req)
 void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 {
 	struct cvp_dsp_apps *me = &gfa_cv;
-	struct msm_cvp_inst *inst = NULL;
+	struct msm_cvp_inst *inst = NULL, *inst_temp = NULL;
 	uint64_t inst_handle = 0;
 	uint32_t pid;
 	int rc = 0;
@@ -1501,6 +1505,8 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	struct task_struct *task = NULL;
 	struct cvp_hfi_ops *ops_tbl;
 	struct fastrpc_device *frpc_device;
+	struct list_head *s = NULL, *next_s = NULL;
+	bool found_inst = false;
 
 	cmd->ret = 0;
 
@@ -1594,11 +1600,35 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	return;
 
 fail_get_session_info:
-	msm_cvp_close(inst);
+	mutex_lock(&frpc_node->dsp_sessions.lock);
+	s = &frpc_node->dsp_sessions.list;
+	if (s && (s->next)) {
+		list_for_each_safe(s, next_s,
+				&frpc_node->dsp_sessions.list) {
+			if (!s || !next_s)
+				break;
+			inst_temp = list_entry(s, struct msm_cvp_inst,
+					dsp_list);
+			if (inst_temp == inst) {
+				found_inst = true;
+				break;
+			}
+		}
+	}
+	if (found_inst) {
+		list_del(&inst->dsp_list);
+		frpc_node->session_cnt--;
+		/* close dsp inst */
+		msm_cvp_close(inst);
+	} else {
+		dprintk(CVP_WARN, "Failed DSP session %llx already deleted\n", inst);
+	}
+	mutex_unlock(&frpc_node->dsp_sessions.lock);
 fail_msm_cvp_open:
 	put_task_struct(task);
 fail_pid:
 	cvp_put_fastrpc_node(frpc_node);
+	return;
 fail_lookup:
 	/* unregister fastrpc driver */
 	eva_fastrpc_driver_unregister(dsp2cpu_cmd->pid, false);
@@ -1608,12 +1638,12 @@ fail_lookup:
 void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 {
 	struct cvp_dsp_apps *me = &gfa_cv;
-	struct msm_cvp_inst *inst;
-	int rc;
+	struct msm_cvp_inst *inst, *inst_temp = NULL;
+	int rc = 0;
 	struct cvp_dsp2cpu_cmd *dsp2cpu_cmd = &me->pending_dsp2cpu_cmd;
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
-	struct task_struct *task = NULL;
-	struct cvp_hfi_ops *ops_tbl;
+	struct list_head *s = NULL, *next_s = NULL;
+	bool found_inst = false;
 
 	cmd->ret = 0;
 
@@ -1644,24 +1674,36 @@ void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 		cvp_put_fastrpc_node(frpc_node);
 	}
 
-	task = inst->task;
-
-	ops_tbl = inst->core->dev_ops;
-	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
-
-	rc = msm_cvp_close(inst);
-	if (rc) {
-		dprintk(CVP_ERR, "Warning: Failed to close cvp instance\n");
-		cmd->ret = -1;
-		goto dsp_fail_delete;
+	mutex_lock(&frpc_node->dsp_sessions.lock);
+	s = &frpc_node->dsp_sessions.list;
+	if (s && (s->next)) {
+		list_for_each_safe(s, next_s,
+				&frpc_node->dsp_sessions.list) {
+			if (!s || !next_s)
+				break;
+			inst_temp = list_entry(s, struct msm_cvp_inst,
+					dsp_list);
+			if (inst_temp == inst) {
+				found_inst = true;
+				break;
+			}
+		}
+	}
+	if (found_inst) {
+		list_del(&inst->dsp_list);
+		frpc_node->session_cnt--;
+		mutex_unlock(&frpc_node->dsp_sessions.lock);
+		/* Delete DSP session */
+		rc = delete_dsp_session(inst, frpc_node);
+	} else {
+		mutex_unlock(&frpc_node->dsp_sessions.lock);
+		dprintk(CVP_WARN, "DSP double deleted session %llx\n", inst);
 	}
 
-	if (task)
-		put_task_struct(task);
+	if (rc) {
+		cmd->ret = -1;
+	}
 
-	dprintk(CVP_DSP, "%s DSP2CPU_DETELE_SESSION Done, nr_maps %d\n",
-			__func__, atomic_read(&nr_maps));
 dsp_fail_delete:
 	return;
 }
