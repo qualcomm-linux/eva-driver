@@ -68,7 +68,6 @@ const struct msm_cvp_gov_data CVP_DEFAULT_BUS_VOTE = {
 	.data = NULL,
 	.data_count = 0,
 };
-
 const int cvp_max_packets = 32;
 static enum cvp_irq_state cur_irq_state = CVP_IRQ_CLEAR;
 
@@ -5870,6 +5869,7 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 static int __power_off_controller_v1(struct iris_hfi_device *device)
 {
 	u32 lpi_status, count = 0, max_count = 1000;
+	u32 lpi_control;
 	int rc;
 
 	/* HPG 3.7 Step 4  */
@@ -5899,6 +5899,12 @@ static int __power_off_controller_v1(struct iris_hfi_device *device)
 	if (count == max_count) {
 		dprintk(CVP_WARN, "DBLP Release: lpi_status %x\n", lpi_status);
 	}
+	lpi_control = __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL);
+	lpi_control = lpi_control | 0x10;
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, lpi_control);
+	usleep_range(50, 100);
+	lpi_control = lpi_control & (~0x10);
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, lpi_control);
 
 	/*
 	 * Below sequence are missing from HPG Section 3.7.
