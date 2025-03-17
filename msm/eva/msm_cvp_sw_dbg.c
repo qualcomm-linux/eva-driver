@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "msm_cvp_internal.h"
@@ -89,33 +89,38 @@ void eva_kmd_session_dump(void)
 
 	list_for_each_entry(inst, &core->instances, list) {
 		if (inst != NULL) {
-			kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
-			kmd_trace_sess->session_id = hash32_ptr(inst->session);
-			kmd_trace_sess->instance_state = inst->state;
-			kmd_trace_sess->session_type = inst->session_type;
-			kmd_trace_sess->hfi_error_code = inst->hfi_error_code;
-			kmd_trace_sess->prev_hfi_error_code = inst->prev_hfi_error_code;
-			kmd_trace_sess->session_error_code = inst->session_error_code;
+			if (inst->state > MSM_CVP_OPEN) {
+				kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
+				kmd_trace_sess->session_id = hash32_ptr(inst->session);
+				kmd_trace_sess->instance_state = inst->state;
+				kmd_trace_sess->session_type = inst->session_type;
+				kmd_trace_sess->hfi_error_code = inst->hfi_error_code;
+				kmd_trace_sess->prev_hfi_error_code = inst->prev_hfi_error_code;
+				kmd_trace_sess->session_error_code = inst->session_error_code;
 
 
-			write_idx = new_write_idx;
-			write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr) + (write_idx << 2)
-					+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
-			if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
+				write_idx = new_write_idx;
+				write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr)
+						+ (write_idx << 2)
+						+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
+				if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
 					write_ptr > (u32 *)(dev->sw_dbg_buf.align_virtual_addr
-						+ EVA_SW_DBG_BUF_UMD_OFFSET)) {
-				dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
-				return;
-			}
+					+ EVA_SW_DBG_BUF_UMD_OFFSET)) {
+					dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
+					return;
+				}
 
-			memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
-			new_write_idx = write_idx + (sizeof(struct eva_kmd_session) >> 2);
-			trace_index++;
-			if (trace_index >= TRACE_SESS_SIZE) {
-				dprintk(CVP_ERR, "%s: reached max number of instances %d\n",
-					__func__, trace_index);
-				break;
-			}
+				memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
+				new_write_idx = write_idx + (sizeof(struct eva_kmd_session) >> 2);
+				trace_index++;
+				if (trace_index >= TRACE_SESS_SIZE) {
+					dprintk(CVP_ERR, "%s: reached max number of instances %d\n",
+							__func__, trace_index);
+					break;
+				}
+			} else
+				dprintk(CVP_WARN, "%s: Not dumping as state is %d for inst %pK",
+						__func__, inst->state, inst);
 		}
 	}
 #endif
