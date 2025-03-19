@@ -303,6 +303,7 @@ struct msm_cvp_core {
 	unsigned long orig_core_sum;
 	unsigned long bw_sum;
 	atomic64_t kernel_trans_id;
+	atomic_t va_watermark;
 	struct eva_kmd_debug kmd_dbg;
 	struct eva_kmd_trace kmd_trace;
 };
@@ -349,6 +350,7 @@ struct msm_cvp_inst {
 	struct cvp_fence_queue fence_cmd_queue;
 	char proc_name[TASK_COMM_LEN];
 	u32 pm_qos_latency;
+	atomic_t va_inst_watermark;
 };
 
 extern struct msm_cvp_drv *cvp_driver;
