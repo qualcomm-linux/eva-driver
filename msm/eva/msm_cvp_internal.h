@@ -305,6 +305,10 @@ struct msm_cvp_core {
 	atomic64_t kernel_trans_id;
 	struct eva_kmd_debug kmd_dbg;
 	struct eva_kmd_trace kmd_trace;
+	ktime_t last_msg_ts;
+	ktime_t last_fw_fetch_ts;
+	u32 cur_cmd_q_read_offset;
+	u32 prev_cmd_q_read_offset;
 };
 
 struct msm_cvp_inst {
