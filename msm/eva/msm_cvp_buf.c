@@ -417,9 +417,14 @@ int msm_cvp_map_buf_wncc(struct msm_cvp_inst *inst,
 	return rc;
 
 exit:
-	if (smem->device_addr)
-		msm_cvp_unmap_smem(inst, smem, "unmap wncc");
-	msm_cvp_smem_put_dma_buf(smem->dma_buf);
+	if (smem->device_addr) {
+		rc = msm_cvp_unmap_smem(inst, smem, "unmap wncc");
+		if (rc)
+			dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+				__func__, smem, rc);
+		else
+			msm_cvp_smem_put_dma_buf(smem->dma_buf);
+	}
 	cvp_kmem_cache_free(&cvp_driver->buf_cache, cbuf);
 	cbuf = NULL;
 	cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
@@ -501,8 +506,12 @@ int msm_cvp_unmap_buf_wncc(struct msm_cvp_inst *inst,
 	}
 
 	if (cbuf->smem->device_addr) {
-		msm_cvp_unmap_smem(inst, cbuf->smem, "unmap wncc");
-		msm_cvp_smem_put_dma_buf(cbuf->smem->dma_buf);
+		rc = msm_cvp_unmap_smem(inst, cbuf->smem, "unmap wncc");
+		if (rc)
+			dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+				__func__, cbuf->smem, rc);
+		else
+			msm_cvp_smem_put_dma_buf(cbuf->smem->dma_buf);
 	}
 
 	list_del(&cbuf->list);
@@ -1259,6 +1268,7 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				struct msm_cvp_smem *smem)
 {
+	int rc = 0;
 	struct msm_cvp_smem *smem2;
 	struct rb_node *node;
 	int index;
@@ -1277,8 +1287,12 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				rb_erase(&smem2->node,
 					&inst->dma_cache.rbtree);
 				inst->dma_cache.nr--;
-				msm_cvp_unmap_smem(inst, smem2, "unmap cpu");
-				msm_cvp_smem_put_dma_buf(smem2->dma_buf);
+				rc = msm_cvp_unmap_smem(inst, smem2, "unmap cpu");
+				if (rc)
+					dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+						__func__, smem2, rc);
+				else
+					msm_cvp_smem_put_dma_buf(smem2->dma_buf);
 				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem2);
 				msm_cvp_add_smem_rb_node(inst, smem);
 				goto exit;
@@ -1385,7 +1399,17 @@ static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 	return smem;
 
 exit2:
-	msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+	rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+	if (rc)
+		dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+			__func__, smem, rc);
+	else {
+		msm_cvp_smem_put_dma_buf(dma_buf);
+		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+		smem = NULL;
+		return smem;
+	}
+
 exit:
 	msm_cvp_smem_put_dma_buf(dma_buf);
 	cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
@@ -1398,6 +1422,7 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 				u32 pkt_type, u32 buf_idx, u32 *iova)
 {
 	struct list_head *ptr;
+	int rc = 0;
 	struct list_head *next;
 	struct cvp_internal_buf *pbuf;
 	struct msm_cvp_smem *smem = NULL;
@@ -1436,8 +1461,12 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 						inst->dma_cache.nr--;
 					}
 				}
-				msm_cvp_unmap_smem(inst, smem, "unmap user persist");
-				msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				rc = msm_cvp_unmap_smem(inst, smem, "unmap user persist");
+				if (rc)
+					dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+						__func__, smem, rc);
+				else
+					msm_cvp_smem_put_dma_buf(smem->dma_buf);
 				smem->buf_idx |= 0xdead0000;
 				smem->device_addr = 0;
 				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
@@ -1662,6 +1691,7 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 {
 	u32 i;
 	u32 type;
+	int rc = 0;
 	struct msm_cvp_smem *smem = NULL;
 	struct cvp_internal_buf *buf;
 
@@ -1685,8 +1715,12 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 				mutex_unlock(&inst->dma_cache.lock);
 			} else {
 				if (smem && atomic_dec_and_test(&smem->refcount)) {
-					msm_cvp_unmap_smem(inst, smem, "unmap cpu");
-					dma_heap_buffer_free(smem->dma_buf);
+					rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+					if (rc)
+						dprintk(CVP_ERR, "%s:unmap smem 0x%x,error %d\n",
+							__func__, smem, rc);
+					else
+						msm_cvp_smem_put_dma_buf(smem->dma_buf);
 					smem->buf_idx |= 0xdead0000;
 					cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 					buf->smem = NULL;
@@ -1995,10 +2029,13 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 				 * this is user persistent buffer
 				 */
 				if (smem->device_addr) {
-					msm_cvp_unmap_smem(inst, smem,
+					rc = msm_cvp_unmap_smem(inst, smem,
 						"unmap persist");
-					msm_cvp_smem_put_dma_buf(
-						cbuf->smem->dma_buf);
+					if (rc)
+						dprintk(CVP_ERR, "%s: unmap smem 0x%x,error %d\n",
+							__func__, smem, rc);
+					else
+						msm_cvp_smem_put_dma_buf(cbuf->smem->dma_buf);
 					smem->device_addr = 0;
 				}
 				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
@@ -2029,8 +2066,12 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 			print_smem(CVP_WARN, "in use", inst, smem);
 
 		rb_erase(&smem->node, &inst->dma_cache.rbtree);
-		msm_cvp_unmap_smem(inst, smem, "unmap cpu cache");
-		msm_cvp_smem_put_dma_buf(smem->dma_buf);
+		rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu cache");
+		if (rc)
+			dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+				__func__, smem, rc);
+		else
+			msm_cvp_smem_put_dma_buf(smem->dma_buf);
 		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 		node = rb_first(&inst->dma_cache.rbtree);
 		inst->dma_cache.nr--;
