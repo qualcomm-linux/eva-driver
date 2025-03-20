@@ -601,6 +601,7 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	unsigned long flags = 0;
 	enum cvp_session_state s_state;
 	enum cvp_session_errorcode s_ecode;
+	struct msm_cvp_inst *s;
 
 	dprintk(CVP_ERR,
 		"timeout occurred for inst %pK sess %x\n", inst, hash32_ptr(inst->session));
@@ -613,6 +614,13 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 		atomic_inc(&cvp_error_count);
 
 	spin_unlock(&sq->lock);
+
+	s = cvp_get_inst_validate(inst->core, inst);
+	if (!s) {
+		dprintk(CVP_WARN, "%s: Session is not a valid session\n",
+			__func__);
+		return;
+	}
 
 	inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
 				atomic_read(&cvp_error_count);
@@ -635,6 +643,8 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	BUG_ON(!msm_cvp_session_error_recovery);
 	if (stop_required)
 		msm_cvp_session_flush_stop(inst);
+
+	cvp_put_inst(inst);
 }
 
 void handle_sys_error(enum hal_command_response cmd, void *data)
@@ -1461,7 +1471,6 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 		struct msm_cvp_inst *inst = NULL, *inst_t;
 
 		dprintk(CVP_ERR, "Session timeout triggered\n");
-		mutex_lock(&core->lock);
 		list_for_each_entry_safe(inst, inst_t,  &core->instances, list) {
 			if (inst != NULL) {
 				dprintk(CVP_INFO, "Session to be taken for session timeout 0x%x\n",
@@ -1470,7 +1479,6 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 				break;
 				}
 		}
-		mutex_unlock(&core->lock);
 
 		return;
 	}
