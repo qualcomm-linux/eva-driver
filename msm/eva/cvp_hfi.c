@@ -4700,6 +4700,8 @@ static int __set_subcaches(struct iris_hfi_device *device)
 			if (!strcmp("cvp", sinfo->name)) {
 				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
 				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				dprintk(CVP_CORE, "Subcache slice id: %d size: %d\n",
+					sinfo->subcache->slice_id, sinfo->subcache->slice_size);
 				c++;
 
 				/* Will enable MPU once DV team confirms that
@@ -4711,6 +4713,8 @@ static int __set_subcaches(struct iris_hfi_device *device)
 			} else if (!strcmp("cvpfw", sinfo->name)) {
 				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
 				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				dprintk(CVP_CORE, "Subcache slice id: %d size: %d\n",
+					sinfo->subcache->slice_id, sinfo->subcache->slice_size);
 				c++;
 			} else {
 				dprintk(CVP_ERR, "Invalid subcache %s\n", sinfo->name);
