@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "msm_cvp.h"
@@ -723,8 +723,12 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	struct cvp_hfi_ops *ops_tbl;
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr;
 	struct cvp_fence_queue *q;
-	int pkt_type, rc = 0;
+	int pkt_type, rc = 0, i = 0;
 	enum buf_map_type map_type;
+	uint32_t *fd_arr = NULL;
+	unsigned int offset = 0;
+	struct cvp_buf_type *buf;
+
 	CVPKERNEL_ATRACE_BEGIN("cvp_enqueue_pkt");
 
 	ops_tbl = inst->core->dev_ops;
@@ -755,12 +759,21 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	mutex_unlock(&q->lock);
 
 
-	if (map_type == MAP_PERSIST)
-		rc = msm_cvp_map_user_persist(inst, in_pkt, in_offset, in_buf_num);
-	else if (map_type == UNMAP_PERSIST)
+	if (map_type == MAP_PERSIST) {
+		fd_arr = kcalloc(in_buf_num, sizeof(uint32_t), GFP_KERNEL);
+		if (!fd_arr) {
+			dprintk(CVP_ERR, "%s: fd array allocation failed\n", __func__);
+			rc = -ENOMEM;
+			goto exit;
+		} else {
+			memset((void *)fd_arr, -1, sizeof(uint32_t) * in_buf_num);
+		}
+		rc = msm_cvp_map_user_persist(inst, in_pkt, in_offset, in_buf_num, fd_arr);
+	} else if (map_type == UNMAP_PERSIST) {
 		rc = msm_cvp_unmap_user_persist(inst, in_pkt, in_offset, in_buf_num);
-	else
+	} else {
 		rc = msm_cvp_map_frame(inst, in_pkt, in_offset, in_buf_num);
+	}
 
 	if (rc)
 		goto exit;
@@ -775,9 +788,21 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 			dprintk(CVP_ERR,"%s: Failed in call_hfi_op %d, %x\n",
 					__func__, in_pkt->pkt_data[0],
 					in_pkt->pkt_data[1]);
-			if (map_type == MAP_FRAME)
-				msm_cvp_unmap_frame(inst,
-					cmd_hdr->header.client_data.kdata);
+			if (map_type == MAP_FRAME) {
+				msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
+			} else if (map_type == MAP_PERSIST) {
+				offset = in_offset;
+				for (i = 0; i < in_buf_num; i++) {
+					/* Update the in_pkt s.t iova is replaced back with fd */
+					buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
+					offset += sizeof(*buf) >> 2;
+					if (!buf->size || fd_arr[i] < 0)
+						continue;
+					buf->fd = fd_arr[i];
+				}
+				rc = msm_cvp_unmap_user_persist(inst,
+						in_pkt, in_offset, in_buf_num);
+			}
 		}
 	} else if (rc > 0) {
 		dprintk(CVP_SYNX, "Going fenced path\n");
@@ -785,12 +810,27 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	} else {
 		dprintk(CVP_ERR,"%s: Failed to populate fences\n",
 			__func__);
-		if (map_type == MAP_FRAME)
+		if (map_type == MAP_FRAME) {
 			msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
+		} else if (map_type == MAP_PERSIST) {
+			offset = in_offset;
+			for (i = 0; i < in_buf_num; i++) {
+				/* Update the in_pkt s.t iova is replaced back with fd */
+				buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
+				offset += sizeof(*buf) >> 2;
+				if (!buf->size || fd_arr[i] < 0)
+					continue;
+				buf->fd = fd_arr[i];
+			}
+			rc = msm_cvp_unmap_user_persist(inst,
+					in_pkt, in_offset, in_buf_num);
+		}
 	}
 	CVPKERNEL_ATRACE_END("cvp_enqueue_pkt");
 exit:
 	atomic_dec(&q->send_count);
+	if (map_type == MAP_PERSIST)
+		kfree(fd_arr);
 	return rc;
 }
 
