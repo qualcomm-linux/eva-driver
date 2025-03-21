@@ -83,14 +83,16 @@ TRACE_EVENT(tracing_mark_write,
 TRACE_EVENT(tracing_eva_frame_from_sw,
 	TP_PROTO(u64 aon_cycles, const char *name,
 	u32 session_id, u32 stream_id,
-	u32 packet_id, u32 transaction_id, u64 ktid),
-	TP_ARGS(aon_cycles, name, session_id, stream_id, packet_id, transaction_id, ktid),
+	u32 packet_id, const char *command_name, u32 transaction_id, u64 ktid),
+	TP_ARGS(aon_cycles, name, session_id, stream_id, packet_id, command_name,
+	transaction_id, ktid),
 	TP_STRUCT__entry(
 		__field(u64, aon_cycles)
 		__string(trace_name, name)
 		__field(u32, session_id)
 		__field(u32, stream_id)
 		__field(u32, packet_id)
+		__string(trace_command_name, command_name)
 		__field(u32, transaction_id)
 		__field(u64, ktid)
 	),
@@ -98,8 +100,12 @@ TRACE_EVENT(tracing_eva_frame_from_sw,
 		__entry->aon_cycles = aon_cycles;
 #if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 		__assign_str(trace_name);
+		__assign_str(trace_command_name);
+
 #else
 		__assign_str(trace_name, name);
+		__assign_str(trace_command_name, command_name);
+
 #endif
 		__entry->session_id = session_id;
 		__entry->stream_id  = stream_id;
@@ -107,10 +113,11 @@ TRACE_EVENT(tracing_eva_frame_from_sw,
 		__entry->transaction_id = transaction_id;
 		__entry->ktid = ktid;
 	),
-	TP_printk("AON_TIMESTAMP: %llu %s session_id = 0x%08x stream_id = 0x%08x packet_id = 0x%08x transaction_id = 0x%08x ktid = %llu",
+	TP_printk("AON_TIMESTAMP: %llu %s session_id = 0x%08x stream_id = 0x%08x packet_id = 0x%08x command_name = %s transaction_id = 0x%016llx ktid = %llu",
 		__entry->aon_cycles, __get_str(trace_name),
 		__entry->session_id, __entry->stream_id,
-		__entry->packet_id, __entry->transaction_id, __entry->ktid)
+		__entry->packet_id, __get_str(trace_command_name),
+		__entry->transaction_id, __entry->ktid)
 )
 
 TRACE_EVENT(tracing_eva_frame_from_fw,

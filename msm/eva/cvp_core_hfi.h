@@ -331,19 +331,22 @@ struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 		u32 pkt_id = 0; \
 		u32 stream_id = 0; \
 		u64 t_id = 0; \
+		const char *command_name = ""; \
 		sess_id = cmd_hdr->header.session_id; \
 		pkt_id  = cmd_hdr->header.packet_type; \
+		command_name = get_pkt_name_from_type(pkt_id); \
 		stream_id = cmd_hdr->header.stream_idx; \
 		t_id    = cmd_hdr->header.client_data.transaction_id; \
 		u64 ktid = 0; \
 		aon_cycles  = get_aon_time(); \
 		ktid = (cmd_hdr->header.client_data.kdata  & (FENCE_BIT - 1)); \
 		trace_tracing_eva_frame_from_sw(aon_cycles, tag, sess_id, \
-			stream_id, pkt_id, t_id, ktid); \
+			stream_id, pkt_id, command_name, t_id, ktid); \
 		dprintk(CVP_INFO, \
 			"tracing_eva_frame_from_sw: AON_TIMESTAMP: %llu %s session_id = 0x%x "\
-			"stream_id = 0x%x packet_id = 0x%x transaction_id = 0x%x ktid = 0x%x\n",\
-			aon_cycles, tag, sess_id, stream_id, pkt_id, t_id, ktid); \
+			"stream_id = 0x%x packet_id = 0x%x command_name = %s "\
+			"transaction_id = 0x%x ktid = 0x%x\n",\
+			aon_cycles, tag, sess_id, stream_id, pkt_id, command_name, t_id, ktid); \
 	} \
 })
 
@@ -356,19 +359,22 @@ struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 		u32 stream_id = 0; \
 		u64 t_id = 0; \
 		u64 ktid = 0; \
+		const char *command_name = ""; \
 		unsigned int session_id; \
 		session_id   = msg_hdr->header.session_id; \
 		pkt_id    = msg_hdr->header.packet_type; \
+		command_name = get_pkt_name_from_type(pkt_id); \
 		stream_id = msg_hdr->header.stream_idx; \
 		t_id      = msg_hdr->header.client_data.transaction_id; \
 		aon_cycles  = get_aon_time(); \
 		ktid = (msg_hdr->header.client_data.kdata  & (FENCE_BIT - 1)); \
 		trace_tracing_eva_frame_from_sw(aon_cycles, tag, session_id, \
-			stream_id, pkt_id, t_id, ktid); \
+			stream_id, pkt_id, command_name, t_id, ktid); \
 		dprintk(CVP_INFO,\
 			"tracing_eva_frame_from_sw: AON_TIMESTAMP: %llu %s session_id = 0x%x "\
-			"stream_id = 0x%x packet_id = 0x%x transaction_id = 0x%x ktid = 0x%x\n",\
-			aon_cycles, tag, session_id, stream_id, pkt_id, t_id, ktid); \
+			"stream_id = 0x%x packet_id = 0x%x command_name = %s "\
+			"transaction_id = 0x%x ktid = 0x%x\n",\
+			aon_cycles, tag, session_id, stream_id, pkt_id, command_name, t_id, ktid); \
 	} \
 })
 
