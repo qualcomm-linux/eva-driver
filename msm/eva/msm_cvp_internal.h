@@ -50,6 +50,8 @@
 
 #define ARP_BUF_SIZE 0x300000
 
+#define ARP_CHUNK_SIZE 204800
+
 #define CVP_RT_PRIO_THRESHOLD 1
 
 #define MAX_CVP_ERROR_COUNT 65535
@@ -241,6 +243,7 @@ struct cvp_session_prop {
 	u32 priority;
 	u32 is_secure;
 	u32 dsp_mask;
+	u32 pkt_concurrency;
 	u32 fthread_nr;
 	u32 cycles[HFI_MAX_HW_THREADS];
 	u32 fw_cycles;

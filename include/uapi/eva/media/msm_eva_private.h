@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __MSM_EVA_PRIVATE_H__
 #define __MSM_EVA_PRIVATE_H__
@@ -150,6 +150,7 @@ struct eva_kmd_hfi_packet {
 #define EVA_KMD_PROP_SW_DBG_BUF		11
 #define EVA_KMD_PROP_SW_DBG_BUF_IDX	12
 #define EVA_KMD_PROP_SESSION_LATENCY	13
+#define EVA_KMD_PROP_PKT_CONCURRENCY	14
 
 #define EVA_KMD_PROP_PWR_FDU	0x10
 #define EVA_KMD_PROP_PWR_ICA	0x11
