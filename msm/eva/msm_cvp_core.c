@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-direction.h>
@@ -303,8 +303,20 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 	sqf = &inst->session_queue_fence;
 	sq = &inst->session_queue;
 
-	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 5;
-	msm_cvp_session_queue_stop(inst);
+	tmp = cvp_get_inst_validate(inst->core, inst);
+	if (!tmp) {
+		dprintk(CVP_ERR, "%s has a invalid session %llx\n",
+			__func__, inst);
+		goto exit;
+	}
+
+	if (inst->session_queue.state != QUEUE_STOP) {
+		rc = msm_cvp_session_flush_stop(inst);
+		if (rc)
+			goto err_timeout;
+		/* Continue to release ARP anyway */
+	}
+	cvp_put_inst(tmp);
 
 	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 1;
 wait_frame:
@@ -332,20 +344,6 @@ wait_frame:
 		inst->core->synx_ftbl->cvp_dump_fence_queue(inst);
 	}
 
-	tmp = cvp_get_inst_validate(inst->core, inst);
-	if (!tmp) {
-		dprintk(CVP_ERR, "%s has a invalid session %llx\n",
-			__func__, inst);
-		goto exit;
-	}
-
-	if (inst->session_queue.state != QUEUE_STOP) {
-		rc = msm_cvp_session_flush_stop(inst);
-		if (rc)
-			goto err_timeout;
-		/* Continue to release ARP anyway */
-	}
-	cvp_put_inst(tmp);
 exit:
 	if (cvp_release_arp_buffers(inst))
 		dprintk_rl(CVP_WARN,
