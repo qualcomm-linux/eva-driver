@@ -2017,10 +2017,10 @@ void __dsp_cvp_mem_free(struct cvp_dsp_cmd_msg *cmd)
 	frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd->pid);
 	if (!frpc_node) {
 		dprintk(CVP_ERR,
-			"%s Failed to find fastrpc node 0x%x, but allow memfree\n",
+			"%s Failed to find fastrpc node 0x%x, mem free failed\n",
 			__func__, dsp2cpu_cmd->pid);
-		// cmd->ret = -1;
-		// return;
+		cmd->ret = -1;
+		return;
 	} else {
 		frpc_device = frpc_node->cvp_fastrpc_device;
 	}
