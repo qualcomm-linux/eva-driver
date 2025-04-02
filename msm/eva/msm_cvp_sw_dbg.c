@@ -66,13 +66,13 @@ void eva_kmd_session_dump(void)
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	struct msm_cvp_core *core = NULL;
 	struct eva_kmd_session *kmd_trace_sess = NULL;
-	struct msm_cvp_inst *inst = NULL;
+	struct msm_cvp_inst *inst = NULL, *temp;
 	struct iris_hfi_device *dev = NULL;
 	struct cvp_hfi_ops *ops_tbl = NULL;
 	u32 *write_ptr = NULL;
 	u32 write_idx = 0;
 	u32 new_write_idx = 0;
-	u32 trace_index = 0;
+	u32 trace_index = 0, i = 0;
 
 	core = cvp_driver->cvp_core;
 	if (!core) {
@@ -86,8 +86,8 @@ void eva_kmd_session_dump(void)
 		dprintk(CVP_ERR, "%s: dev is NULL\n", __func__);
 		return;
 	}
-
-	list_for_each_entry(inst, &core->instances, list) {
+	mutex_lock(&core->lock);
+	list_for_each_entry_safe(inst, temp, &core->instances, list) {
 		if (inst != NULL) {
 			if (inst->state > MSM_CVP_OPEN) {
 				kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
@@ -98,31 +98,38 @@ void eva_kmd_session_dump(void)
 				kmd_trace_sess->prev_hfi_error_code = inst->prev_hfi_error_code;
 				kmd_trace_sess->session_error_code = inst->session_error_code;
 
-
-				write_idx = new_write_idx;
-				write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr)
-						+ (write_idx << 2)
-						+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
-				if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
-					write_ptr > (u32 *)(dev->sw_dbg_buf.align_virtual_addr
-					+ EVA_SW_DBG_BUF_UMD_OFFSET)) {
-					dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
-					return;
-				}
-
-				memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
-				new_write_idx = write_idx + (sizeof(struct eva_kmd_session) >> 2);
 				trace_index++;
 				if (trace_index >= TRACE_SESS_SIZE) {
 					dprintk(CVP_ERR, "%s: reached max number of instances %d\n",
 							__func__, trace_index);
 					break;
 				}
-			} else
+			} else {
 				dprintk(CVP_WARN, "%s: Not dumping as state is %d for inst %pK",
 						__func__, inst->state, inst);
+			}
 		}
 	}
+	mutex_unlock(&core->lock);
+
+	/* Dumping the already stored data to SW DBG Buffer*/
+	for (i = 0; i < trace_index; i++) {
+		kmd_trace_sess = &(core->kmd_trace.kmd_session[i]);
+
+		write_idx = new_write_idx;
+		write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr)
+				+ (write_idx << 2)
+				+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
+		if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
+			write_ptr > (u32 *)(dev->sw_dbg_buf.align_virtual_addr
+				+ EVA_SW_DBG_BUF_UMD_OFFSET)) {
+			dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
+			return;
+		}
+		memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
+		new_write_idx = write_idx + (sizeof(struct eva_kmd_session) >> 2);
+	}
+
 #endif
 }
 
