@@ -29,6 +29,9 @@
 #include "msm_cvp_dsp.h"
 #include "msm_cvp.h"
 #include "vm/cvp_vm.h"
+#include "cvp_kaanapali_hal.h"
+#include "cvp_pakala_hal.h"
+#include "cvp_hawi_hal.h"
 
 #define CLASS_NAME              "cvp"
 #define DRIVER_NAME             "cvp"
@@ -281,9 +284,23 @@ static const struct of_device_id msm_cvp_plat_match[] = {
 	{}
 };
 
+static int set_hal_functions(const char *chip_id)
+{
+	if (strcmp(chip_id, "qcom,canoe-cvp") == 0) {
+		set_kaanapali_hal_functions();
+		return 0;
+	} else if (strcmp(chip_id, "qcom,pineapple-cvp") == 0) {
+		set_pakala_hal_functions();
+		return 0;
+	}
+	return -EINVAL;
+}
+
 static int msm_probe_cvp_device(struct platform_device *pdev)
 {
 	int rc = 0;
+	int index = 1;
+	const char *chip_id;
 	struct msm_cvp_core *core;
 
 	if (!cvp_driver) {
@@ -389,7 +406,15 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		dprintk(CVP_ERR, "Failed to trigger probe for sub-devices\n");
 		goto err_fail_sub_device_probe;
 	}
-
+	if (!of_property_read_string_index(pdev->dev.of_node,
+		"compatible", index, &chip_id)) {
+		rc = set_hal_functions(chip_id);
+		if (rc)
+			dprintk(CVP_WARN, "Failed to initialize HAL functions\n");
+	} else {
+		dprintk(CVP_WARN, "Failed to read chip id\n");
+		rc = -EINVAL;
+	}
 	atomic64_set(&core->kernel_trans_id, ARRAY_SIZE(cvp_hfi_defs));
 
 	if (core->resources.dsp_enabled) {
@@ -399,7 +424,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	} else {
 		dprintk(CVP_DSP, "DSP interface not enabled\n");
 	}
-
 	return rc;
 
 err_fail_sub_device_probe:
