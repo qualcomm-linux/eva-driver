@@ -1225,6 +1225,14 @@ int msm_cvp_session_flush_stop(struct msm_cvp_inst *inst)
 		goto exit;
 	}
 
+	if (sq->state < QUEUE_START) {
+		dprintk(CVP_WARN, "Session %llx (%#x) not started yet, session state: %d\n",
+			inst, hash32_ptr(inst->session), sq->state);
+		spin_unlock(&sq->lock);
+		rc = 0;
+		goto stop_thread;
+	}
+
 	spin_unlock(&sq->lock);
 
 	ops_tbl = inst->core->dev_ops;
