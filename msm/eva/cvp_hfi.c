@@ -1571,7 +1571,13 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 {
 	bool needs_interrupt = false;
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr = NULL;
-	int rc = __iface_cmdq_write_relaxed(device, pkt, &needs_interrupt);
+	int rc = 0;
+	struct cvp_iface_q_info *q_info = NULL;
+	struct cvp_hfi_queue_header *queue = NULL;
+	struct msm_cvp_core *core = NULL;
+
+	core = cvp_driver->cvp_core;
+	rc = __iface_cmdq_write_relaxed(device, pkt, &needs_interrupt);
 
 #ifdef USE_PRESIL42
 	__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
@@ -1584,6 +1590,21 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 		if (call_iris_op(device, check_ctl_power_on, device))
 			dprintk(CVP_ERR, "%s power off, don't access reg\n", __func__);
 		__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+
+		q_info = &device->iface_queues[CVP_IFACEQ_CMDQ_IDX];
+		if (core && q_info) {
+			queue = (struct cvp_hfi_queue_header *) q_info->q_hdr;
+			if (queue) {
+				spin_lock(&q_info->hfi_lock);
+				core->cur_cmd_q_read_offset = queue->qhdr_read_idx;
+				if (core->prev_cmd_q_read_offset != core->cur_cmd_q_read_offset) {
+					core->last_fw_fetch_ts = ktime_get();
+					core->prev_cmd_q_read_offset = core->cur_cmd_q_read_offset;
+				}
+				spin_unlock(&q_info->hfi_lock);
+			}
+		}
+
 	}
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)pkt;
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_END");
@@ -3671,14 +3692,15 @@ int __response_handler(struct iris_hfi_device *device)
 	int packet_count = 0;
 	u8 *raw_packet = NULL;
 	bool requeue_pm_work = true;
-#ifdef CVP_SW_DBG_BUF_ENABLED
 	struct msm_cvp_core *core = NULL;
-#endif
+
 	if (!device || device->state != IRIS_STATE_INIT)
 		return 0;
-#ifdef CVP_SW_DBG_BUF_ENABLED
+
 	core = cvp_driver->cvp_core;
-#endif
+	if (!core)
+		return 0;
+
 	packets = device->response_pkt;
 
 	raw_packet = device->raw_packet;
@@ -3719,6 +3741,7 @@ int __response_handler(struct iris_hfi_device *device)
 		struct cvp_hfi_msg_session_hdr *hdr =
 			(struct cvp_hfi_msg_session_hdr *)raw_packet;
 		int rc = 0;
+		core->last_msg_ts = ktime_get();
 
 		print_msg_hdr(hdr);
 		rc = cvp_hfi_process_msg_packet(0, raw_packet, info);

@@ -602,11 +602,76 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	enum cvp_session_state s_state;
 	enum cvp_session_errorcode s_ecode;
 	struct msm_cvp_inst *s;
+	struct msm_cvp_core *core = NULL;
+	u64 fw_resp_ts = 0, fw_cmd_fetch_ts = 0;
+	ktime_t curr_time = 0;
+	struct msm_cvp_cb_cmd_done response  = {0};
+	enum hal_command_response cmd = HAL_SYS_WATCHDOG_TIMEOUT;
+	struct cvp_hfi_ops *ops_tbl = NULL;
+	struct iris_hfi_device *hfi_device = NULL;
+	struct cvp_iface_q_info *q_info = NULL;
+	struct cvp_hfi_queue_header *queue = NULL;
+
+	core = cvp_driver->cvp_core;
+	if (!core) {
+		dprintk(CVP_ERR, "%s: core is NULL", __func__);
+		return;
+	}
+	ops_tbl = core->dev_ops;
+	if (!ops_tbl) {
+		dprintk(CVP_ERR, "%s: ops_tbl is NULL\n", __func__);
+		return;
+	}
+
 
 	dprintk(CVP_ERR,
 		"timeout occurred for inst %pK sess %x\n", inst, hash32_ptr(inst->session));
 
+	s = cvp_get_inst_validate(inst->core, inst);
+	if (!s) {
+		dprintk(CVP_WARN, "%s: Session is not a valid session\n",
+				__func__);
+		return;
+	}
+
 	sq = &inst->session_queue;
+	spin_lock(&sq->lock);
+	s_state = (0xF0000000 & inst->session_error_code) >> 28;
+	s_ecode = (0x0FFF0000 & inst->session_error_code) >> 16;
+	spin_unlock(&sq->lock);
+	if (s_state == SESSION_ERROR && s_ecode == EVA_SYS_ERROR) {
+		dprintk(CVP_ERR, "%s: Invalid session, error code %d\n", __func__, s_ecode);
+		cvp_put_inst(inst);
+		return;
+	}
+	curr_time = ktime_get();
+
+	hfi_device = ops_tbl->hfi_device_data;
+	if (hfi_device) {
+		q_info = &hfi_device->iface_queues[CVP_IFACEQ_CMDQ_IDX];
+		if (q_info) {
+			queue = (struct cvp_hfi_queue_header *) q_info->q_hdr;
+			if (queue) {
+				spin_lock(&q_info->hfi_lock);
+				core->cur_cmd_q_read_offset = queue->qhdr_read_idx;
+				fw_cmd_fetch_ts = (u64)ktime_to_ms(curr_time) -
+					(u64)ktime_to_ms(core->last_fw_fetch_ts);
+				spin_unlock(&q_info->hfi_lock);
+			}
+		}
+	}
+	fw_resp_ts = (u64)ktime_to_ms(curr_time) - (u64)ktime_to_ms(core->last_msg_ts);
+
+	if (fw_resp_ts > 500 || (fw_cmd_fetch_ts > 500
+				&& core->cur_cmd_q_read_offset == core->prev_cmd_q_read_offset)) {
+		dprintk(CVP_ERR, "%s: FW hanged, cleaning up. %llu ms %llu ms",
+				__func__, fw_resp_ts, fw_cmd_fetch_ts);
+		response.device_id = 0;
+		handle_sys_error(cmd, (void *) &response);
+		cvp_put_inst(inst);
+		return;
+	}
+
 	spin_lock(&sq->lock);
 	s_state = SESSION_ERROR;
 	s_ecode = EVA_SESSION_TIMEOUT;
@@ -614,13 +679,6 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 		atomic_inc(&cvp_error_count);
 
 	spin_unlock(&sq->lock);
-
-	s = cvp_get_inst_validate(inst->core, inst);
-	if (!s) {
-		dprintk(CVP_WARN, "%s: Session is not a valid session\n",
-			__func__);
-		return;
-	}
 
 	inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
 				atomic_read(&cvp_error_count);
@@ -681,7 +739,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	ops_tbl = core->dev_ops;
 
 	mutex_lock(&core->lock);
-	core->ssr_count++;
 	if (core->state == CVP_CORE_UNINIT) {
 		dprintk(CVP_ERR,
 			"%s: Core %pK already moved to state %d\n",
@@ -690,6 +747,7 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 		return;
 	}
 
+	core->ssr_count++;
 	cur_state = core->state;
 	core->state = CVP_CORE_UNINIT;
 	dprintk(CVP_WARN, "SYS_ERROR from core %pK cmd %x total: %d\n",
