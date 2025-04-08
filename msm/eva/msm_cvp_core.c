@@ -310,12 +310,9 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 		goto exit;
 	}
 
-	if (inst->session_queue.state != QUEUE_STOP) {
-		rc = msm_cvp_session_flush_stop(inst);
-		if (rc)
-			goto err_timeout;
-		/* Continue to release ARP anyway */
-	}
+	rc = msm_cvp_session_flush_stop(inst);
+	if (rc)
+		goto err_timeout;
 	cvp_put_inst(tmp);
 
 	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 1;
