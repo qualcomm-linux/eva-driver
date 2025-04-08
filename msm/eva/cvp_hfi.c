@@ -2372,9 +2372,6 @@ static int iris_pm_qos_aggregate(void *device)
 		if (min_pm_qos_latency > core->resources.pm_qos.latency_us) {
 			dev->global_pm_qos_latency_us = min_pm_qos_latency;
 			cvp_pm_qos_update(dev, true);
-		} else {
-			dprintk(CVP_WARN, "%s New aggregated minmum latency is less than default"
-				"CVP latency (%d)\n", __func__, core->resources.pm_qos.latency_us);
 		}
 		mutex_unlock(&dev->lock);
 	}
@@ -3479,7 +3476,7 @@ static void __process_sys_error(struct iris_hfi_device *device)
 
 	vsfr = (struct cvp_hfi_sfr_struct *)device->sfr.align_virtual_addr;
 	sfr_buf_size = vsfr->bufSize;
-	if (vsfr && sfr_buf_size < ALIGNED_SFR_SIZE) {
+	if (vsfr && sfr_buf_size <= ALIGNED_SFR_SIZE) {
 		void *p = memchr(vsfr->rg_data, '\0', sfr_buf_size);
 		/*
 		 * SFR isn't guaranteed to be NULL terminated
@@ -3495,6 +3492,11 @@ static void __process_sys_error(struct iris_hfi_device *device)
 		dprintk(CVP_ERR, "SFR Message from FW: %s\n",
 				vsfr->rg_data);
 	}
+}
+
+void __print_sfr_msg(struct iris_hfi_device *device)
+{
+	__process_sys_error(device);
 }
 
 static void __flush_debug_queue(struct iris_hfi_device *device, u8 *packet)

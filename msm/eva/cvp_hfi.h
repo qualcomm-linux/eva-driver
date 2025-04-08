@@ -410,4 +410,5 @@ struct iris_hfi_device;
 int __tzbsp_set_cvp_state(enum tzbsp_subsys_state state);
 int __resume(struct iris_hfi_device *device);
 int __response_handler(struct iris_hfi_device *device);
+void __print_sfr_msg(struct iris_hfi_device *device);
 #endif
