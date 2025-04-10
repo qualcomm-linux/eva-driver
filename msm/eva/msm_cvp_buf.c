@@ -1242,11 +1242,44 @@ static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 	return NULL;
 }
 
+static void msm_cvp_free_unused_mapping(struct msm_cvp_inst *inst)
+{
+	struct msm_cvp_core *core = cvp_driver->cvp_core;
+	struct rb_node *node;
+	int rc = 0;
+
+	mutex_lock(&inst->dma_cache.lock);
+	node = rb_first(&inst->dma_cache.rbtree);
+	while (node) {
+		struct msm_cvp_smem *smem = rb_entry(node, struct msm_cvp_smem, node);
+		struct rb_node *next = rb_next(node);
+
+		if (atomic_read(&smem->refcount) == 0) {
+			print_smem(CVP_MEM, "free", inst, smem);
+			rb_erase(&smem->node, &inst->dma_cache.rbtree);
+			rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu cache");
+			if (rc)
+				dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
+					__func__, smem, rc);
+			else {
+				msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				atomic_sub(smem->size, &inst->va_inst_watermark);
+				atomic_sub(smem->size, &core->va_watermark);
+			}
+			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+			inst->dma_cache.nr--;
+		}
+		node = next;
+	}
+	mutex_unlock(&inst->dma_cache.lock);
+}
+
 static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 			struct msm_cvp_smem *smem)
 {
 	struct rb_node **node, *parent = NULL;
 	struct msm_cvp_smem *smem2;
+	struct msm_cvp_core *core = cvp_driver->cvp_core;
 
 	node = &inst->dma_cache.rbtree.rb_node;
 	while (*node != NULL) {
@@ -1263,6 +1296,8 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 	rb_link_node(&smem->node, parent, node);
 	rb_insert_color(&smem->node, &inst->dma_cache.rbtree);
 	inst->dma_cache.nr++;
+	atomic_add(smem->size, &inst->va_inst_watermark);
+	atomic_add(smem->size, &core->va_watermark);
 }
 
 static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
@@ -1271,8 +1306,10 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 	int rc = 0;
 	struct msm_cvp_smem *smem2;
 	struct rb_node *node;
+	struct msm_cvp_core *core;
 	int index;
 
+	core = cvp_driver->cvp_core;
 	mutex_lock(&inst->dma_cache.lock);
 	if (inst->dma_cache.nr < MAX_DMABUF_NUMS) {
 		msm_cvp_add_smem_rb_node(inst, smem);
@@ -1291,8 +1328,11 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				if (rc)
 					dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
 						__func__, smem2, rc);
-				else
+				else {
 					msm_cvp_smem_put_dma_buf(smem2->dma_buf);
+					atomic_sub(smem2->size, &inst->va_inst_watermark);
+					atomic_sub(smem2->size, &core->va_watermark);
+				}
 				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem2);
 				msm_cvp_add_smem_rb_node(inst, smem);
 				goto exit;
@@ -1315,6 +1355,15 @@ exit:
 	dprintk(CVP_MEM, "%s: Added entry %d into cache\n", __func__, index);
 	dprintk(CVP_MEM, "%s: fd %d, dma_buf %#llx, smem->refcount %d\n",
 		__func__, smem->fd, smem->dma_buf, atomic_read(&smem->refcount));
+
+	if (inst->dma_cache.nr == MAX_DMABUF_NUMS ||
+		atomic_read(&core->va_watermark) > IOVA_THRESHOLD) {
+		dprintk(CVP_MEM,
+			"%s: bufs reached to %d or IOVA threashold %d. cleaning up ...\n",
+			__func__, inst->dma_cache.nr, atomic_read(&core->va_watermark));
+		msm_cvp_free_unused_mapping(inst);
+	}
+
 	return 0;
 }
 
@@ -1429,6 +1478,7 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 	int rc = 0;
 	struct list_head *next;
 	struct cvp_internal_buf *pbuf;
+	struct msm_cvp_core *core = cvp_driver->cvp_core;
 	struct msm_cvp_smem *smem = NULL;
 	struct msm_cvp_smem *smem_cache_entry = NULL;
 	struct dma_buf *dma_buf;
@@ -1466,6 +1516,8 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 					if (smem_cache_entry) {
 						rb_erase(&smem_cache_entry->node,
 							&inst->dma_cache.rbtree);
+						atomic_sub(smem->size, &inst->va_inst_watermark);
+						atomic_sub(smem->size, &core->va_watermark);
 						smem->cached = false;
 						inst->dma_cache.nr--;
 					}
@@ -2011,6 +2063,7 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 	struct eva_kmd_buffer buf;
 	struct list_head *ptr = (struct list_head *)0xdead;
 	struct list_head *next = (struct list_head *)0xdead;
+	struct msm_cvp_core *core = cvp_driver->cvp_core;
 
 	session = (struct cvp_hal_session *)inst->session;
 
@@ -2085,8 +2138,11 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 		if (rc)
 			dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
 				__func__, smem, rc);
-		else
+		else {
 			msm_cvp_smem_put_dma_buf(smem->dma_buf);
+			atomic_sub(smem->size, &inst->va_inst_watermark);
+			atomic_sub(smem->size, &core->va_watermark);
+		}
 		cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 		node = rb_first(&inst->dma_cache.rbtree);
 		inst->dma_cache.nr--;
