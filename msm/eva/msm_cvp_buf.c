@@ -1927,8 +1927,6 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		offset += sizeof(*buf) >> 2;
 
 		if (buf->fd < 0 || !buf->size) {
-			dprintk(CVP_ERR, "%s: fd = %d, Size = %d, in_buf_num = %d\n",
-				__func__, buf->fd, buf->size, buf_num);
 			continue;
 		}
 

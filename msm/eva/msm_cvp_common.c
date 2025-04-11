@@ -17,6 +17,7 @@
 #include "msm_cvp.h"
 #include "cvp_core_hfi.h"
 #include "msm_cvp_events.h"
+#include "cvp_hfi.h"
 
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
@@ -754,6 +755,13 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 			core, cmd, core->ssr_count);
 	mutex_lock(&core->clk_lock);
 	hfi_device = ops_tbl->hfi_device_data;
+	if (!hfi_device) {
+		dprintk(CVP_WARN, "%s: Invalid device\n", __func__);
+		mutex_unlock(&core->lock);
+		return;
+	}
+
+	__print_sfr_msg(hfi_device);
 	call_hfi_op(ops_tbl, flush_debug_queue, ops_tbl->hfi_device_data);
 
 #ifdef CVP_SW_DBG_BUF_ENABLED
