@@ -2411,7 +2411,7 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 	smem->buf_idx = 0;
 	smem->fd = buf->fd;
 	dprintk(CVP_MEM, "%s: dma_buf = %llx\n", __func__, dma_buf);
-	rc = msm_cvp_map_smem(inst, smem, "map dsp"); // Jingyu todo: change this?
+	rc = msm_cvp_map_smem(inst, smem, "map dsp");
 	if (rc) {
 		print_client_buffer(CVP_ERR, "map failed", inst, buf);
 		goto exit;
@@ -2426,6 +2426,7 @@ int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
 	cbuf->index = buf->index;
 
 	buf->reserved[0] = (uint32_t)smem->device_addr;
+	buf->size = dma_buf->size; // Pass to QDI for reference
 
 	mutex_lock(&frpc_node->cvpdspbufs.lock);
 	list_add_tail(&cbuf->list, &frpc_node->cvpdspbufs.list);
