@@ -61,19 +61,24 @@ void eva_kmd_buf_dump(struct msm_cvp_inst *inst,
 #endif
 }
 
-void eva_kmd_session_dump(void)
+void eva_kmd_session_dump(struct msm_cvp_inst *inst)
 {
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	struct msm_cvp_core *core = NULL;
 	struct eva_kmd_session *kmd_trace_sess = NULL;
-	struct msm_cvp_inst *inst = NULL, *temp;
 	struct iris_hfi_device *dev = NULL;
 	struct cvp_hfi_ops *ops_tbl = NULL;
 	u32 *write_ptr = NULL;
 	u32 write_idx = 0;
-	u32 new_write_idx = 0;
-	u32 trace_index = 0, i = 0;
+	u32 trace_index = 0;
 
+	pr_info(CVP_PID_TAG "%s : Session Error dump to SW DBG Buffer\n",
+			current->pid, current->tgid, "info", __func__);
+
+	if (!inst) {
+		dprintk(CVP_ERR, "%s: inst is not valid\n", __func__);
+		return;
+	}
 	core = cvp_driver->cvp_core;
 	if (!core) {
 		dprintk(CVP_ERR, "%s: Core is NULL!\n", __func__);
@@ -86,50 +91,34 @@ void eva_kmd_session_dump(void)
 		dprintk(CVP_ERR, "%s: dev is NULL\n", __func__);
 		return;
 	}
-	mutex_lock(&core->lock);
-	list_for_each_entry_safe(inst, temp, &core->instances, list) {
-		if (inst != NULL) {
-			if (inst->state > MSM_CVP_OPEN) {
-				kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
-				kmd_trace_sess->session_id = hash32_ptr(inst->session);
-				kmd_trace_sess->instance_state = inst->state;
-				kmd_trace_sess->session_type = inst->session_type;
-				kmd_trace_sess->hfi_error_code = inst->hfi_error_code;
-				kmd_trace_sess->prev_hfi_error_code = inst->prev_hfi_error_code;
-				kmd_trace_sess->session_error_code = inst->session_error_code;
 
-				trace_index++;
-				if (trace_index >= TRACE_SESS_SIZE) {
-					dprintk(CVP_ERR, "%s: reached max number of instances %d\n",
-							__func__, trace_index);
-					break;
-				}
-			} else {
-				dprintk(CVP_WARN, "%s: Not dumping as state is %d for inst %pK",
-						__func__, inst->state, inst);
-			}
-		}
-	}
-	mutex_unlock(&core->lock);
+	mutex_lock(&core->kmd_dbg.dbg_lock);
+	trace_index = core->kmd_dbg.kmd_sess_cnt;
+	core->kmd_dbg.kmd_sess_cnt++;
+	if (core->kmd_dbg.kmd_sess_cnt >= TRACE_SESS_SIZE)
+		core->kmd_dbg.kmd_sess_cnt = 0;
 
-	/* Dumping the already stored data to SW DBG Buffer*/
-	for (i = 0; i < trace_index; i++) {
-		kmd_trace_sess = &(core->kmd_trace.kmd_session[i]);
+	mutex_unlock(&core->kmd_dbg.dbg_lock);
 
-		write_idx = new_write_idx;
-		write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr)
-				+ (write_idx << 2)
-				+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
-		if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
+	kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
+	kmd_trace_sess->session_id = hash32_ptr(inst->session);
+	kmd_trace_sess->instance_state = inst->state;
+	kmd_trace_sess->session_type = inst->session_type;
+	kmd_trace_sess->hfi_error_code = inst->hfi_error_code;
+	kmd_trace_sess->prev_hfi_error_code = inst->prev_hfi_error_code;
+	kmd_trace_sess->session_error_code = inst->session_error_code;
+
+	write_idx = trace_index * (sizeof(struct eva_kmd_session) >> 2);
+	write_ptr = (u32 *)((dev->sw_dbg_buf.align_virtual_addr)
+			+ (write_idx << 2)
+			+ EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX);
+	if (write_ptr < (u32 *)dev->sw_dbg_buf.align_virtual_addr ||
 			write_ptr > (u32 *)(dev->sw_dbg_buf.align_virtual_addr
 				+ EVA_SW_DBG_BUF_UMD_OFFSET)) {
-			dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
-			return;
-		}
-		memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
-		new_write_idx = write_idx + (sizeof(struct eva_kmd_session) >> 2);
+		dprintk(CVP_ERR, "%s: write_ptr is OOB\n", __func__);
+		return;
 	}
-
+	memcpy(write_ptr, kmd_trace_sess, sizeof(struct eva_kmd_session));
 #endif
 }
 
@@ -141,6 +130,8 @@ void eva_kmd_debug_log_dump(void)
 	struct iris_hfi_device *dev = NULL;
 	struct cvp_hfi_ops *ops_tbl = NULL;
 
+	pr_info(CVP_PID_TAG "%s : Log Error dump to SW DBG Buffer\n",
+			current->pid, current->tgid, "info", __func__);
 	core = cvp_driver->cvp_core;
 	if (!core) {
 		dprintk(CVP_ERR, "%s: Core is NULL!\n", __func__);

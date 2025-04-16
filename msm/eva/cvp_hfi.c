@@ -2111,9 +2111,12 @@ hfi_queue_init:
 sfr_init:
 	__sfr_init(dev);
 #ifdef CVP_SW_DBG_BUF_ENABLED
+	core = cvp_driver->cvp_core;
 	if (dev->sw_dbg_buf.align_virtual_addr) {
 		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
 				0, ALIGNED_SW_DBG_BUF_SIZE);
+		if (core)
+			core->kmd_dbg.kmd_sess_cnt = 0;
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
 				SMEM_UNCACHED, O_RDWR);
@@ -2125,13 +2128,11 @@ sfr_init:
 			dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
 			dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
 			dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
-			core = cvp_driver->cvp_core;
-			if (!core)
-				dprintk(CVP_ERR, "%s: Core is null\n", __func__);
-			else {
+			if (core) {
 				mutex_init(&core->kmd_dbg.dbg_lock);
 				core->kmd_dbg.kmd_buf_offset = 0;
 				core->kmd_dbg.kmd_buf_cnt = 0;
+				core->kmd_dbg.kmd_sess_cnt = 0;
 			}
 		}
 	}

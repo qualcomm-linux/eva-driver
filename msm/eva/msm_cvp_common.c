@@ -553,8 +553,8 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	}
 
 	ops_tbl = inst->core->dev_ops;
-	dprintk(CVP_ERR, "Sess error 0x%x received for inst %pK sess %x\n",
-		response->status, inst, hash32_ptr(inst->session));
+	dprintk(CVP_ERR, "%s: Session error 0x%x received for inst %pK sess %x\n",
+			__func__, response->status, inst, hash32_ptr(inst->session));
 
 	sq = &inst->session_queue;
 	spin_lock(&sq->lock);
@@ -577,10 +577,7 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 			complete(&inst->completions[i]);
 #ifdef CVP_SW_DBG_BUF_ENABLED
 		if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-			pr_info(CVP_PID_TAG "%s : Error dump to SW DBG Buffer %d\n",
-				current->pid, current->tgid, "info",
-				__func__, msm_cvp_sw_dbg_buf_dump);
-			eva_kmd_session_dump();
+			eva_kmd_session_dump(inst);
 			eva_kmd_debug_log_dump();
 		}
 #endif
@@ -625,8 +622,8 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	}
 
 
-	dprintk(CVP_ERR,
-		"timeout occurred for inst %pK sess %x\n", inst, hash32_ptr(inst->session));
+	dprintk(CVP_ERR, "%s: Session timeout occurred for inst %pK sess %x\n",
+			__func__, inst, hash32_ptr(inst->session));
 
 	s = cvp_get_inst_validate(inst->core, inst);
 	if (!s) {
@@ -686,10 +683,7 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	cvp_print_inst(CVP_WARN, inst);
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-		pr_info(CVP_PID_TAG "%s : Error dump to SW DBG Buffer %d\n",
-			current->pid, current->tgid, "info",
-			__func__, msm_cvp_sw_dbg_buf_dump);
-		eva_kmd_session_dump();
+		eva_kmd_session_dump(inst);
 		eva_kmd_debug_log_dump();
 	}
 #endif
@@ -751,8 +745,8 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	core->ssr_count++;
 	cur_state = core->state;
 	core->state = CVP_CORE_UNINIT;
-	dprintk(CVP_WARN, "SYS_ERROR from core %pK cmd %x total: %d\n",
-			core, cmd, core->ssr_count);
+	dprintk(CVP_WARN, "%s: SYS_ERROR from core %pK cmd %x total: %d\n",
+			__func__, core, cmd, core->ssr_count);
 	mutex_lock(&core->clk_lock);
 	hfi_device = ops_tbl->hfi_device_data;
 	if (!hfi_device) {
@@ -764,13 +758,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	__print_sfr_msg(hfi_device);
 	call_hfi_op(ops_tbl, flush_debug_queue, ops_tbl->hfi_device_data);
 
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	log = (core->kmd_trace.kmd_debug_log.log.snapshot_index > 0) ? false : true;
-	list_for_each_entry(inst, &core->instances, list) {
-		msm_cvp_print_inst_bufs(inst, log);
-	}
-#endif
-
 	if ((atomic_read(&cvp_error_count)) < MAX_CVP_ERROR_COUNT)
 		atomic_inc(&cvp_error_count);
 
@@ -778,25 +765,14 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 		dprintk(CVP_WARN, "Got NOC error");
 		msm_cvp_noc_error_info(core);
 	}
+
 #ifdef CVP_SW_DBG_BUF_ENABLED
-	else {
-		if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-			list_for_each_entry(inst, &core->instances, list) {
-				sq = &inst->session_queue;
-				spin_lock(&sq->lock);
-				s_state = SESSION_ERROR;
-				s_ecode = EVA_SYS_ERROR;
-				inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
-					atomic_read(&cvp_error_count);
-				spin_unlock(&sq->lock);
-			}
-			pr_info(CVP_PID_TAG "%s : Error dump to SW DBG Buffer %d\n",
-				current->pid, current->tgid, "info",
-				__func__, msm_cvp_sw_dbg_buf_dump);
-			eva_kmd_session_dump();
-			eva_kmd_debug_log_dump();
-		}
+	log = (core->kmd_trace.kmd_debug_log.log.snapshot_index > 0) ? false : true;
+	list_for_each_entry(inst, &core->instances, list) {
+		msm_cvp_print_inst_bufs(inst, log);
 	}
+	if (msm_cvp_sw_dbg_buf_dump & BIT(0))
+		eva_kmd_debug_log_dump();
 #endif
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
@@ -809,6 +785,11 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 				atomic_read(&cvp_error_count);
 			spin_unlock(&sq->lock);
 			change_cvp_inst_state(inst, MSM_CVP_CORE_INVALID);
+#ifdef CVP_SW_DBG_BUF_ENABLED
+			if (msm_cvp_sw_dbg_buf_dump & BIT(0))
+				eva_kmd_session_dump(inst);
+#endif
+
 			if (cvp_clean_session_queues(inst))
 				dprintk(CVP_ERR, "Failed to clean fences\n");
 			for (i = 0; i < ARRAY_SIZE(inst->completions); i++)
@@ -1400,12 +1381,6 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core)
 {
 	struct cvp_hfi_ops *ops_tbl;
 	static u32 last_fault_count = 0;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	struct msm_cvp_inst *inst = NULL;
-	struct cvp_session_queue *sq;
-	enum cvp_session_state s_state;
-	enum cvp_session_errorcode s_ecode;
-#endif
 
 	if (!core || !core->dev_ops) {
 		dprintk(CVP_WARN, "%s: Invalid parameters: %pK\n",
@@ -1423,23 +1398,6 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core)
 			core->smmu_fault_count);
 	ops_tbl = core->dev_ops;
 	call_hfi_op(ops_tbl, noc_error_info, ops_tbl->hfi_device_data);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-		list_for_each_entry(inst, &core->instances, list) {
-			sq = &inst->session_queue;
-			spin_lock(&sq->lock);
-			s_state = SESSION_ERROR;
-			s_ecode = EVA_SYS_ERROR;
-			inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
-				atomic_read(&cvp_error_count);
-			spin_unlock(&sq->lock);
-		}
-		pr_info(CVP_PID_TAG "%s : Error dump to SW DBG Buffer %d\n",
-			current->pid, current->tgid, "info", __func__, msm_cvp_sw_dbg_buf_dump);
-		eva_kmd_session_dump();
-		eva_kmd_debug_log_dump();
-	}
-#endif
 
 	if (core->smmu_fault_count >= core->resources.max_ssr_allowed) {
 		dprintk(CVP_INFO, "msm_cvp_smmu_fault_recovery %d\n",

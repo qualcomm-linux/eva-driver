@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef MSM_CVP_SW_DBG_H
@@ -116,11 +116,12 @@ struct eva_kmd_debug {
 	u32 kmd_buf_offset;
 	struct mutex dbg_lock;
 	u32 kmd_buf_cnt;
+	u32 kmd_sess_cnt;
 };
 
 void eva_kmd_buf_dump(struct msm_cvp_inst *inst,
 		struct msm_cvp_smem *smem, int buf_map_type);
-void eva_kmd_session_dump(void);
+void eva_kmd_session_dump(struct msm_cvp_inst *inst);
 void eva_kmd_debug_log_dump(void);
 
 #endif
