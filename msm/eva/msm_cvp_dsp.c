@@ -2325,7 +2325,12 @@ static struct file *msm_cvp_fget(unsigned int fd, struct task_struct *task,
 	rcu_read_unlock();
 #else
 	unsigned int ret_fd = fd;
+
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+	file = fget_task_next(task, &ret_fd);
+#else
 	file = task_lookup_next_fdget_rcu(task, &ret_fd);
+#endif
 	if (ret_fd != fd)
 		dprintk(CVP_ERR, "%s FAILED to get file from fd = %u, %u\n",
 			__func__, fd, ret_fd);

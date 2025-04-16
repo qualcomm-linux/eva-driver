@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -620,4 +620,8 @@ MODULE_SOFTDEP("pre: msm-mmrm");
 MODULE_SOFTDEP("pre: synx-driver");
 MODULE_SOFTDEP("pre: frpc-adsprpc");
 MODULE_LICENSE("GPL v2");
+#if (KERNEL_VERSION(6, 13, 0) < LINUX_VERSION_CODE)
+MODULE_IMPORT_NS("DMA_BUF");
+#else
 MODULE_IMPORT_NS(DMA_BUF);
+#endif
