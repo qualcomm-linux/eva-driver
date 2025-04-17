@@ -1514,7 +1514,7 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 		dprintk(CVP_ERR, "Session error triggered\n");
 		mutex_lock(&core->lock);
 		list_for_each_entry_safe(inst, inst_t, &core->instances, list) {
-			if (inst != NULL) {
+			if (inst != NULL && inst->state != MSM_CVP_CORE_INVALID) {
 				dprintk(CVP_INFO, "Session to be taken for session error 0x%x\n",
 					inst);
 				response.session_id = inst;
