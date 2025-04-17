@@ -5267,9 +5267,11 @@ static const char * const mid_names[25] = {
 static void __print_reg_details_errlog3_low(u32 val)
 {
 	u32 mid, sid;
-
+#ifdef CONFIG_EVA_SUN
 	mid = (val >> 5) & 0x1F;
-
+#else
+	mid = (val >> 7) & 0x1F;
+#endif
 	sid = (val >> 2) & 0x7;
 	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_LOW:     %#x\n", val);
 	dprintk(CVP_ERR, "Sub-client:%s, SID: %d\n", mid_names[mid], sid);
