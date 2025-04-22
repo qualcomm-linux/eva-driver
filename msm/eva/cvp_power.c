@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only
  *
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
  */
 
@@ -234,7 +234,7 @@ int msm_cvp_update_power(struct msm_cvp_inst *inst)
 		if (!strcmp(core->resources.bus_set.bus_tbl[bus_count].name, "eva-ddr")) {
 			bus = &core->resources.bus_set.bus_tbl[bus_count];
 			max_bw = bus->range[1];
-			min_bw = max_bw/10;
+			min_bw = max_bw/100;
 		}
 	}
 	if (!bus) {
