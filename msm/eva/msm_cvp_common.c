@@ -1630,14 +1630,32 @@ static int set_internal_buf_on_fw(struct msm_cvp_inst *inst,
 int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 {
 	int rc = 0;
+	u32 pkt_concurrency;
 	struct cvp_internal_buf *buf;
+	struct cvp_session_prop *session_prop;
 
 	if (!inst || !inst->core || !inst->core->dev_ops) {
 		dprintk(CVP_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
 
-	buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
+	session_prop = &inst->prop;
+
+	if (!session_prop) {
+		dprintk(CVP_WARN, "Incorrect Props in inst %pK sess %x\n",
+			inst, hash32_ptr(inst->session));
+		return -EINVAL;
+	}
+
+	pkt_concurrency = session_prop->pkt_concurrency;
+
+	if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
+		dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
+			inst, hash32_ptr(inst->session), pkt_concurrency);
+		return -EINVAL;
+	}
+
+	buf = cvp_allocate_arp_bufs(inst, ALIGN(ARP_CHUNK_SIZE, SZ_4K) * pkt_concurrency);
 	if (!buf) {
 		rc = -ENOMEM;
 		goto error;

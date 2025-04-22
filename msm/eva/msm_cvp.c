@@ -1654,6 +1654,9 @@ static int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		case EVA_KMD_PROP_SESSION_DUMPSIZE:
 			session_prop->dump_size = prop_array->data;
 			break;
+		case EVA_KMD_PROP_PKT_CONCURRENCY:
+			session_prop->pkt_concurrency = prop_array->data;
+			break;
 		case EVA_KMD_PROP_SET_NAME:
 		{
 			u32 idx = i * 4;
