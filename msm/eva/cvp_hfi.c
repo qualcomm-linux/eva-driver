@@ -68,7 +68,6 @@ const struct msm_cvp_gov_data CVP_DEFAULT_BUS_VOTE = {
 	.data = NULL,
 	.data_count = 0,
 };
-
 const int cvp_max_packets = 32;
 static enum cvp_irq_state cur_irq_state = CVP_IRQ_CLEAR;
 
@@ -595,7 +594,7 @@ static int __read_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 	u32 *read_ptr;
 	u32 receive_request = 0;
 	u32 read_idx, write_idx;
-		int rc = 0;
+	int rc = 0;
 
 	if (!qinfo || !packet || !pb_tx_req_is_set) {
 		dprintk(CVP_ERR, "Invalid Params\n");
@@ -685,6 +684,12 @@ static int __read_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 					(u8 *)qinfo->q_array.align_virtual_addr,
 					new_read_idx << 2);
 		}
+		/*
+		 * Copy back the validated size to avoid security issue. As we are reading
+		 * the packet from a shared queue, there is a possibility to get the
+		 * packet->size data corrupted of shared queue by mallicious FW.
+		 */
+		*((u32 *) packet) = packet_size_in_words << 2;
 	} else {
 		dprintk(CVP_WARN,
 			"BAD packet received, read_idx: %#x, pkt_size: %d\n",
@@ -1566,7 +1571,13 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 {
 	bool needs_interrupt = false;
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr = NULL;
-	int rc = __iface_cmdq_write_relaxed(device, pkt, &needs_interrupt);
+	int rc = 0;
+	struct cvp_iface_q_info *q_info = NULL;
+	struct cvp_hfi_queue_header *queue = NULL;
+	struct msm_cvp_core *core = NULL;
+
+	core = cvp_driver->cvp_core;
+	rc = __iface_cmdq_write_relaxed(device, pkt, &needs_interrupt);
 
 #ifdef USE_PRESIL42
 	__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
@@ -1579,6 +1590,21 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 		if (call_iris_op(device, check_ctl_power_on, device))
 			dprintk(CVP_ERR, "%s power off, don't access reg\n", __func__);
 		__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+
+		q_info = &device->iface_queues[CVP_IFACEQ_CMDQ_IDX];
+		if (core && q_info) {
+			queue = (struct cvp_hfi_queue_header *) q_info->q_hdr;
+			if (queue) {
+				spin_lock(&q_info->hfi_lock);
+				core->cur_cmd_q_read_offset = queue->qhdr_read_idx;
+				if (core->prev_cmd_q_read_offset != core->cur_cmd_q_read_offset) {
+					core->last_fw_fetch_ts = ktime_get();
+					core->prev_cmd_q_read_offset = core->cur_cmd_q_read_offset;
+				}
+				spin_unlock(&q_info->hfi_lock);
+			}
+		}
+
 	}
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)pkt;
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_END");
@@ -2085,9 +2111,12 @@ hfi_queue_init:
 sfr_init:
 	__sfr_init(dev);
 #ifdef CVP_SW_DBG_BUF_ENABLED
+	core = cvp_driver->cvp_core;
 	if (dev->sw_dbg_buf.align_virtual_addr) {
 		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
 				0, ALIGNED_SW_DBG_BUF_SIZE);
+		if (core)
+			core->kmd_dbg.kmd_sess_cnt = 0;
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
 				SMEM_UNCACHED, O_RDWR);
@@ -2099,13 +2128,11 @@ sfr_init:
 			dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
 			dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
 			dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
-			core = cvp_driver->cvp_core;
-			if (!core)
-				dprintk(CVP_ERR, "%s: Core is null\n", __func__);
-			else {
+			if (core) {
 				mutex_init(&core->kmd_dbg.dbg_lock);
 				core->kmd_dbg.kmd_buf_offset = 0;
 				core->kmd_dbg.kmd_buf_cnt = 0;
+				core->kmd_dbg.kmd_sess_cnt = 0;
 			}
 		}
 	}
@@ -2323,6 +2350,7 @@ static int iris_pm_qos_aggregate(void *device)
 
 	dev = device;
 	core = cvp_driver->cvp_core;
+	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		sq = &inst->session_queue;
 		spin_lock(&sq->lock);
@@ -2332,6 +2360,7 @@ static int iris_pm_qos_aggregate(void *device)
 							min_pm_qos_latency:inst->pm_qos_latency;
 		spin_unlock(&sq->lock);
 	}
+	mutex_unlock(&core->lock);
 
 	if (min_pm_qos_latency != dev->global_pm_qos_latency_us) {
 		mutex_lock(&dev->lock);
@@ -2344,9 +2373,6 @@ static int iris_pm_qos_aggregate(void *device)
 		if (min_pm_qos_latency > core->resources.pm_qos.latency_us) {
 			dev->global_pm_qos_latency_us = min_pm_qos_latency;
 			cvp_pm_qos_update(dev, true);
-		} else {
-			dprintk(CVP_WARN, "%s New aggregated minmum latency is less than default"
-				"CVP latency (%d)\n", __func__, core->resources.pm_qos.latency_us);
 		}
 		mutex_unlock(&dev->lock);
 	}
@@ -3447,17 +3473,19 @@ skip_power_off:
 static void __process_sys_error(struct iris_hfi_device *device)
 {
 	struct cvp_hfi_sfr_struct *vsfr = NULL;
+	u32 sfr_buf_size = 0;
 
 	vsfr = (struct cvp_hfi_sfr_struct *)device->sfr.align_virtual_addr;
-	if (vsfr) {
-		void *p = memchr(vsfr->rg_data, '\0', vsfr->bufSize);
+	sfr_buf_size = vsfr->bufSize;
+	if (vsfr && sfr_buf_size <= ALIGNED_SFR_SIZE) {
+		void *p = memchr(vsfr->rg_data, '\0', sfr_buf_size);
 		/*
 		 * SFR isn't guaranteed to be NULL terminated
 		 * since SYS_ERROR indicates that Iris is in the
 		 * process of crashing.
 		 */
 		if (p == NULL)
-			vsfr->rg_data[vsfr->bufSize - 1] = '\0';
+			vsfr->rg_data[sfr_buf_size - 1] = '\0';
 
 #ifdef USE_PRESIL42
 		presil42_retrieve_sfr_buffer(device);
@@ -3465,6 +3493,11 @@ static void __process_sys_error(struct iris_hfi_device *device)
 		dprintk(CVP_ERR, "SFR Message from FW: %s\n",
 				vsfr->rg_data);
 	}
+}
+
+void __print_sfr_msg(struct iris_hfi_device *device)
+{
+	__process_sys_error(device);
 }
 
 static void __flush_debug_queue(struct iris_hfi_device *device, u8 *packet)
@@ -3662,14 +3695,15 @@ int __response_handler(struct iris_hfi_device *device)
 	int packet_count = 0;
 	u8 *raw_packet = NULL;
 	bool requeue_pm_work = true;
-#ifdef CVP_SW_DBG_BUF_ENABLED
 	struct msm_cvp_core *core = NULL;
-#endif
+
 	if (!device || device->state != IRIS_STATE_INIT)
 		return 0;
-#ifdef CVP_SW_DBG_BUF_ENABLED
+
 	core = cvp_driver->cvp_core;
-#endif
+	if (!core)
+		return 0;
+
 	packets = device->response_pkt;
 
 	raw_packet = device->raw_packet;
@@ -3710,6 +3744,7 @@ int __response_handler(struct iris_hfi_device *device)
 		struct cvp_hfi_msg_session_hdr *hdr =
 			(struct cvp_hfi_msg_session_hdr *)raw_packet;
 		int rc = 0;
+		core->last_msg_ts = ktime_get();
 
 		print_msg_hdr(hdr);
 		rc = cvp_hfi_process_msg_packet(0, raw_packet, info);
@@ -4657,11 +4692,34 @@ static int __set_subcaches(struct iris_hfi_device *device)
 	sc_res_info = (struct cvp_hfi_resource_syscache_info_type *)resource;
 	sc_res = &(sc_res_info->rg_subcache_entries[0]);
 
+	/* Mapping of cache slices as:
+	 * cvp slice (scid:8):    HFI_SYSCACHE_TARGET_FDU, HFI_SYSCACHE_TARGET_MPU
+	 * cvpfw slice (scid:19): HFI_SYSCACHE_TARGET_EVA_CPU
+	 */
 	iris_hfi_for_each_subcache(device, sinfo) {
 		if (sinfo->isactive) {
-			sc_res[c].size = sinfo->subcache->slice_size;
-			sc_res[c].sc_id = sinfo->subcache->slice_id;
-			c++;
+			if (!strcmp("cvp", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				dprintk(CVP_CORE, "Subcache slice id: %d size: %d\n",
+					sinfo->subcache->slice_id, sinfo->subcache->slice_size);
+				c++;
+
+				/* Will enable MPU once DV team confirms that
+				 * same slice id can be shared
+				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
+				 * c++;
+				 */
+			} else if (!strcmp("cvpfw", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				dprintk(CVP_CORE, "Subcache slice id: %d size: %d\n",
+					sinfo->subcache->slice_id, sinfo->subcache->slice_size);
+				c++;
+			} else {
+				dprintk(CVP_ERR, "Invalid subcache %s\n", sinfo->name);
+			}
 		}
 	}
 
@@ -4715,13 +4773,31 @@ static int __release_subcaches(struct iris_hfi_device *device)
 	sc_res_info = (struct cvp_hfi_resource_syscache_info_type *)resource;
 	sc_res = &(sc_res_info->rg_subcache_entries[0]);
 
-	/* Release resource command to Iris */
+	/* Release resource command to Iris
+	 * Mapping of cache slices as:
+	 * cvp slice (scid:8):    HFI_SYSCACHE_TARGET_FDU, HFI_SYSCACHE_TARGET_MPU
+	 * cvpfw slice (scid:19): HFI_SYSCACHE_TARGET_EVA_CPU
+	 */
 	iris_hfi_for_each_subcache_reverse(device, sinfo) {
 		if (sinfo->isset) {
-			/* Update the entry */
-			sc_res[c].size = sinfo->subcache->slice_size;
-			sc_res[c].sc_id = sinfo->subcache->slice_id;
-			c++;
+			if (!strcmp("cvp", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+
+				/* Will enable MPU once DV team confirms that
+				 * same slice id can be shared
+				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
+				 * c++;
+				 */
+			} else if (!strcmp("cvpfw", sinfo->name)) {
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+			} else {
+				dprintk(CVP_ERR, "Invalid subcache %s\n", sinfo->name);
+			}
 			sinfo->isset = false;
 		}
 	}
@@ -5195,9 +5271,11 @@ static const char * const mid_names[25] = {
 static void __print_reg_details_errlog3_low(u32 val)
 {
 	u32 mid, sid;
-
+#ifdef CONFIG_EVA_SUN
 	mid = (val >> 5) & 0x1F;
-
+#else
+	mid = (val >> 7) & 0x1F;
+#endif
 	sid = (val >> 2) & 0x7;
 	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_LOW:     %#x\n", val);
 	dprintk(CVP_ERR, "Sub-client:%s, SID: %d\n", mid_names[mid], sid);
@@ -5635,6 +5713,7 @@ static int __power_on_controller_v1(struct iris_hfi_device *device)
 	}
 
 	dprintk(CVP_PWR, "EVA controller powered on\n");
+	CVPKERNEL_ATRACE_END("__power_on_controller_v1");
 	return 0;
 
 fail_enable_freerun:
@@ -5680,14 +5759,6 @@ static int __power_on_core_v1(struct iris_hfi_device *device)
 		dprintk(CVP_ERR, "Failed to enable core_freerun_clk: %d\n", rc);
 		goto fail_enable_freerun;
 	}
-
-	__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
-	__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x1);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
-	usleep_range(5, 10);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x0);
-	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x0);
 
 	dprintk(CVP_PWR, "EVA core powered on\n");
 	CVPKERNEL_ATRACE_END("__power_on_core_v1");
@@ -5831,6 +5902,7 @@ static int __power_off_core_v1(struct iris_hfi_device *device)
 static int __power_off_controller_v1(struct iris_hfi_device *device)
 {
 	u32 lpi_status, count = 0, max_count = 1000;
+	u32 lpi_control;
 	int rc;
 
 	/* HPG 3.7 Step 4  */
@@ -5860,6 +5932,12 @@ static int __power_off_controller_v1(struct iris_hfi_device *device)
 	if (count == max_count) {
 		dprintk(CVP_WARN, "DBLP Release: lpi_status %x\n", lpi_status);
 	}
+	lpi_control = __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL);
+	lpi_control = lpi_control | 0x10;
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, lpi_control);
+	usleep_range(50, 100);
+	lpi_control = lpi_control & (~0x10);
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, lpi_control);
 
 	/*
 	 * Below sequence are missing from HPG Section 3.7.
@@ -6068,6 +6146,14 @@ static int __set_registers_v1(struct iris_hfi_device *device)
 					reg_set->reg_tbl[i].value);
 	}
 
+	__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
+	__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
+	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x1);
+	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
+	usleep_range(5, 10);
+	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x0);
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x0);
+
 	__write_register(device, CVP_CPU_CS_AXI4_QOS,
 				pdata->noc_qos->axi_qos);
 	__write_register(device, CVP_NOC_A_PRIORITYLUT_LOW,
@@ -6158,8 +6244,12 @@ static void __dump_noc_regs_v1(struct iris_hfi_device *device)
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_LOW: 0x%x", val);
 	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH);
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH: 0x%x", val);
+	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW);
+	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW: 0x%x", val);
 	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH);
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH: 0x%x", val);
+	val = __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW);
+	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW: 0x%x", val);
 
 	dprintk(CVP_ERR, "Dumping Core NoC registers\n");
 	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_LOW_OFFS);

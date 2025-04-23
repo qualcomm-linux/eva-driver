@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  *
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 /**
@@ -31,6 +31,7 @@ struct cvp_buf_type {
 	__u32 output_handle;
 	__u32 debug_flags;
 	__u32 crc;
+	__u32 context_bank_id;
 };
 
 /**

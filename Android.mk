@@ -3,6 +3,8 @@ ifeq ($(TARGET_KERNEL_DLKM_DISABLE), true)
 ifeq ($(TARGET_KERNEL_DLKM_EVA_OVERRIDE), true)
 ENABLE_EVA_KERNEL := true
 endif
+else
+ENABLE_EVA_KERNEL := true
 endif
 
 ifeq ($(ENABLE_EVA_KERNEL), true)

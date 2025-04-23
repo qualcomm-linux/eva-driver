@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __CVP_PAKALA_IO_H__
@@ -223,8 +223,12 @@
 		(CVP_NOC_CORE_BASE_OFFS + 0x7100)
 #define CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH \
 		(CVP_NOC_CORE_BASE_OFFS + 0x7104)
+#define CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW \
+		(CVP_NOC_CORE_BASE_OFFS + 0x7108)
 #define CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH \
 		(CVP_NOC_CORE_BASE_OFFS + 0x710C)
+#define CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW \
+		(CVP_NOC_CORE_BASE_OFFS + 0x7110)
 #define CVP_NOC_CORE_ERR_SWID_LOW_OFFS \
 		(CVP_NOC_CORE_BASE_OFFS + 0xA000)
 #define CVP_NOC_CORE_ERR_SWID_HIGH_OFFS \

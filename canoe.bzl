@@ -12,9 +12,9 @@ def define_canoe():
             #"CONFIG_TARGET_SYNX_ENABLE",
             "TARGET_SYNX_ENABLE",
             "TARGET_DSP_ENABLE",
-            #"TARGET_MMRM_ENABLE",
+            "TARGET_MMRM_ENABLE",
             "CONFIG_EVA_CANOE",
             #"TARGET_PRESIL_ENABLE",
-           # "CONFIG_MSM_MMRM"
+            "CONFIG_MSM_MMRM"
         ],
     )

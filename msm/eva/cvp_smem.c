@@ -145,7 +145,12 @@ static int msm_dma_put_device_address(u32 flags,
 	if (!mapping_info->dev || !mapping_info->table ||
 		!mapping_info->buf || !mapping_info->attach ||
 		!mapping_info->cb_info) {
-		dprintk(CVP_WARN, "Invalid params\n");
+		dprintk(CVP_WARN,
+			"Invalid params mapping_info: dev %x,table %x buf %x",
+			mapping_info->dev, mapping_info->table, mapping_info->buf);
+
+		dprintk(CVP_WARN, "attach %x cb_info %x\n",
+			mapping_info->attach, mapping_info->cb_info);
 		return -EINVAL;
 	}
 
@@ -328,6 +333,7 @@ static int msm_cvp_unmap_smem_helper(struct msm_cvp_smem *smem)
 	rc = msm_dma_put_device_address(smem->flags, &smem->mapping_info);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to put device address: %d\n", rc);
+		WARN_ON(true);
 		return rc;
 	}
 

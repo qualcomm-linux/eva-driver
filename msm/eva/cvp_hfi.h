@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __H_CVP_HFI_H__
@@ -354,7 +354,7 @@ struct cvp_hfi_msg_sys_property_info_packet {
 	u32 size;
 	u32 packet_type;
 	u32 num_properties;
-	u32 rg_property_data[128];
+	u32 rg_property_data[] __counted_by(size);
 };
 
 enum session_flags {
@@ -410,4 +410,5 @@ struct iris_hfi_device;
 int __tzbsp_set_cvp_state(enum tzbsp_subsys_state state);
 int __resume(struct iris_hfi_device *device);
 int __response_handler(struct iris_hfi_device *device);
+void __print_sfr_msg(struct iris_hfi_device *device);
 #endif

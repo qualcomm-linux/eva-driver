@@ -272,35 +272,48 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 	struct msm_cvp_inst *inst = NULL;
 	char *dbuf, *cur, *end;
 	ssize_t len = 0;
+	ssize_t debug_buf_len = 4096*4;
 
 	if (!core || !core->dev_ops) {
 		dprintk(CVP_ERR, "Invalid params, core: %pK\n", core);
 		return 0;
 	}
 
-	dbuf = kzalloc(MAX_DBG_BUF_SIZE, GFP_KERNEL);
+	dbuf = kzalloc(debug_buf_len, GFP_KERNEL);
 	if (!dbuf) {
 		dprintk(CVP_ERR, "%s: Allocation failed!\n", __func__);
 		return -ENOMEM;
 	}
 	cur = dbuf;
-	end = cur + MAX_DBG_BUF_SIZE;
+	end = cur + debug_buf_len;
 
 	mutex_lock(&core->lock);
-	list_for_each_entry(inst, &core->instances, list){
-		cvp_print_inst(CVP_ERR, inst);
+	list_for_each_entry(inst, &core->instances, list) {
 		cur += write_str(cur, end - cur, "==============================\n");
 		cur += write_str(cur, end - cur, "INSTANCE: %pK (%s)\n", inst,
 			inst->session_type == MSM_CVP_USER ? "User" : "Kernel");
 		cur += write_str(cur, end - cur, "proc name: %s\n", inst->proc_name);
 		cur += write_str(cur, end - cur, "session name: %s\n", inst->prop.session_name);
 		cur += write_str(cur, end - cur, "session id: %#x\n",hash32_ptr(inst->session));
+		cur += write_str(cur, end - cur, "is secure: %u\n", inst->prop.is_secure);
+		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
+		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
 	}
 	mutex_unlock(&core->lock);
 
 	len = simple_read_from_buffer(buf, count, ppos,
 			dbuf, cur - dbuf);
+
+	dprintk(CVP_DBG, "%s: len %d\n", __func__, len);
+
+	if (len == 0) {
+		mutex_lock(&core->lock);
+		list_for_each_entry(inst, &core->instances, list) {
+			cvp_print_inst(CVP_ERR, inst);
+		}
+		mutex_unlock(&core->lock);
+	}
 
 	kfree(dbuf);
 	return len;

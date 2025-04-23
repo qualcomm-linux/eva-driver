@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _MSM_CVP_INTERNAL_H_
@@ -27,7 +27,7 @@
 #include "cvp_hfi_helper.h"
 #include "msm_cvp_sw_dbg.h"
 
-#define MAX_SUPPORTED_INSTANCES 16
+#define MAX_SUPPORTED_INSTANCES 24
 #define MAX_CV_INSTANCES MAX_SUPPORTED_INSTANCES
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
@@ -49,6 +49,8 @@
 #define SESSION_NAME_MAX_LEN 256
 
 #define ARP_BUF_SIZE 0x300000
+
+#define ARP_CHUNK_SIZE 204800
 
 #define CVP_RT_PRIO_THRESHOLD 1
 
@@ -241,6 +243,7 @@ struct cvp_session_prop {
 	u32 priority;
 	u32 is_secure;
 	u32 dsp_mask;
+	u32 pkt_concurrency;
 	u32 fthread_nr;
 	u32 cycles[HFI_MAX_HW_THREADS];
 	u32 fw_cycles;
@@ -303,8 +306,13 @@ struct msm_cvp_core {
 	unsigned long orig_core_sum;
 	unsigned long bw_sum;
 	atomic64_t kernel_trans_id;
+	atomic_t va_watermark;
 	struct eva_kmd_debug kmd_dbg;
 	struct eva_kmd_trace kmd_trace;
+	ktime_t last_msg_ts;
+	ktime_t last_fw_fetch_ts;
+	u32 cur_cmd_q_read_offset;
+	u32 prev_cmd_q_read_offset;
 };
 
 struct msm_cvp_inst {
@@ -349,6 +357,7 @@ struct msm_cvp_inst {
 	struct cvp_fence_queue fence_cmd_queue;
 	char proc_name[TASK_COMM_LEN];
 	u32 pm_qos_latency;
+	atomic_t va_inst_watermark;
 };
 
 extern struct msm_cvp_drv *cvp_driver;

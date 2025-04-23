@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "hfi_packetization.h"
@@ -154,8 +154,8 @@ int cvp_create_pkt_cmd_sys_set_resource(
 
 		for (i = 0; i < hfi_sc_info->num_entries; i++) {
 			hfi_sc[i] = res_sc[i];
-		dprintk(CVP_PKT, "entry hfi#%d, sc_id %d, size %d\n",
-				 i, hfi_sc[i].sc_id, hfi_sc[i].size);
+		dprintk(CVP_PKT, "entry hfi#%d, sc_id %d, target_hw %d\n",
+				 i, hfi_sc[i].sc_id, hfi_sc[i].target_hw);
 		}
 		break;
 	}

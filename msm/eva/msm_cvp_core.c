@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-direction.h>
@@ -143,6 +143,17 @@ static void __deinit_session_queue(struct msm_cvp_inst *inst)
 	wake_up_all(&inst->session_queue.wq);
 }
 
+static void close_helper(struct kref *kref)
+{
+	struct msm_cvp_inst *inst;
+
+	if (!kref)
+		return;
+	inst = container_of(kref, struct msm_cvp_inst, kref);
+
+	msm_cvp_destroy(inst);
+}
+
 struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 {
 	struct msm_cvp_inst *inst = NULL;
@@ -240,21 +251,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	return inst;
 fail_init:
-	__deinit_session_queue(inst);
-	__deinit_fence_queue(inst);
-	mutex_lock(&core->lock);
-	list_del(&inst->list);
-	mutex_unlock(&core->lock);
-	mutex_destroy(&inst->sync_lock);
-	mutex_destroy(&inst->lock);
-
-	DEINIT_MSM_CVP_LIST(&inst->persistbufs);
-	DEINIT_DMAMAP_CACHE(&inst->dma_cache);
-	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
-	DEINIT_MSM_CVP_LIST(&inst->frames);
-
-	kfree(inst);
-	inst = NULL;
+	kref_put(&inst->kref, close_helper);
 err_invalid_core:
 	return inst;
 }
@@ -306,8 +303,17 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 	sqf = &inst->session_queue_fence;
 	sq = &inst->session_queue;
 
-	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 5;
-	msm_cvp_session_queue_stop(inst);
+	tmp = cvp_get_inst_validate(inst->core, inst);
+	if (!tmp) {
+		dprintk(CVP_ERR, "%s has a invalid session %llx\n",
+			__func__, inst);
+		goto exit;
+	}
+
+	rc = msm_cvp_session_flush_stop(inst);
+	if (rc)
+		goto err_timeout;
+	cvp_put_inst(tmp);
 
 	max_retries =  inst->core->resources.msm_cvp_hw_rsp_timeout >> 1;
 wait_frame:
@@ -335,20 +341,6 @@ wait_frame:
 		inst->core->synx_ftbl->cvp_dump_fence_queue(inst);
 	}
 
-	tmp = cvp_get_inst_validate(inst->core, inst);
-	if (!tmp) {
-		dprintk(CVP_ERR, "%s has a invalid session %llx\n",
-			__func__, inst);
-		goto exit;
-	}
-
-	if (inst->session_queue.state != QUEUE_STOP) {
-		rc = msm_cvp_session_flush_stop(inst);
-		if (rc)
-			goto err_timeout;
-		/* Continue to release ARP anyway */
-	}
-	cvp_put_inst(tmp);
 exit:
 	if (cvp_release_arp_buffers(inst))
 		dprintk_rl(CVP_WARN,
@@ -426,17 +418,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		atomic_read(&cvp_driver->buf_cache.nr_objs),
 		atomic_read(&cvp_driver->smem_cache.nr_objs));
 	return 0;
-}
-
-static void close_helper(struct kref *kref)
-{
-	struct msm_cvp_inst *inst;
-
-	if (!kref)
-		return;
-	inst = container_of(kref, struct msm_cvp_inst, kref);
-
-	msm_cvp_destroy(inst);
 }
 
 int msm_cvp_close(void *instance)
