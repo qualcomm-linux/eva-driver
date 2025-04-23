@@ -1565,6 +1565,7 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	inst->prop.priority = dsp2cpu_cmd->session_prio;
 	inst->prop.is_secure = dsp2cpu_cmd->is_secure;
 	inst->prop.dsp_mask = dsp2cpu_cmd->dsp_access_mask;
+	inst->prop.pkt_concurrency = 8;
 
 	eva_fastrpc_driver_add_sess(frpc_node, inst);
 	rc = msm_cvp_session_create(inst);
