@@ -1669,8 +1669,8 @@ void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 		dprintk(CVP_ERR,
 			"%s pid 0x%x not registered with fastrpc, but allow delete session\n",
 			__func__, dsp2cpu_cmd->pid);
-		// cmd->ret = -1;
-		// return;
+		cmd->ret = -1;
+		goto dsp_fail_delete;
 	} else {
 		cvp_put_fastrpc_node(frpc_node);
 	}
