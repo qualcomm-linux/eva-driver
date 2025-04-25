@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only
  *
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_MSM_CVP_EVENTS_H_) || defined(TRACE_HEADER_MULTI_READ)
@@ -16,7 +16,7 @@
 #undef TRACE_INCLUDE_FILE
 #define TRACE_INCLUDE_FILE msm_cvp_events
 
-#define USE_PERFETTO
+// #define USE_PERFETTO
 
 #ifdef USE_PERFETTO
 
@@ -46,29 +46,37 @@
 // adb shell "echo 1 > /sys/kernel/tracing/events/msm_cvp/tracing_mark_write/enable"
 
 TRACE_EVENT(tracing_mark_write,
-	TP_PROTO(int pid, const char *name, bool trace_begin),
-	TP_ARGS(pid, name, trace_begin),
+	TP_PROTO(char trace_type, const struct task_struct *task,
+		const char *name, int value),
+	TP_ARGS(trace_type, task, name, value),
 	TP_STRUCT__entry(
-		__field(int, pid)
-		__string(trace_name, name)
-		__field(bool, trace_begin)
+			__field(char, trace_type)
+			__field(int, pid)
+			__string(trace_name, name)
+			__field(int, value)
 	),
 	TP_fast_assign(
-		__entry->pid = pid;
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
-		__assign_str(trace_name);
+			__entry->trace_type = trace_type;
+			__entry->pid = task ? task->tgid : 0;
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+			__assign_str(trace_name);
 #else
-		__assign_str(trace_name, name);
+			__assign_str(trace_name, name);
 #endif
-		__entry->trace_begin = trace_begin;
-		),
-	TP_printk("%s|%d|%s", __entry->trace_begin ? "B" : "E",
-		__entry->pid, __get_str(trace_name))
+			__entry->value = value;
+	),
+	TP_printk("%c|%d|%s|%d", __entry->trace_type,
+			__entry->pid, __get_str(trace_name), __entry->value)
 )
+/*
 #define CVPKERNEL_ATRACE_END(name) \
 		trace_tracing_mark_write(current->tgid, name, 0)
 #define CVPKERNEL_ATRACE_BEGIN(name) \
 		trace_tracing_mark_write(current->tgid, name, 1)
+*/
+
+#define CVPKERNEL_ATRACE_END(name) trace_tracing_mark_write('E', current, name, 0)
+#define CVPKERNEL_ATRACE_BEGIN(name) trace_tracing_mark_write('B', current, name, 0)
 
 #endif  // #ifdef USE_PERFETTO
 
