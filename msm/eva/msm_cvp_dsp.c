@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/module.h>
 #include <linux/rpmsg.h>
@@ -118,6 +118,7 @@ static int cvp_dsp_send_cmd_hfi_queue(phys_addr_t *phys_addr,
 	cmd.type = CPU2DSP_SEND_HFI_QUEUE;
 	cmd.msg_ptr = (uint64_t)phys_addr;
 	cmd.msg_ptr_len = size_in_bytes;
+	cmd.hfi_version = 1;
 	cmd.ddr_type = cvp_of_fdt_get_ddrtype();
 	if (cmd.ddr_type < 0) {
 		dprintk(CVP_WARN,

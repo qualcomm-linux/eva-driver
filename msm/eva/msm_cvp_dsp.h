@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef MSM_CVP_DSP_H
@@ -161,9 +161,9 @@ struct cvp_dsp_cmd_msg {
 	int32_t ret;
 	uint64_t msg_ptr;
 	uint32_t msg_ptr_len;
-	uint32_t buff_fd_iova;
-	uint32_t buff_index;
-	uint32_t buff_size;
+	uint32_t transaction_id;
+	uint32_t hfi_version;
+	uint32_t recycle1;
 	uint32_t session_id;
 	int32_t ddr_type;
 	uint32_t buff_fd;
