@@ -452,4 +452,5 @@ int __response_handler(struct iris_hfi_device *device);
 
 void __print_sfr_msg(struct iris_hfi_device *device);
 
+u32 msm_cvp_set_fw_version(char *image_version);
 #endif

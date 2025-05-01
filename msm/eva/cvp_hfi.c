@@ -6388,4 +6388,72 @@ void cvp_clock_reg_print(struct iris_hfi_device *dev)
 	dprintk(CVP_ERR, "CVP_GCC_EVA_XO_CBCR: %x\n", reg);
 }
 
+static bool msm_cvp_validate_fw_version(char version)
+{
+	bool is_numeric = true;
+	const int char_of_0 = 48, char_of_9 = 57;
+
+	if (((int)version < char_of_0) || ((int)version > char_of_9)) {
+		is_numeric = false;
+		dprintk(CVP_WARN, "%s:non-numeric char %x\n", __func__, version);
+	}
+
+	return is_numeric;
+}
+
+u32 msm_cvp_set_fw_version(char *image_version)
+{
+	u32 fw_version = 0;
+	u8 major_version, minor_version, rev_version_1, rev_version_2;
+	u32 rev_version_merged = 0;
+	u8 char_correction = 48;
+	char fw_string[] = "EVA.FIRMWARE.";
+	char version_subarray[10];
+	size_t copy_bytes = 6;
+	size_t fw_string_size = ARRAY_SIZE(fw_string) - 1;
+
+	char *vptr = strnstr(image_version, fw_string, 128);
+
+	if (vptr == NULL) {
+		dprintk(CVP_WARN, "%s: EVA.FIRMWARE not found in sys props\n", __func__);
+		goto error_fw_version;
+	}
+
+	vptr = vptr + fw_string_size;
+
+	memcpy(version_subarray, vptr, copy_bytes);
+
+	if (!msm_cvp_validate_fw_version(version_subarray[0]))
+		goto error_fw_version;
+
+	major_version = (u8)version_subarray[0] - char_correction;
+
+	if (!msm_cvp_validate_fw_version(version_subarray[2]))
+		goto error_fw_version;
+
+	minor_version = (u8)version_subarray[2] - char_correction;
+
+	if (!msm_cvp_validate_fw_version(version_subarray[4]))
+		goto error_fw_version;
+
+	rev_version_1 = (u8)version_subarray[4] - char_correction;
+
+	if (!msm_cvp_validate_fw_version(version_subarray[5])) {
+		rev_version_merged = rev_version_1;
+	} else {
+		rev_version_2 = (u8)version_subarray[5] - char_correction;
+		rev_version_merged = (rev_version_1 * 10) + rev_version_2;
+	}
+
+	fw_version = (((u32)major_version << 24) |
+	((u32)minor_version << 16) | rev_version_merged);
+
+	dprintk(CVP_CORE, "%s: fw version set:0x%x\n", __func__, fw_version);
+	return fw_version;
+
+error_fw_version:
+	dprintk(CVP_WARN, "%s: Failed to set fw version\n", __func__);
+	return fw_version;
+}
+
 
