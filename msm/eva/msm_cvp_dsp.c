@@ -369,6 +369,51 @@ exit:
 	return frpc_node;
 }
 
+/* The function may not return for up to 50ms */
+static struct cvp_dsp_fastrpc_driver_entry *pop_frpc_node_with_handle(uint32_t handle)
+{
+	struct cvp_dsp_apps *me = &gfa_cv;
+	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
+	struct list_head *ptr = NULL, *next = NULL;
+	u32 refcount, max_count = 10;
+
+search_again:
+	ptr = &me->fastrpc_driver_list.list;
+	if (!ptr) {
+		frpc_node = NULL;
+		goto exit;
+	}
+
+	mutex_lock(&me->fastrpc_driver_list.lock);
+	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
+		if (!ptr)
+			break;
+		frpc_node = list_entry(ptr,
+			struct cvp_dsp_fastrpc_driver_entry, list);
+
+		if (frpc_node && frpc_node->handle == handle) {
+			refcount = atomic_read(&frpc_node->refcount);
+			if (refcount > 0) {
+				mutex_unlock(&me->fastrpc_driver_list.lock);
+				usleep_range(5000, 10000);
+				if (max_count-- == 0) {
+					dprintk(CVP_ERR, "%s timeout\n",
+							__func__);
+					frpc_node = NULL;
+					goto exit;
+				}
+				goto search_again;
+			}
+			list_del(&frpc_node->list);
+			break;
+		}
+	}
+
+	mutex_unlock(&me->fastrpc_driver_list.lock);
+exit:
+	return frpc_node;
+}
+
 static void cvp_dsp_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	struct cvp_dsp_apps *me = &gfa_cv;
@@ -1219,11 +1264,11 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		dprintk(CVP_ERR, "Unregister pid != hndl %#x %#x\n",
 				handle, dsp2cpu_cmd->pid);
 
-	/* Foundd fastrpc node */
-	frpc_node = cvp_get_fastrpc_node_with_handle(handle);
+	/* Found fastrpc node */
+	frpc_node = pop_frpc_node_with_handle(handle);
 
 	if (frpc_node == NULL) {
-		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered\n",
+		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered/search timed out\n",
 			__func__, handle);
 		return;
 	}
