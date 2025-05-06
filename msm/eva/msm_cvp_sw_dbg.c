@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "msm_cvp_internal.h"
@@ -154,5 +154,96 @@ void eva_kmd_debug_log_dump(void)
 		return;
 	}
 	memcpy(write_ptr, &(core->kmd_trace.kmd_debug_log), sizeof(struct eva_kmd_debug_log));
+#endif
+}
+
+static int eva_queue_dump(struct cvp_iface_q_info *iface_q,
+		u8 *align_virtual_addr, uint32_t queue_idx)
+{
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct cvp_hfi_queue_header *q_hdr = NULL;
+	u32 *write_ptr = NULL;
+
+	q_hdr = (struct cvp_hfi_queue_header *)iface_q->q_hdr;
+	if (!q_hdr || (iface_q->q_array.align_virtual_addr == NULL)) {
+		dprintk(CVP_ERR, "%s: Cannot read from shared Queue\n", __func__);
+		return -1;
+	}
+	write_ptr = (u32 *)(align_virtual_addr + queue_idx);
+	if (write_ptr < (u32 *)align_virtual_addr ||
+			write_ptr > (u32 *)(align_virtual_addr
+				+ queue_idx + SW_DBG_UMD_KMD_SIZE)) {
+		dprintk(CVP_ERR, "%s: write_ptr is OOB for Queue\n", __func__);
+		return -1;
+	}
+	memcpy(write_ptr, q_hdr, sizeof(struct cvp_hfi_queue_header));
+	write_ptr = (u32 *)(align_virtual_addr + queue_idx
+			+ sizeof(struct cvp_hfi_queue_header));
+	memcpy(write_ptr, iface_q->q_array.align_virtual_addr, iface_q->q_array.mem_size);
+	return 0;
+#endif
+}
+
+void eva_cmd_msg_queue_dump(void)
+{
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct msm_cvp_core *core = NULL;
+	struct cvp_iface_q_info *iface_q = NULL;
+	struct iris_hfi_device *dev = NULL;
+	struct cvp_hfi_ops *ops_tbl = NULL;
+	u8 *align_virtual_addr = NULL;
+	int rc = 0;
+
+	pr_info(CVP_PID_TAG "%s : CMD Queue dump to SW DBG Buffer\n",
+			current->pid, current->tgid, "info", __func__);
+	core = cvp_driver->cvp_core;
+	if (!core) {
+		dprintk(CVP_ERR, "%s: Core is NULL!\n", __func__);
+		return;
+	}
+	ops_tbl = core->dev_ops;
+	if (ops_tbl)
+		dev = ops_tbl->hfi_device_data;
+	if (!dev) {
+		dprintk(CVP_ERR, "%s: dev is NULL\n", __func__);
+		return;
+	}
+	align_virtual_addr = dev->sw_dbg_buf.align_virtual_addr;
+	if (align_virtual_addr ==  NULL) {
+		dprintk(CVP_ERR, "%s: SW debug buffer is not allocated\n", __func__);
+		return;
+	}
+
+	/* Dump CMD queue */
+	iface_q = &dev->iface_queues[CVP_IFACEQ_CMDQ_IDX];
+	rc = eva_queue_dump(iface_q, align_virtual_addr, SW_DBG_CMD_Q_IDX);
+	if (rc) {
+		dprintk(CVP_ERR, "%s: Cannot read from CMD Queue\n", __func__);
+		return;
+	}
+
+	/* Dump MSG queue */
+	iface_q = &dev->iface_queues[CVP_IFACEQ_MSGQ_IDX];
+	rc = eva_queue_dump(iface_q, align_virtual_addr, SW_DBG_MSG_Q_IDX);
+	if (rc) {
+		dprintk(CVP_ERR, "%s: Cannot read from MSG Queue\n", __func__);
+		return;
+	}
+
+	/* Dump DSP CMD queue */
+	iface_q = &dev->dsp_iface_queues[CVP_IFACEQ_CMDQ_IDX];
+	rc = eva_queue_dump(iface_q, align_virtual_addr, SW_DBG_DSP_CMD_Q_IDX);
+	if (rc) {
+		dprintk(CVP_ERR, "%s: Cannot read from DSP CMD Queue\n", __func__);
+		return;
+	}
+
+	/* Dump DSP MSG queue */
+	iface_q = &dev->dsp_iface_queues[CVP_IFACEQ_MSGQ_IDX];
+	rc = eva_queue_dump(iface_q, align_virtual_addr, SW_DBG_DSP_MSG_Q_IDX);
+	if (rc) {
+		dprintk(CVP_ERR, "%s: Cannot read from DSP MSG Queue\n", __func__);
+		return;
+	}
 #endif
 }
