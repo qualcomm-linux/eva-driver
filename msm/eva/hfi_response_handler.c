@@ -648,10 +648,12 @@ static void hfi_process_sys_get_prop_image_version(
 	const u32 version_string_size = 128;
 	u8 *str_image_version;
 	int req_bytes;
+	struct msm_cvp_core *core;
+
+	core = cvp_driver->cvp_core;
 
 	req_bytes = pkt->size - sizeof(*pkt);
-	if (req_bytes < (signed int)version_string_size ||
-			!pkt->rg_property_data[1] ||
+	if (!pkt->rg_property_data[1] ||
 			pkt->num_properties > 1) {
 		dprintk(CVP_ERR, "%s: bad_pkt: %d\n", __func__, req_bytes);
 		return;
@@ -670,6 +672,8 @@ static void hfi_process_sys_get_prop_image_version(
 	}
 	cvp_driver->fw_version[i - 1] = '\0';
 	dprintk(CVP_HFI, "F/W version: %s\n", cvp_driver->fw_version);
+
+	core->fw_version = msm_cvp_set_fw_version(cvp_driver->fw_version);
 }
 
 static int hfi_process_sys_property_info(u32 device_id,
@@ -677,10 +681,11 @@ static int hfi_process_sys_property_info(u32 device_id,
 {
 	struct cvp_hfi_msg_sys_property_info_packet *pkt =
 			(struct cvp_hfi_msg_sys_property_info_packet *)hdr;
+	const u32 version_string_size = 128;
 	if (!pkt) {
 		dprintk(CVP_ERR, "%s: invalid param\n", __func__);
 		return -EINVAL;
-	} else if (pkt->size > sizeof(*pkt)) {
+	} else if (pkt->size > sizeof(*pkt) + (version_string_size * sizeof(u32))) {
 		dprintk(CVP_ERR,
 				"%s: bad_pkt_size %d\n", __func__, pkt->size);
 		return -E2BIG;
