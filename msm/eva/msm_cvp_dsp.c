@@ -369,6 +369,51 @@ exit:
 	return frpc_node;
 }
 
+/* The function may not return for up to 50ms */
+static struct cvp_dsp_fastrpc_driver_entry *pop_frpc_node_with_handle(uint32_t handle)
+{
+	struct cvp_dsp_apps *me = &gfa_cv;
+	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
+	struct list_head *ptr = NULL, *next = NULL;
+	u32 refcount, max_count = 10;
+
+search_again:
+	ptr = &me->fastrpc_driver_list.list;
+	if (!ptr) {
+		frpc_node = NULL;
+		goto exit;
+	}
+
+	mutex_lock(&me->fastrpc_driver_list.lock);
+	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
+		if (!ptr)
+			break;
+		frpc_node = list_entry(ptr,
+			struct cvp_dsp_fastrpc_driver_entry, list);
+
+		if (frpc_node && frpc_node->handle == handle) {
+			refcount = atomic_read(&frpc_node->refcount);
+			if (refcount > 0) {
+				mutex_unlock(&me->fastrpc_driver_list.lock);
+				usleep_range(5000, 10000);
+				if (max_count-- == 0) {
+					dprintk(CVP_ERR, "%s timeout\n",
+							__func__);
+					frpc_node = NULL;
+					goto exit;
+				}
+				goto search_again;
+			}
+			list_del(&frpc_node->list);
+			break;
+		}
+	}
+
+	mutex_unlock(&me->fastrpc_driver_list.lock);
+exit:
+	return frpc_node;
+}
+
 static void cvp_dsp_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	struct cvp_dsp_apps *me = &gfa_cv;
@@ -1219,11 +1264,11 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		dprintk(CVP_ERR, "Unregister pid != hndl %#x %#x\n",
 				handle, dsp2cpu_cmd->pid);
 
-	/* Foundd fastrpc node */
-	frpc_node = cvp_get_fastrpc_node_with_handle(handle);
+	/* Found fastrpc node */
+	frpc_node = pop_frpc_node_with_handle(handle);
 
 	if (frpc_node == NULL) {
-		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered\n",
+		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered/search timed out\n",
 			__func__, handle);
 		return;
 	}
@@ -1565,6 +1610,7 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	inst->prop.priority = dsp2cpu_cmd->session_prio;
 	inst->prop.is_secure = dsp2cpu_cmd->is_secure;
 	inst->prop.dsp_mask = dsp2cpu_cmd->dsp_access_mask;
+	inst->prop.pkt_concurrency = 8;
 
 	eva_fastrpc_driver_add_sess(frpc_node, inst);
 	rc = msm_cvp_session_create(inst);
@@ -1668,8 +1714,8 @@ void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 		dprintk(CVP_ERR,
 			"%s pid 0x%x not registered with fastrpc, but allow delete session\n",
 			__func__, dsp2cpu_cmd->pid);
-		// cmd->ret = -1;
-		// return;
+		cmd->ret = -1;
+		goto dsp_fail_delete;
 	} else {
 		cvp_put_fastrpc_node(frpc_node);
 	}
@@ -2325,7 +2371,12 @@ static struct file *msm_cvp_fget(unsigned int fd, struct task_struct *task,
 	rcu_read_unlock();
 #else
 	unsigned int ret_fd = fd;
+
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+	file = fget_task_next(task, &ret_fd);
+#else
 	file = task_lookup_next_fdget_rcu(task, &ret_fd);
+#endif
 	if (ret_fd != fd)
 		dprintk(CVP_ERR, "%s FAILED to get file from fd = %u, %u\n",
 			__func__, fd, ret_fd);

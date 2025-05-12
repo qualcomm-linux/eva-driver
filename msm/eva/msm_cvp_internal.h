@@ -27,7 +27,7 @@
 #include "cvp_hfi_helper.h"
 #include "msm_cvp_sw_dbg.h"
 
-#define MAX_SUPPORTED_INSTANCES 24
+#define MAX_SUPPORTED_INSTANCES 32
 #define MAX_CV_INSTANCES MAX_SUPPORTED_INSTANCES
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
@@ -297,6 +297,7 @@ struct msm_cvp_core {
 	struct work_struct ssr_work;
 	enum hal_ssr_trigger_type ssr_type;
 	u32 soc_version;
+	u32 fw_version;
 	u32 smmu_fault_count;
 	u32 last_fault_addr;
 	u32 ssr_count;
