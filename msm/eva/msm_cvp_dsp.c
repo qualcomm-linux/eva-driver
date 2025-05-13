@@ -1334,9 +1334,6 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		DEINIT_MSM_CVP_LIST(&frpc_node->cvpdspbufs);
 
 		cvp_put_fastrpc_node(frpc_node);
-		if (!dequeue_frpc_node(frpc_node))
-			/* Don't find the node */
-			return;
 
 		__fastrpc_driver_unregister(&frpc_node->cvp_fastrpc_driver);
 		mutex_lock(&me->driver_name_lock);
