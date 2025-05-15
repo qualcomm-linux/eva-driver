@@ -2351,6 +2351,55 @@ const char *get_pkt_name_from_type_v2(u32 pkt_type)
 		return "";
 }
 #endif
+const char *get_feature_name_from_type(u32 pkt_type)
+{
+	switch (pkt_type) {
+	case HFI_CV_KERNEL_FPX:
+		return "FPX";
+	case HFI_CV_KERNEL_WARP:
+		return "WARP";
+	case HFI_CV_KERNEL_DESCRIPTOR:
+		return "DESCRIPTOR";
+	case HFI_CV_KERNEL_NCC:
+		return "NCC";
+	case HFI_CV_KERNEL_DFS:
+		return "DFS";
+	case HFI_CV_KERNEL_WARP_NCC:
+		return "WARP NCC";
+	case HFI_CV_KERNEL_ORB:
+		return "ORB";
+	case HFI_CV_KERNEL_PYS_HCD:
+		return "Pyramid HCD";
+	case HFI_CV_KERNEL_ICA:
+		return "ICA";
+	case HFI_CV_KERNEL_GCX:
+		return "GSX";
+	case HFI_CV_KERNEL_XRA:
+		return "XRA";
+	case HFI_CV_KERNEL_CSC:
+		return "CSC";
+	case HFI_CV_KERNEL_LSR:
+		return "LSR";
+	case HFI_CV_KERNEL_ITOF:
+		return "ITOF";
+	case HFI_CV_KERNEL_RGE:
+		return "RGE";
+	case HFI_CV_KERNEL_LME:
+		return "LME";
+	case HFI_CV_KERNEL_SPSTAT:
+		return "Spatial Stats";
+	case HFI_CV_KERNEL_GME:
+		return "GME";
+	case HFI_CV_KERNEL_SCALER:
+		return "SCALER";
+	case HFI_CV_KERNEL_MATCH:
+		return "MATCH";
+	case HFI_CV_KERNEL_BLOB:
+		return "BLOB";
+	default:
+		return " ";
+	}
+}
 MODULE_DEVICE_TABLE(of, msm_cvp_dt_match);
 
 int cvp_of_fdt_get_ddrtype(void)
