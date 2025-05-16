@@ -36,6 +36,9 @@ ddk_headers(
 load(":canoe.bzl", "define_canoe")
 define_canoe()
 
+load(":alor.bzl", "define_alor")
+define_alor()
+
 load(":sun.bzl", "define_sun")
 define_sun()
 
