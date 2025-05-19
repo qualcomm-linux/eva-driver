@@ -23,10 +23,6 @@
 #include <linux/interrupt.h>
 #include <linux/version.h>
 #include <linux/soc/qcom/msm_mmrm.h>
-enum core_gdsc_dest {
-	TO_SW_CTRL = 0x0,
-	TO_HW_CTRL = 0x1
-};
 
 #define HFI_MASK_QHDR_TX_TYPE			0xFF000000
 #define HFI_MASK_QHDR_RX_TYPE			0x00FF0000
@@ -256,10 +252,7 @@ struct cvp_hal_ops {
 	int (*set_registers)(struct iris_hfi_device *device);
 	void (*dump_noc_regs)(struct iris_hfi_device *device);
 	int (*enable_hw_power_collapse)(struct iris_hfi_device *device);
-	int (*reset_control_assert_name)(struct iris_hfi_device *device, const char *name);
-	int (*reset_control_deassert_name)(struct iris_hfi_device *device, const char *name);
-	int (*reset_control_acquire_name)(struct iris_hfi_device *device, const char *name);
-	int (*reset_control_release_name)(struct iris_hfi_device *device, const char *name);
+	void (*check_tensilica_in_reset)(struct iris_hfi_device *device);
 };
 
 struct iris_hfi_device {
