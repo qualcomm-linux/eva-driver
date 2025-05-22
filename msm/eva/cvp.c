@@ -289,7 +289,7 @@ static int set_hal_functions(const char *chip_id)
 	if (strcmp(chip_id, "qcom,canoe-cvp") == 0) {
 		set_kaanapali_hal_functions();
 		return 0;
-	} else if (strcmp(chip_id, "qcom,pineapple-cvp") == 0) {
+	} else if (strcmp(chip_id, "qcom,sun-cvp") == 0) {
 		set_pakala_hal_functions();
 		return 0;
 	}
