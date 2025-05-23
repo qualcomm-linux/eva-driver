@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025  Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/compat.h>
@@ -26,7 +26,8 @@ static int _get_pkt_hdr_from_user(struct eva_kmd_arg __user *up,
 		return -EFAULT;
 
 	if (get_pkt_index(pkt_hdr) < 0) {
-		dprintk(CVP_ERR, "user mode provides incorrect hfi\n");
+		dprintk(CVP_ERR, "user mode provides incorrect hfi 0x%x\n",
+			pkt_hdr->packet_type);
 		goto set_default_pkt_hdr;
 	}
 

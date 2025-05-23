@@ -243,6 +243,13 @@ struct cvp_hal_cmd_sys_get_property_packet {
 #define PKT_NAME_LEN	64
 #define MAX_PKT_IDX	0x200
 
+#define CTRL_OFFSET 0x32
+#define CONFIG_OFFSET 0x64
+#define FRAME_OFFSET 0x96
+
+#define MSG_SESSION_EVA_CTRL_INDEX 0x32
+#define MSG_SESSION_INDEX 0x64
+
 struct msm_cvp_hfi_defs {
 	unsigned int size;
 	unsigned int type;
@@ -308,7 +315,7 @@ void cvp_hfi_deinitialize(enum msm_cvp_hfi_type hfi_type,
 			struct cvp_hfi_ops *hdev);
 
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr);
-int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt* hdr);
+int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr);
 int get_pkt_index_from_type(u32 pkt_type);
 const char *get_pkt_name_from_type(u32 pkt_type);
 int get_hfi_version(void);
@@ -321,5 +328,7 @@ extern struct msm_cvp_hfi_defs *cvp_hfi_defs;
 extern struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX];
 extern struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
 extern struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX];
+extern struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX];
+extern struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX];
 void print_hfi_queue_info(struct cvp_hfi_ops *hdev);
 #endif /*__CVP_HFI_API_H__ */

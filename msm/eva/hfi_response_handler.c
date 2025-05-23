@@ -695,7 +695,11 @@ static int hfi_process_sys_property_info(u32 device_id,
 	}
 
 	switch (pkt->rg_property_data[0]) {
+#ifdef CONFIG_EVA_SUN
 	case HFI_PROPERTY_SYS_IMAGE_VERSION:
+#else
+	case HFI_PROPERTY_SYS_EVA_FW_VERSION:
+#endif
 		hfi_process_sys_get_prop_image_version(pkt);
 
 		*info = (struct msm_cvp_cb_info) {
@@ -753,10 +757,18 @@ int cvp_hfi_process_msg_packet(u32 device_id, void *hdr,
 	case HFI_MSG_SESSION_CVP_FLUSH:
 		pkt_func = (pkt_func_def)hfi_process_session_flush_done;
 		break;
+#ifdef CONFIG_EVA_SUN
 	case HFI_MSG_SESSION_EVA_START:
+#else
+	case HFI_MSG_SESSION_EVA_START_DONE:
+#endif
 		pkt_func = (pkt_func_def)hfi_process_session_start_done;
 		break;
+#ifdef CONFIG_EVA_SUN
 	case HFI_MSG_SESSION_EVA_STOP:
+#else
+	case HFI_MSG_SESSION_EVA_STOP_DONE:
+#endif
 		pkt_func = (pkt_func_def)hfi_process_session_stop_done;
 		break;
 	case HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY:

@@ -960,4 +960,8 @@ static inline bool is_params_pkt(int pkt_type)
 	return false;
 }
 
+int get_pkt_index_v1(struct cvp_hal_session_cmd_pkt *hdr);
+int get_pkt_fenceoverride_v1(struct cvp_hal_session_cmd_pkt *hdr);
+int get_pkt_index_from_type_v1(u32 pkt_type);
+const char *get_pkt_name_from_type_v1(u32 pkt_type);
 #endif
