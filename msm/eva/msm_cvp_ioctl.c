@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025  Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/compat.h>
 #include "cvp_private.h"
 #include "cvp_hfi_api.h"
+#include "msm_cvp_common.h"
 
 static int _get_pkt_hdr_from_user(struct eva_kmd_arg __user *up,
 		struct cvp_hal_session_cmd_pkt *pkt_hdr)
@@ -621,7 +622,20 @@ static long cvp_ioctl(struct msm_cvp_inst *inst,
 		kfree(karg);
 		return -EFAULT;
 	}
+	if (((msm_cvp_debug & CVP_PERF) == CVP_PERF) &&
+		(karg->type == EVA_KMD_SEND_CMD_PKT)) {
+		u32 pkt_id = 0;
+		u64 aontimer = 0;
+		const char *command_name = "";
+		struct cvp_hfi_cmd_session_hdr *hdr = NULL;
 
+		hdr = (struct cvp_hfi_cmd_session_hdr *)&karg->data.hfi_pkt;
+		pkt_id  = hdr->header.packet_type;
+		command_name = get_pkt_name_from_type(pkt_id);
+		aontimer = get_aon_time();
+		dprintk(CVP_PERF, "%s: msg packet %s received from umd at aontimer %llu\n",
+			__func__, command_name, aontimer);
+	}
 	rc = msm_cvp_private((void *)inst, cmd, karg);
 	if (rc) {
 		dprintk(CVP_ERR, "%s: failed cmd type %x %d\n",

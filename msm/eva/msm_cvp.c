@@ -175,6 +175,17 @@ static int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
 	rc = cvp_wait_process_message(inst, sq, NULL, wait_time, out_pkt);
 
 	msg_hdr = (struct cvp_hfi_msg_session_hdr *)out_pkt;
+	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+		u32 pkt_id = 0;
+		u64 aontimer = 0;
+		const char *command_name = "";
+
+		pkt_id  = msg_hdr->header.packet_type;
+		command_name = get_pkt_name_from_type(pkt_id);
+		aontimer = get_aon_time();
+		dprintk(CVP_PERF, "%s: msg packet %s sent back to umd at aontimer %llu\n",
+			__func__, command_name, aontimer);
+	}
 	msm_cvp_msg_tracing_from_sw(msg_hdr, "EVA_KMD_REV_END");
 
 	cvp_put_inst(inst);
