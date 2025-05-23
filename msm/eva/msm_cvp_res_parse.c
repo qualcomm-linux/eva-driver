@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/iommu.h>
@@ -1001,6 +1001,7 @@ int cvp_read_platform_resources_from_dt(
 {
 	struct msm_cvp_platform_resources *res;
 	struct platform_device *pdev;
+	struct msm_cvp_platform_data *pdata;
 	struct resource *kres = NULL;
 	int rc = 0;
 	uint32_t firmware_base = 0;
@@ -1121,6 +1122,10 @@ int cvp_read_platform_resources_from_dt(
 		dprintk(CVP_CORE,
 				"Using fw-bias : %pa", &res->firmware_base);
 	}
+
+	pdata = core->platform_data;
+	cvp_hfi_defs = pdata->cvp_hfi;
+	cvp_hfi_msg_defs = pdata->cvp_hfi_msg;
 
 return rc;
 

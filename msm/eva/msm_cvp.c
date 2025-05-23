@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include "msm_cvp.h"
@@ -140,7 +140,7 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 	CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
 	memcpy(out, &msg->pkt, get_msg_size(hdr));
 	CVPKERNEL_ATRACE_END("before and after memcpy");
-	if (hdr->header.client_data.kdata >= ARRAY_SIZE(cvp_hfi_defs))
+	if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
 		msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
 	cvp_kmem_cache_free(&cvp_driver->msg_cache, msg);
 

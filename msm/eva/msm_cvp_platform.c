@@ -460,6 +460,8 @@ static struct msm_cvp_platform_data default_data = {
 	.ubwc_config = 0x0,
 	.noc_qos = 0x0,
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8450_data = {
@@ -470,6 +472,8 @@ static struct msm_cvp_platform_data sm8450_data = {
 	.ubwc_config = kona_ubwc_data,
 	.noc_qos = &waipio_noc_qos,
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8550_data = {
@@ -480,6 +484,8 @@ static struct msm_cvp_platform_data sm8550_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8550_tvm_data = {
@@ -490,6 +496,8 @@ static struct msm_cvp_platform_data sm8550_tvm_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 2,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8650_data = {
@@ -500,6 +508,8 @@ static struct msm_cvp_platform_data sm8650_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8750_data = {
@@ -510,6 +520,8 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8850_data = {
@@ -520,6 +532,8 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 };
 
 static struct msm_cvp_platform_data sm8845_data = {
@@ -564,6 +578,9 @@ static const struct of_device_id msm_cvp_dt_match[] = {
 	{},
 };
 
+struct msm_cvp_hfi_defs *cvp_hfi_defs;
+struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
+
 /*
  * WARN: name field CAN NOT hold more than 63 chars
  *	 excluding the ending '\0'
@@ -571,7 +588,7 @@ static const struct of_device_id msm_cvp_dt_match[] = {
  * NOTE: the def entry index for the command packet is
  *	 "the packet type - HFI_CMD_SESSION_CVP_START"
  */
-const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
+struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 	[HFI_CMD_SESSION_CVP_DFS_CONFIG - HFI_CMD_SESSION_CVP_START] =
 		{
 			.size = HFI_DFS_CONFIG_CMD_SIZE,
@@ -1205,7 +1222,7 @@ const struct msm_cvp_hfi_defs cvp_hfi_defs[MAX_PKT_IDX] = {
  *  "the packet type - HFI_MSG_SESSION_CVP_START"
  */
 
-const struct msm_cvp_hfi_defs cvp_hfi_msg_defs[MAX_PKT_IDX] = {
+struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX] = {
 	[HFI_MSG_SESSION_CVP_FPX - HFI_MSG_SESSION_CVP_START] = {
 		.size = 0xFFFFFFFF,
 		.type = HFI_MSG_SESSION_CVP_FPX,

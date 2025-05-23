@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/bitops.h>
@@ -10,7 +10,6 @@
 #include <linux/interrupt.h>
 #include <linux/hash.h>
 #include <linux/soc/qcom/smem.h>
-#include "cvp_hfi_helper.h"
 #include "cvp_hfi_io.h"
 #include "msm_cvp_debug.h"
 #include "cvp_hfi.h"
