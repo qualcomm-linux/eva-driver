@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _MSM_COMM_DEF_H_
@@ -30,6 +30,9 @@ enum queue_state {
 #ifdef CONFIG_EVA_TVM
 
 #else	/* LA target starts here */
+
+#define DEFAULT_HAL_VER 1
+#define KNP_HAL_VER 2
 
 #ifdef CONFIG_EVA_KALAMA
 #define CVP_SYNX_ENABLED 1

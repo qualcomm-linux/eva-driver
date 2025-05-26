@@ -476,6 +476,7 @@ static struct msm_cvp_platform_data default_data = {
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8450_data = {
@@ -489,6 +490,7 @@ static struct msm_cvp_platform_data sm8450_data = {
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8550_data = {
@@ -502,6 +504,7 @@ static struct msm_cvp_platform_data sm8550_data = {
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8550_tvm_data = {
@@ -515,6 +518,7 @@ static struct msm_cvp_platform_data sm8550_tvm_data = {
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8650_data = {
@@ -528,6 +532,7 @@ static struct msm_cvp_platform_data sm8650_data = {
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8750_data = {
@@ -541,6 +546,7 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
 	.hfi_ver = 2,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8850_data = {
@@ -554,6 +560,7 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
 	.hfi_ver = 2,
+	.hal_version = KNP_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8845_data = {
@@ -567,6 +574,7 @@ static struct msm_cvp_platform_data sm8845_data = {
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
 	.hfi_ver = 2,
+	.hal_version = KNP_HAL_VER,
 };
 
 static const struct of_device_id msm_cvp_dt_match[] = {

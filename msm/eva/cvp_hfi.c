@@ -43,7 +43,7 @@
 #include "msm_cvp_events.h"
 #include "cvp_comm_def.h"
 #include "cvp_presil.h"
-#include "cvp_kaanapali_hal.h"
+#include "target/cvp_kaanapali_hal.h"
 
 // ysi - added for debug
 #include <linux/clk/qcom.h>
