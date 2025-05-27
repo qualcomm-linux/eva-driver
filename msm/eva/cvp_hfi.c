@@ -1395,6 +1395,18 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 
 	}
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)pkt;
+	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+		u32 pkt_id = 0;
+		u64 aontimer = 0;
+		const char *command_name = "";
+
+		pkt_id  = cmd_hdr->header.packet_type;
+		command_name = get_pkt_name_from_type(pkt_id);
+		aontimer = get_aon_time();
+		dprintk(CVP_PERF, "%s: msg packet %s sent to FW at aontimer %llu\n",
+			__func__, command_name, aontimer);
+	}
+
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_END");
 	return rc;
 }
@@ -3533,7 +3545,17 @@ int __response_handler(struct iris_hfi_device *device)
 			(struct cvp_hfi_msg_session_hdr *)raw_packet;
 		int rc = 0;
 		core->last_msg_ts = ktime_get();
+		if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+			u32 pkt_id = 0;
+			u64 aontimer = 0;
+			const char *command_name = "";
 
+			pkt_id  = hdr->header.packet_type;
+			command_name = get_pkt_name_from_type(pkt_id);
+			aontimer = get_aon_time();
+			dprintk(CVP_PERF, "%s: msg packet %s received from fw at aontimer %llu\n",
+				__func__, command_name, aontimer);
+		}
 		print_msg_hdr(hdr);
 		rc = cvp_hfi_process_msg_packet(0, raw_packet, info);
 		if (rc) {
