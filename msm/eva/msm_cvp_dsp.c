@@ -1217,7 +1217,11 @@ static int eva_fastrpc_driver_register(uint32_t handle)
 	return rc;
 
 fail_fastrpc_driver_register:
-	dequeue_frpc_node(frpc_node);
+	if (!dequeue_frpc_node(frpc_node)) {
+		dprintk(CVP_DSP, "%s fastrpc node %pK hdl 0x%x released elsewhere\n",
+			__func__, frpc_node, handle);
+		return -EINVAL;
+	}
 	if (!skip_deregister)
 		__fastrpc_driver_unregister(&frpc_node->cvp_fastrpc_driver);
 
@@ -1269,7 +1273,7 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 	frpc_node = pop_frpc_node_with_handle(handle);
 
 	if (frpc_node == NULL) {
-		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered/search timed out\n",
+		dprintk(CVP_WARN, "%s fastrpc handle 0x%x unregistered/search timed out\n",
 			__func__, handle);
 		return;
 	}
