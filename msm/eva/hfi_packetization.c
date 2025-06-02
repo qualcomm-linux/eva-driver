@@ -458,7 +458,7 @@ int cvp_create_pkt_cmd_sys_image_version(
 	pkt->size = sizeof(struct cvp_hfi_cmd_sys_get_property_packet) + sizeof(u32);
 	pkt->packet_type = HFI_CMD_SYS_GET_PROPERTY;
 	pkt->num_properties = 1;
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	pkt->rg_property_data[0] = HFI_PROPERTY_SYS_IMAGE_VERSION;
 #else
 	pkt->rg_property_data[0] = HFI_PROPERTY_SYS_EVA_FW_VERSION;

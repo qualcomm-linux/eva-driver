@@ -2842,7 +2842,7 @@ static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
 		dprintk(CVP_ERR, "%s: invalid in_pkt\n", __func__);
 		return -1;
 	}
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	if (msm_cvp_fw_debug & HFI_DEBUG_MSG_CRC_EN) {
 #else
 	if (msm_cvp_fw_debug & HFI_DEBUG_CFG_BUF_CRC_EN) {
