@@ -150,6 +150,35 @@ enum hfi_property_sys_crtl {
 #define  HFI_DEBUG_MSG_SYNX_HIGH     0x00004000 /**< High level messages. */
 #define  HFI_DEBUG_CACHE_LOG_EN      0x00010000 /**< Enables cache log. */
 
+#define HFI_CV_KERNEL_FPX         0x00000001 /**< Harris Corner Detector            */
+#define HFI_CV_KERNEL_SCALER      0x00000002 /**< DownScale                         */
+#define HFI_CV_KERNEL_NCC         0x00000004 /**< NCC                               */
+#define HFI_CV_KERNEL_DFS         0x00000008 /**< Depth From Stereo                 */
+#define HFI_CV_KERNEL_WARP_NCC    0x00000010 /**< Warp NCC                          */
+#define HFI_CV_KERNEL_OF          0x00000020 /**< Optical Flow/TME                  */
+#define HFI_CV_KERNEL_ORB         0x00000040 /**< ORB compute & Matching            */
+#define HFI_CV_KERNEL_PYS_HCD     0x00000080 /**< Pyramid DS & HCD                  */
+#define HFI_CV_KERNEL_BLOB        0x00000100 /**< Blob detector                     */
+#define HFI_CV_KERNEL_DESCRIPTOR  0x00000200 /**< Patch Descriptor                  */
+#define HFI_CV_KERNEL_MATCH       0x00000400 /**< Matcher                           */
+#define HFI_CV_KERNEL_PPU         0x00000800 /**< PPU                               */
+#define HFI_CV_KERNEL_LME         0x00001000 /**< Local motion Estimation ppu/mpu   */
+#define HFI_CV_KERNEL_ICA         0x00002000 /**< Image Correction & Adjustment     */
+#define HFI_CV_KERNEL_GCX         0x00004000 /**< Geometric Correction for XR    */
+#define HFI_CV_KERNEL_XRA         0x00008000 /**< XRA                               */
+#define HFI_CV_KERNEL_CSC         0x00010000 /**< CSC for XR    */
+#define HFI_CV_KERNEL_LSR         0x00020000 /**< LSR for XR    */
+#define HFI_CV_KERNEL_ITOF        0x00040000 /**< Time of Flight Sensor    */
+#define HFI_CV_KERNEL_RGE         0x00080000 /**< RGE, Reprojection and Grid-inversion Engine */
+#define HFI_CV_KERNEL_SPSTAT      0x00100000 /**< FTexture (Spatial Statistics)     */
+#define HFI_CV_KERNEL_GME         0x00200000 /**< Global motion Estimation fdu   */
+#define HFI_CV_KERNEL_STL         0x00400000 /**< stl   */
+#define HFI_CV_KERNEL_WARP        0x00800000 /**< warp   */
+#define HFI_CV_KERNEL_DCM_NONPOR  0x01000000
+#define HFI_CV_KERNEL_TME_NONPOR  0x02000000
+#define HFI_CV_KERNEL_PRE_NONPOR  0x04000000
+#define HFI_CV_KERNEL_POST_NONPOR 0x08000000
+
 #define HFI_DEBUG_MODE_QUEUE				0x00000001
 #define HFI_DEBUG_MODE_QDSS					0x00000002
 
@@ -628,9 +657,37 @@ struct cvp_hfi_header_type {
 	u32 size;
 	u32 packet_type;
 	u32 session_id;
+	u32 packet_version;
 	struct cvp_hfi_client client_data;
 	u32 stream_idx;
 	u32 packet_crc;
+} __packed;
+
+/**
+ * Structure corresponding to HFI_CVP_BUFFER_TYPE
+ */
+
+struct cvp_buf_type {
+	__u32 fd;
+	__u32 size;
+	__u32 offset;
+	__u32 flags;
+	__u32 reserved1;
+	__u32 reserved2;
+	__u32 fence_type;
+	__u32 input_handle;
+	__u32 output_handle;
+	__u32 debug_flags;
+	__u32 crc;
+	__u32 context_bank_id;
+} __packed;
+
+struct cvp_hfi_persist_buffer_packet {
+	struct cvp_hfi_header_type sHeader;
+	u32 nCVKernelType;
+	struct cvp_buf_type nPersist1Buffer;
+	struct cvp_buf_type nPersist2Buffer;
+	struct cvp_buf_type nPersist3Buffer;
 } __packed;
 
 struct cvp_hfi_cmd_session_hdr {
@@ -818,4 +875,5 @@ int get_pkt_index_v2(struct cvp_hal_session_cmd_pkt *hdr);
 int get_pkt_fenceoverride_v2(struct cvp_hal_session_cmd_pkt *hdr);
 int get_pkt_index_from_type_v2(u32 pkt_type);
 const char *get_pkt_name_from_type_v2(u32 pkt_type);
+const char *get_feature_name_from_type(u32 pkt_type);
 #endif

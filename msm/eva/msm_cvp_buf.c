@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/pid.h>
@@ -18,6 +18,7 @@
 #include "msm_cvp_dsp.h"
 #include "eva_shared_def.h"
 #include "cvp_presil.h"
+#include "cvp_hfi.h"
 
 extern bool trigger_smmu_fault;
 
@@ -270,6 +271,27 @@ void print_client_buffer(u32 tag, const char *str,
 		str, hash32_ptr(inst->session), cbuf->index, cbuf->fd,
 		cbuf->offset, cbuf->size, cbuf->type, cbuf->flags,
 		cbuf->reserved[0]);
+}
+
+void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
+		struct msm_cvp_inst *inst, struct eva_kmd_hfi_packet *pkt)
+{
+	struct cvp_hfi_persist_buffer_packet *persist_pkt =
+			(struct cvp_hfi_persist_buffer_packet *) pkt;
+
+	if (!(tag & msm_cvp_debug) || !str || !inst)
+		return;
+
+	if (persist_pkt == NULL)
+		dprintk(tag, "%s size %d total persist size = %d for session %s (%x)",
+			str, buffer_size, atomic_read(&inst->persist_usage),
+			inst->prop.session_name, hash32_ptr(inst->session));
+	else {
+		dprintk(tag, "Feature: %s :{Persist 1 %lu Persist 2 %lu Persist 3 %lu}",
+			get_feature_name_from_type(persist_pkt->nCVKernelType),
+			persist_pkt->nPersist1Buffer.size, persist_pkt->nPersist2Buffer.size,
+			persist_pkt->nPersist3Buffer.size);
+	}
 }
 
 int msm_cvp_map_buf_wncc(struct msm_cvp_inst *inst,
@@ -1472,7 +1494,8 @@ exit:
 
 static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 				struct cvp_buf_type *buf,
-				u32 pkt_type, u32 buf_idx, u32 *iova)
+				u32 pkt_type, u32 buf_idx, u32 *iova,
+				struct eva_kmd_hfi_packet *in_pkt)
 {
 	struct list_head *ptr;
 	int rc = 0;
@@ -1522,6 +1545,9 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 						inst->dma_cache.nr--;
 					}
 				} else {
+					atomic_sub(smem->size, &inst->persist_usage);
+					print_persist_buffer_info(CVP_MEM, "FREE user persist",
+						smem->size, inst, in_pkt);
 					rc = msm_cvp_unmap_smem(inst, smem, "unmap user persist");
 					if (rc)
 						dprintk(CVP_ERR,
@@ -1573,7 +1599,8 @@ enum cp_context_bank msm_cvp_get_cb(u32 flags)
 
 static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 				struct cvp_buf_type *buf,
-				u32 pkt_type, u32 buf_idx, u32 *iova)
+				u32 pkt_type, u32 buf_idx, u32 *iova,
+				struct eva_kmd_hfi_packet *in_pkt)
 {
 	struct msm_cvp_smem *smem = NULL;
 	struct list_head *ptr;
@@ -1601,10 +1628,14 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 			return -EINVAL;
 		pbuf = list_entry(ptr, struct cvp_internal_buf, list);
 		if (dma_buf == pbuf->smem->dma_buf) {
+			atomic_sub(pbuf->size, &inst->persist_usage);
 			pbuf->size =
 				(pbuf->size >= buf->size) ?
 				pbuf->size : buf->size;
 			*iova = pbuf->smem->device_addr + buf->offset;
+			atomic_add(pbuf->size, &inst->persist_usage);
+			print_persist_buffer_info(CVP_MEM, "MAP user persist",
+					pbuf->size, inst, NULL);
 			mutex_unlock(&inst->persistbufs.lock);
 			atomic_inc(&pbuf->smem->refcount);
 			dma_buf_put(dma_buf);
@@ -1646,6 +1677,9 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 	pbuf->offset = buf->offset;
 	pbuf->ownership = CLIENT;
 
+	atomic_add(pbuf->size, &inst->persist_usage);
+	print_persist_buffer_info(CVP_MEM, "MAP user persist", pbuf->size,
+		inst, NULL);
 	mutex_lock(&inst->persistbufs.lock);
 	list_add_tail(&pbuf->list, &inst->persistbufs.list);
 	mutex_unlock(&inst->persistbufs.lock);
@@ -1887,7 +1921,7 @@ int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
 			continue;
 
 		ret = msm_cvp_unmap_user_persist_buf(inst, buf,
-				cmd_hdr->header.packet_type, i, &iova);
+				cmd_hdr->header.packet_type, i, &iova, in_pkt);
 		if (ret) {
 			dprintk(CVP_ERR,
 				"%s: buf %d unmap failed.\n",
@@ -1931,7 +1965,7 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		}
 
 		ret = msm_cvp_map_user_persist_buf(inst, buf,
-				cmd_hdr->header.packet_type, i, &iova);
+				cmd_hdr->header.packet_type, i, &iova, in_pkt);
 		if (ret) {
 			dprintk(CVP_ERR,
 				"%s: buf %d map failed.\n",
@@ -1947,6 +1981,8 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		presil42_set_buf_fd(buf, iova, "cvp_map_user_persist");
 #endif
 	}
+	print_persist_buffer_info(CVP_MEM, "MAP user persist", 0,
+		inst, in_pkt);
 	return 0;
 }
 
@@ -2088,6 +2124,9 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 			"%s: %x : fd %d %pK size %d",
 			"free user persistent", hash32_ptr(inst->session), cbuf->fd,
 			smem->dma_buf, cbuf->size);
+			atomic_sub(cbuf->size, &inst->persist_usage);
+			print_persist_buffer_info(CVP_MEM, "FREE user persist", cbuf->size,
+						inst, NULL);
 			list_del(&cbuf->list);
 			if (smem->cached == false) {
 				/*
@@ -2412,6 +2451,9 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 	buf->size = buf->smem->size;
 	buf->type = HFI_BUFFER_INTERNAL_PERSIST_1;
 	buf->ownership = DRIVER;
+	atomic_add(buf->size, &inst->persist_usage);
+	print_persist_buffer_info(CVP_MEM, "MAP ARP buffer", buf->size,
+				inst, NULL);
 
 	mutex_lock(&buf_list->lock);
 	list_add_tail(&buf->list, &buf_list->list);
@@ -2489,6 +2531,9 @@ int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 			"%s: %x : fd %d %pK size %d",
 			"free arp", hash32_ptr(inst->session), buf->fd,
 			smem->dma_buf, buf->size);
+			atomic_sub(buf->size, &inst->persist_usage);
+			print_persist_buffer_info(CVP_MEM, "FREE ARP buffer",
+						buf->size, inst, NULL);
 			list_del(&buf->list);
 			atomic_dec(&smem->refcount);
 			msm_cvp_smem_free(smem);

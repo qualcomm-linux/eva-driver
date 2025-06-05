@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/debugfs.h>
@@ -299,6 +299,7 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
+		cur += write_str(cur, end - cur, "persist memory size: %d\n", inst->persist_usage);
 	}
 	mutex_unlock(&core->lock);
 
