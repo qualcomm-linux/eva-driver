@@ -286,7 +286,8 @@ static const struct of_device_id msm_cvp_plat_match[] = {
 
 static int set_hal_functions(const char *chip_id)
 {
-	if (strcmp(chip_id, "qcom,canoe-cvp") == 0) {
+	if ((strcmp(chip_id, "qcom,canoe-cvp") == 0) ||
+		(strcmp(chip_id, "qcom,alor-cvp") == 0)) {
 		set_kaanapali_hal_functions();
 		return 0;
 	} else if (strcmp(chip_id, "qcom,sun-cvp") == 0) {
