@@ -8,7 +8,7 @@
 #define __H_CVP_HFI_H__
 
 #ifdef CONFIG_EVA_SUN
-#include "cvp_hfi_v1.h"
+#include "cvp_hfi_v2.h"
 #endif
 
 #ifdef CONFIG_EVA_CANOE

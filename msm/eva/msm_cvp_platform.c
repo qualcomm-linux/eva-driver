@@ -460,7 +460,7 @@ static struct msm_cvp_platform_data default_data = {
 	.ubwc_config = 0x0,
 	.noc_qos = 0x0,
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -477,7 +477,7 @@ static struct msm_cvp_platform_data sm8450_data = {
 	.ubwc_config = kona_ubwc_data,
 	.noc_qos = &waipio_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -494,7 +494,7 @@ static struct msm_cvp_platform_data sm8550_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -511,7 +511,7 @@ static struct msm_cvp_platform_data sm8550_tvm_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 2,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -528,7 +528,7 @@ static struct msm_cvp_platform_data sm8650_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -545,7 +545,7 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -562,7 +562,7 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
 #else
@@ -623,7 +623,7 @@ struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
  * NOTE: the def entry index for the command packet is
  *	 "the packet type - HFI_CMD_SESSION_CVP_START"
  */
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 	[HFI_CMD_SESSION_CVP_DFS_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = HFI_DFS_CONFIG_CMD_SIZE,
@@ -2158,7 +2158,7 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX] = {
 #endif
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr)
 {
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	return get_pkt_index_v1(hdr);
 #else
 	return get_pkt_index_v2(hdr);
@@ -2167,7 +2167,7 @@ int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr)
 
 int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr)
 {
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	return get_pkt_fenceoverride_v1(hdr);
 #else
 	return get_pkt_fenceoverride_v2(hdr);
@@ -2176,7 +2176,7 @@ int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr)
 
 int get_pkt_index_from_type(u32 pkt_type)
 {
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	return get_pkt_index_from_type_v1(pkt_type);
 #else
 	return get_pkt_index_from_type_v2(pkt_type);
@@ -2185,13 +2185,13 @@ int get_pkt_index_from_type(u32 pkt_type)
 
 const char *get_pkt_name_from_type(u32 pkt_type)
 {
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 	return get_pkt_name_from_type_v1(pkt_type);
 #else
 	return get_pkt_name_from_type_v2(pkt_type);
 #endif
 }
-#ifdef CONFIG_EVA_SUN
+#ifdef CONFIG_SUN_HFI
 int get_pkt_index_v1(struct cvp_hal_session_cmd_pkt *hdr)
 {
 	if (!hdr || (hdr->packet_type < HFI_CMD_SESSION_CVP_START)
