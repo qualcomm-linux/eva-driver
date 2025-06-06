@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #ifndef _MSM_CVP_INTERNAL_H_
@@ -24,7 +24,7 @@
 #include "msm_cvp_core.h"
 #include <media/msm_eva_private.h>
 #include "cvp_hfi_api.h"
-#include "cvp_hfi_helper.h"
+#include "cvp_hfi.h"
 #include "msm_cvp_sw_dbg.h"
 
 #define MAX_SUPPORTED_INSTANCES 32
@@ -151,6 +151,8 @@ struct msm_cvp_platform_data {
 	unsigned int vm_id;	/* pvm: 1; tvm: 2 */
 	struct msm_cvp_ubwc_config_data *ubwc_config;
 	struct msm_cvp_qos_setting *noc_qos;
+	struct msm_cvp_hfi_defs *cvp_hfi;
+	struct msm_cvp_hfi_defs *cvp_hfi_msg;
 };
 
 struct cvp_kmem_cache {
@@ -333,6 +335,7 @@ struct msm_cvp_inst {
 	enum instance_state state;
 	struct msm_cvp_list freqs;
 	struct msm_cvp_list persistbufs;
+	atomic_t persist_usage;
 	struct cvp_dmamap_cache dma_cache;
 	struct msm_cvp_list cvpwnccbufs;
 	struct msm_cvp_list frames;

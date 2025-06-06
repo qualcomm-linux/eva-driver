@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/debugfs.h>
@@ -286,7 +286,8 @@ static const struct of_device_id msm_cvp_plat_match[] = {
 
 static int set_hal_functions(const char *chip_id)
 {
-	if (strcmp(chip_id, "qcom,canoe-cvp") == 0) {
+	if ((strcmp(chip_id, "qcom,canoe-cvp") == 0) ||
+		(strcmp(chip_id, "qcom,alor-cvp") == 0)) {
 		set_kaanapali_hal_functions();
 		return 0;
 	} else if (strcmp(chip_id, "qcom,sun-cvp") == 0) {
@@ -415,7 +416,7 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		dprintk(CVP_WARN, "Failed to read chip id\n");
 		rc = -EINVAL;
 	}
-	atomic64_set(&core->kernel_trans_id, ARRAY_SIZE(cvp_hfi_defs));
+	atomic64_set(&core->kernel_trans_id, MAX_PKT_IDX);
 
 	if (core->resources.dsp_enabled) {
 		rc = cvp_dsp_device_init();

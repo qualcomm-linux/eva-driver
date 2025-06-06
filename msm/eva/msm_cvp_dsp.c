@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/module.h>
 #include <linux/rpmsg.h>
@@ -118,6 +118,7 @@ static int cvp_dsp_send_cmd_hfi_queue(phys_addr_t *phys_addr,
 	cmd.type = CPU2DSP_SEND_HFI_QUEUE;
 	cmd.msg_ptr = (uint64_t)phys_addr;
 	cmd.msg_ptr_len = size_in_bytes;
+	cmd.hfi_version = 1;
 	cmd.ddr_type = cvp_of_fdt_get_ddrtype();
 	if (cmd.ddr_type < 0) {
 		dprintk(CVP_WARN,
@@ -1216,7 +1217,11 @@ static int eva_fastrpc_driver_register(uint32_t handle)
 	return rc;
 
 fail_fastrpc_driver_register:
-	dequeue_frpc_node(frpc_node);
+	if (!dequeue_frpc_node(frpc_node)) {
+		dprintk(CVP_DSP, "%s fastrpc node %pK hdl 0x%x released elsewhere\n",
+			__func__, frpc_node, handle);
+		return -EINVAL;
+	}
 	if (!skip_deregister)
 		__fastrpc_driver_unregister(&frpc_node->cvp_fastrpc_driver);
 
@@ -1268,7 +1273,7 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 	frpc_node = pop_frpc_node_with_handle(handle);
 
 	if (frpc_node == NULL) {
-		dprintk(CVP_DSP, "%s fastrpc handle 0x%x unregistered/search timed out\n",
+		dprintk(CVP_WARN, "%s fastrpc handle 0x%x unregistered/search timed out\n",
 			__func__, handle);
 		return;
 	}

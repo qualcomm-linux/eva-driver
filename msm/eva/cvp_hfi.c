@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <asm/memory.h>
@@ -34,7 +34,7 @@
 #include "hfi_packetization.h"
 #include "msm_cvp_debug.h"
 #include "cvp_core_hfi.h"
-#include "cvp_hfi_helper.h"
+#include "cvp_hfi.h"
 #include "cvp_hfi_io.h"
 #include "msm_cvp_dsp.h"
 #include "msm_cvp_clocks.h"
@@ -1395,6 +1395,18 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 
 	}
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)pkt;
+	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+		u32 pkt_id = 0;
+		u64 aontimer = 0;
+		const char *command_name = "";
+
+		pkt_id  = cmd_hdr->header.packet_type;
+		command_name = get_pkt_name_from_type(pkt_id);
+		aontimer = get_aon_time();
+		dprintk(CVP_PERF, "%s: msg packet %s sent to FW at aontimer %llu\n",
+			__func__, command_name, aontimer);
+	}
+
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_END");
 	return rc;
 }
@@ -2830,8 +2842,11 @@ static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
 		dprintk(CVP_ERR, "%s: invalid in_pkt\n", __func__);
 		return -1;
 	}
-
+#ifdef CONFIG_SUN_HFI
 	if (msm_cvp_fw_debug & HFI_DEBUG_MSG_CRC_EN) {
+#else
+	if (msm_cvp_fw_debug & HFI_DEBUG_CFG_BUF_CRC_EN) {
+#endif
 		struct cvp_hfi_cmd_session_hdr *cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 
 		pbuf                                    = (unsigned int *)in_pkt;
@@ -3533,7 +3548,17 @@ int __response_handler(struct iris_hfi_device *device)
 			(struct cvp_hfi_msg_session_hdr *)raw_packet;
 		int rc = 0;
 		core->last_msg_ts = ktime_get();
+		if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+			u32 pkt_id = 0;
+			u64 aontimer = 0;
+			const char *command_name = "";
 
+			pkt_id  = hdr->header.packet_type;
+			command_name = get_pkt_name_from_type(pkt_id);
+			aontimer = get_aon_time();
+			dprintk(CVP_PERF, "%s: msg packet %s received from fw at aontimer %llu\n",
+				__func__, command_name, aontimer);
+		}
 		print_msg_hdr(hdr);
 		rc = cvp_hfi_process_msg_packet(0, raw_packet, info);
 		if (rc) {

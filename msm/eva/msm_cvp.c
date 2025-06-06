@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include "msm_cvp.h"
@@ -140,7 +140,7 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 	CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
 	memcpy(out, &msg->pkt, get_msg_size(hdr));
 	CVPKERNEL_ATRACE_END("before and after memcpy");
-	if (hdr->header.client_data.kdata >= ARRAY_SIZE(cvp_hfi_defs))
+	if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
 		msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
 	cvp_kmem_cache_free(&cvp_driver->msg_cache, msg);
 
@@ -175,6 +175,17 @@ static int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
 	rc = cvp_wait_process_message(inst, sq, NULL, wait_time, out_pkt);
 
 	msg_hdr = (struct cvp_hfi_msg_session_hdr *)out_pkt;
+	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
+		u32 pkt_id = 0;
+		u64 aontimer = 0;
+		const char *command_name = "";
+
+		pkt_id  = msg_hdr->header.packet_type;
+		command_name = get_pkt_name_from_type(pkt_id);
+		aontimer = get_aon_time();
+		dprintk(CVP_PERF, "%s: msg packet %s sent back to umd at aontimer %llu\n",
+			__func__, command_name, aontimer);
+	}
 	msm_cvp_msg_tracing_from_sw(msg_hdr, "EVA_KMD_REV_END");
 
 	cvp_put_inst(inst);

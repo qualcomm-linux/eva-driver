@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/dma-buf.h>
@@ -251,6 +251,7 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 	if (i > 0 && smem->pkt_type != HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS
 		&& smem->pkt_type != HFI_CMD_SESSION_CVP_SET_MODEL_BUFFERS
 		&& smem->pkt_type != HFI_CMD_SESSION_EVA_DLFL_CONFIG)
+
 		/* User persist buffer has no feature config info */
 		is_config_pkt = cvp_hfi_defs[i].is_config_pkt;
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/bitops.h>
@@ -10,7 +10,6 @@
 #include <linux/interrupt.h>
 #include <linux/hash.h>
 #include <linux/soc/qcom/smem.h>
-#include "cvp_hfi_helper.h"
 #include "cvp_hfi_io.h"
 #include "msm_cvp_debug.h"
 #include "cvp_hfi.h"
@@ -696,7 +695,11 @@ static int hfi_process_sys_property_info(u32 device_id,
 	}
 
 	switch (pkt->rg_property_data[0]) {
+#ifdef CONFIG_SUN_HFI
 	case HFI_PROPERTY_SYS_IMAGE_VERSION:
+#else
+	case HFI_PROPERTY_SYS_EVA_FW_VERSION:
+#endif
 		hfi_process_sys_get_prop_image_version(pkt);
 
 		*info = (struct msm_cvp_cb_info) {
@@ -754,10 +757,18 @@ int cvp_hfi_process_msg_packet(u32 device_id, void *hdr,
 	case HFI_MSG_SESSION_CVP_FLUSH:
 		pkt_func = (pkt_func_def)hfi_process_session_flush_done;
 		break;
+#ifdef CONFIG_SUN_HFI
 	case HFI_MSG_SESSION_EVA_START:
+#else
+	case HFI_MSG_SESSION_EVA_START_DONE:
+#endif
 		pkt_func = (pkt_func_def)hfi_process_session_start_done;
 		break;
+#ifdef CONFIG_SUN_HFI
 	case HFI_MSG_SESSION_EVA_STOP:
+#else
+	case HFI_MSG_SESSION_EVA_STOP_DONE:
+#endif
 		pkt_func = (pkt_func_def)hfi_process_session_stop_done;
 		break;
 	case HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY:
