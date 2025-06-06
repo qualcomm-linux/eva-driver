@@ -33,6 +33,7 @@ int __response_handler(struct iris_hfi_device *device);
 void __write_register(struct iris_hfi_device *device,
 	u32 reg, u32 value);
 int __read_register(struct iris_hfi_device *device, u32 reg);
+int __read_tcsr_register(struct iris_hfi_device *device, u32 reg);
 int __read_gcc_register(struct iris_hfi_device *device, u32 reg);
 int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest);
 int __acquire_regulator(struct regulator_info *rinfo,
