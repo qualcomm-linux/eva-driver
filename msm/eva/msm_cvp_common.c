@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/jiffies.h>
@@ -535,7 +535,6 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	struct msm_cvp_inst *inst = NULL;
 	struct cvp_session_queue *sq;
 	unsigned long flags = 0;
-	int i;
 	enum cvp_session_state s_state;
 	enum cvp_session_errorcode s_ecode;
 
@@ -570,11 +569,6 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	cvp_print_inst(CVP_WARN, inst);
 
 	if (inst->state != MSM_CVP_CORE_INVALID) {
-		change_cvp_inst_state(inst, MSM_CVP_CORE_INVALID);
-		if (cvp_clean_session_queues(inst))
-			dprintk(CVP_WARN, "Failed to clean sess queues\n");
-		for (i = 0; i < ARRAY_SIZE(inst->completions); i++)
-			complete(&inst->completions[i]);
 #ifdef CVP_SW_DBG_BUF_ENABLED
 		if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
 			eva_kmd_session_dump(inst);
