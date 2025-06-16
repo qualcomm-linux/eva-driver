@@ -355,10 +355,6 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 			&msm_cvp_syscache_disable);
 	debugfs_create_bool("disable_dcvs", 0644, dir,
 			&msm_cvp_dcvs_disable);
-	debugfs_create_u32("session_error_recovery", 0644, dir,
-			&msm_cvp_session_error_recovery);
-	debugfs_create_u32("hw_hang_recovery", 0644, dir,
-			&msm_cvp_hw_hang_recovery);
 
 	debugfs_create_file("cvp_power", 0644, dir, NULL, &cvp_pwr_fops);
 
@@ -554,6 +550,11 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 	debugfs_create_u32("sw_dbg_buf_dump", 0644, dir,
 		&msm_cvp_sw_dbg_buf_dump);
 #endif
+
+	debugfs_create_u32("session_error_recovery", 0644, dir,
+			&msm_cvp_session_error_recovery);
+	debugfs_create_u32("hw_hang_recovery", 0644, dir,
+			&msm_cvp_hw_hang_recovery);
 
 	if (!debugfs_create_file("session_info", 0444, dir, core, &session_info_fops)) {
 		dprintk(CVP_ERR, "debugfs_create_file: fail\n");
