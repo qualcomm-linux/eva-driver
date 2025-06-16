@@ -337,6 +337,7 @@ struct msm_cvp_inst {
 	enum instance_state state;
 	struct msm_cvp_list freqs;
 	struct msm_cvp_list persistbufs;
+	struct msm_cvp_list persist_list;
 	atomic_t persist_usage;
 	struct cvp_dmamap_cache dma_cache;
 	struct msm_cvp_list cvpwnccbufs;

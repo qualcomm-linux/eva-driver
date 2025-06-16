@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/dma-direction.h>
@@ -198,6 +198,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	spin_lock_init(&inst->event_handler.lock);
 
 	INIT_MSM_CVP_LIST(&inst->persistbufs);
+	INIT_MSM_CVP_LIST(&inst->persist_list);
 	INIT_DMAMAP_CACHE(&inst->dma_cache);
 	INIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	INIT_MSM_CVP_LIST(&inst->frames);
@@ -382,6 +383,7 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 	mutex_unlock(&core->lock);
 
 	DEINIT_MSM_CVP_LIST(&inst->persistbufs);
+	DEINIT_MSM_CVP_LIST(&inst->persist_list);
 	DEINIT_DMAMAP_CACHE(&inst->dma_cache);
 	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	DEINIT_MSM_CVP_LIST(&inst->frames);

@@ -270,6 +270,8 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 {
 	struct msm_cvp_core *core = file->private_data;
 	struct msm_cvp_inst *inst = NULL;
+	struct msm_cvp_persist_list *list_node;
+
 	char *dbuf, *cur, *end;
 	ssize_t len = 0;
 	ssize_t debug_buf_len = 4096*4;
@@ -299,7 +301,12 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
-		cur += write_str(cur, end - cur, "persist memory size: %d\n", inst->persist_usage);
+		cur += write_str(cur, end - cur, "total internal memory size: %d bytes\n",
+					inst->persist_usage);
+		list_for_each_entry(list_node, &inst->persist_list.list, list) {
+			cur += write_str(cur, end - cur, "%s size: %d bytes\n",
+				list_node->info.feature, list_node->info.persist_size);
+		}
 	}
 	mutex_unlock(&core->lock);
 
