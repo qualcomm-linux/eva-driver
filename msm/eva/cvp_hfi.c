@@ -1915,8 +1915,10 @@ sfr_init:
 	if (dev->sw_dbg_buf.align_virtual_addr) {
 		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
 				0, ALIGNED_SW_DBG_BUF_SIZE);
-		if (core)
+		if (core) {
 			core->kmd_dbg.kmd_sess_cnt = 0;
+			core->kmd_dbg.kmd_queue_dump_cnt = 0;
+		}
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
 				SMEM_UNCACHED, O_RDWR);
@@ -1933,6 +1935,7 @@ sfr_init:
 				core->kmd_dbg.kmd_buf_offset = 0;
 				core->kmd_dbg.kmd_buf_cnt = 0;
 				core->kmd_dbg.kmd_sess_cnt = 0;
+				core->kmd_dbg.kmd_queue_dump_cnt = 0;
 			}
 		}
 	}

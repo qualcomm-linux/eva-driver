@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __MSM_EVA_PRIVATE_H__
 #define __MSM_EVA_PRIVATE_H__
@@ -66,8 +66,13 @@
 #define EVA_KMD_BUFTYPE_INTERNAL_1		0x00000003
 #define EVA_KMD_BUFTYPE_INTERNAL_2		0x00000004
 
-#define SW_DBG_BUF_SIZE			1048576
-#define EVA_SW_DBG_BUF_UMD_OFFSET	(SW_DBG_BUF_SIZE / 2)
+#define SW_DBG_BUF_SIZE				5242880
+#define SW_DBG_UMD_KMD_SIZE			1048576
+#define SW_DBG_CMD_Q_IDX            SW_DBG_UMD_KMD_SIZE
+#define SW_DBG_MSG_Q_IDX            (SW_DBG_UMD_KMD_SIZE * 2)
+#define SW_DBG_DSP_CMD_Q_IDX        (SW_DBG_UMD_KMD_SIZE * 3)
+#define SW_DBG_DSP_MSG_Q_IDX        (SW_DBG_UMD_KMD_SIZE * 4)
+#define EVA_SW_DBG_BUF_UMD_OFFSET	(SW_DBG_UMD_KMD_SIZE / 2)
 #define EVA_SW_DBG_OFFLINE_DUMP_IDX	(EVA_SW_DBG_BUF_UMD_OFFSET / 2)
 #define EVA_SW_DBG_KMD_OFFLINE_DUMP_IDX	EVA_SW_DBG_OFFLINE_DUMP_IDX
 #define EVA_SW_DBG_UMD_OFFLINE_DUMP_IDX	(EVA_SW_DBG_BUF_UMD_OFFSET + EVA_SW_DBG_OFFLINE_DUMP_IDX)
