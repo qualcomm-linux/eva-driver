@@ -1,18 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include "cvp_comm_def.h"
 
 #ifdef CONFIG_EVA_PINEAPPLE
-#include "cvp_lanai_io.h"
+#include "target/cvp_lanai_io.h"
 #endif
 
 #ifdef CONFIG_EVA_SUN
-#include "cvp_pakala_io.h"
+#include "target/cvp_pakala_io.h"
 #endif
 
 #ifdef CONFIG_EVA_CANOE
-#include "cvp_kaanapali_io.h"
+#include "target/cvp_kaanapali_io.h"
 #endif

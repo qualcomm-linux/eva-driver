@@ -154,6 +154,7 @@ struct msm_cvp_platform_data {
 	struct msm_cvp_hfi_defs *cvp_hfi;
 	struct msm_cvp_hfi_defs *cvp_hfi_msg;
 	uint32_t hfi_ver;
+	uint32_t hal_version;
 };
 
 struct cvp_kmem_cache {
