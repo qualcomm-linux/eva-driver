@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __MSM_CVP_RESOURCES_H__
@@ -217,6 +217,8 @@ struct msm_cvp_platform_resources {
 	uint32_t max_secure_inst_count;
 	int msm_cvp_hw_rsp_timeout;
 	int msm_cvp_dsp_rsp_timeout;
+	int qos_noc_urgency_low_a_bitmask;
+	int qos_noc_urgency_low_b_bitmask;
 	uint32_t msm_cvp_pwr_collapse_delay;
 	bool non_fatal_pagefaults;
 	bool fatal_ssr;

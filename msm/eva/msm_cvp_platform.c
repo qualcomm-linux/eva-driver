@@ -424,6 +424,14 @@ static struct msm_cvp_common_data sm8845_common_data[] = {
 #else
 		.value = 0,
 #endif
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_a_bitmask",
+		.value = 0x30,
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_b_bitmask",
+		.value = 0x3,
 	}
 };
 
