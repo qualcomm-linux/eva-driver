@@ -1647,6 +1647,9 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 		inst->prop.dsp_mask = dsp2cpu_cmd->dsp_access_mask;
 		inst->prop.pkt_concurrency = 8;
 	} else { // Version 1
+		inst->dsp_handle = dsp2cpu_cmd->pid;
+		inst->fastrpc_entry = frpc_node;
+
 		struct eva_kmd_sys_properties *props = &dsp2cpu_cmd_v2->prop_data;
 		struct eva_kmd_sys_property *prop_array;
 		int i = 0;
