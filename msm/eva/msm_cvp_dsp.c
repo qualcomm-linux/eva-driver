@@ -342,8 +342,10 @@ search_again:
 
 	mutex_lock(&me->fastrpc_driver_list.lock);
 	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
-		if (!ptr)
+		if (!ptr) {
+			frpc_node = NULL;
 			break;
+		}
 		frpc_node = list_entry(ptr,
 			struct cvp_dsp_fastrpc_driver_entry, list);
 
@@ -387,8 +389,10 @@ search_again:
 
 	mutex_lock(&me->fastrpc_driver_list.lock);
 	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
-		if (!ptr)
+		if (!ptr) {
+			frpc_node = NULL;
 			break;
+		}
 		frpc_node = list_entry(ptr,
 			struct cvp_dsp_fastrpc_driver_entry, list);
 
