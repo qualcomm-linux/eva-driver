@@ -1362,8 +1362,6 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		DEINIT_MSM_CVP_LIST(&frpc_node->dsp_sessions);
 		DEINIT_MSM_CVP_LIST(&frpc_node->cvpdspbufs);
 
-		cvp_put_fastrpc_node(frpc_node);
-
 		__fastrpc_driver_unregister(&frpc_node->cvp_fastrpc_driver);
 		mutex_lock(&me->driver_name_lock);
 		eva_fastrpc_driver_release_name(frpc_node);
@@ -1372,7 +1370,6 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 	} else {
 		dprintk(CVP_WARN, "%s Fastrpc driver hdl %#x hdl %#x, f %d, session count is %d, abort unregistration\n",
 						__func__, handle, dsp2cpu_cmd->pid, (uint32_t)force_exit, frpc_node->session_cnt);
-		cvp_put_fastrpc_node(frpc_node);
 	}
 }
 
