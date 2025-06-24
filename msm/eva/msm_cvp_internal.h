@@ -153,6 +153,8 @@ struct msm_cvp_platform_data {
 	struct msm_cvp_qos_setting *noc_qos;
 	struct msm_cvp_hfi_defs *cvp_hfi;
 	struct msm_cvp_hfi_defs *cvp_hfi_msg;
+	uint32_t hfi_ver;
+	uint32_t hal_version;
 };
 
 struct cvp_kmem_cache {
@@ -335,6 +337,7 @@ struct msm_cvp_inst {
 	enum instance_state state;
 	struct msm_cvp_list freqs;
 	struct msm_cvp_list persistbufs;
+	struct msm_cvp_list persist_list;
 	atomic_t persist_usage;
 	struct cvp_dmamap_cache dma_cache;
 	struct msm_cvp_list cvpwnccbufs;

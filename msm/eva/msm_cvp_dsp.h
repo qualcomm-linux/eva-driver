@@ -49,6 +49,8 @@ struct fastrpc_driver {
 #define DSP_VM_NUM 2
 #define CVP_DSP_MAX_RESERVED 5
 #define CVP_DSP2CPU_RESERVED 7
+#define CVP_DSP2CPU_RESERVED_V2 16
+#define CVP_CPU2DSP_RESERVED_V2 16
 #define CVP_DSP_RESPONSE_TIMEOUT 600
 #define CVP_INVALID_RPMSG_TYPE 0xBADDFACE
 #define MAX_FRAME_BUF_NUM 16
@@ -64,6 +66,9 @@ struct fastrpc_driver {
 /* Supports up to 8 DSP sessions in 8 processes */
 #define MAX_DSP_SESSION_NUM			(8)
 #define MAX_FASTRPC_DRIVER_NUM		(MAX_DSP_SESSION_NUM)
+
+/* Maxmimum number of buffers to be registered in a batch */
+#define MAX_BUFFER_NUM_REG          (8)
 
 int cvp_dsp_device_init(void);
 void cvp_dsp_device_exit(void);
@@ -103,7 +108,8 @@ enum CVP_DSP_COMMAND {
 	DSP2CPU_STOP_SESSION = 22,
 	DSP2CPU_SET_SESSION_NAME = 23,
 	DSP2CPU_PD_INIT = 24,
-	CVP_DSP_MAX_CMD = 25,
+	DSP2CPU_SET_SESSION_CONFIGS = 25,
+	CVP_DSP_MAX_CMD = 26,
 };
 
 struct eva_power_req {
@@ -145,6 +151,11 @@ struct eva_mem_remote {
 	uint64_t v_dsp_addr;
 } __packed;
 
+struct eva_mem_remote_batch {
+	uint32_t cnt;
+	struct eva_mem_remote buffers[MAX_BUFFER_NUM_REG];
+} __packed;
+
 /*
  * command: defined as a packet initiated from one party.
  * message: defined as a packet sent as response to a command
@@ -182,6 +193,32 @@ struct cvp_dsp_cmd_msg {
 	uint32_t reserved2;
 } __packed;
 
+struct cvp_dsp_cmd_header {
+	uint32_t type;
+	uint32_t ver;
+	uint32_t len;
+} __packed;
+
+struct cvp_cpu2dsp_cmd_v2 {
+	struct cvp_dsp_cmd_header header;
+	int32_t ret;
+	uint64_t hfi_queue_ptr;
+	uint32_t hfi_queue_size;
+	uint32_t session_id;
+	int32_t ddr_type;
+	uint32_t hfi_version;
+
+	uint32_t eva_dsp_debug_mask;
+
+	/* Create Session */
+	uint32_t session_cpu_low;
+	uint32_t session_cpu_high;
+
+	uint32_t reserved1;
+	uint32_t reserved2;
+	uint32_t data[CVP_CPU2DSP_RESERVED_V2];
+} __packed;
+
 /* cvp_dsp_rsp_msg contains the message sent from DSP to CPU */
 struct cvp_dsp_rsp_msg {
 	uint32_t type;
@@ -214,6 +251,22 @@ struct cvp_dsp2cpu_cmd {
 	char session_name[SESSION_NAME_MAX_LEN];
 
 	uint32_t data[CVP_DSP2CPU_RESERVED];
+} __packed;
+
+struct cvp_dsp2cpu_cmd_v2 {
+	struct cvp_dsp_cmd_header header;
+	uint32_t session_id;
+	uint32_t session_cpu_low;
+	uint32_t session_cpu_high;
+	int32_t pid;
+	char session_name[SESSION_NAME_MAX_LEN];
+	struct eva_power_req power_req;
+	struct eva_mem_remote_batch sbuf_batch;
+	struct eva_kmd_sys_properties prop_data;
+
+	uint32_t transaction_id;
+
+	uint32_t data[CVP_DSP2CPU_RESERVED_V2];
 } __packed;
 
 struct driver_name {
@@ -261,7 +314,9 @@ struct cvp_dsp_apps {
 	uint64_t addr;
 	uint32_t size;
 	struct completion completions[CPU2DSP_MAX_CMD + 1];
+	struct cvp_dsp_cmd_header pending_dsp2cpu_cmd_header; //ALEX: Remove
 	struct cvp_dsp2cpu_cmd pending_dsp2cpu_cmd;
+	struct cvp_dsp2cpu_cmd_v2 pending_dsp2cpu_cmd_v2;
 	struct cvp_dsp_rsp_msg pending_dsp2cpu_rsp;
 	struct task_struct *dsp_thread;
 	/* dsp buffer mapping, set of dma function pointer */

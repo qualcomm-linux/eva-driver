@@ -989,6 +989,12 @@ int cvp_read_platform_resources_from_drv_data(
 	res->non_fatal_pagefaults = find_key_value(platform_data,
 			"qcom,domain-attr-non-fatal-faults");
 
+	/* Reading QOS NOC urgency low A and B register bit masks */
+	res->qos_noc_urgency_low_a_bitmask = find_key_value(platform_data,
+			"qcom,qos_noc_urgency_low_a_bitmask");
+	res->qos_noc_urgency_low_b_bitmask = find_key_value(platform_data,
+			"qcom,qos_noc_urgency_low_b_bitmask");
+
 	res->vpu_ver = platform_data->vpu_ver;
 	res->ubwc_config = platform_data->ubwc_config;
 	res->fatal_ssr = false;

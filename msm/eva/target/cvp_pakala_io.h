@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#ifndef __CVP_KAANAPALI_IO_H__
-#define __CVP_KAANAPALI_IO_H__
+#ifndef __CVP_PAKALA_IO_H__
+#define __CVP_PAKALA_IO_H__
 
 #include <linux/io.h>
 
@@ -127,6 +127,8 @@
 #define CVP_WRAPPER_CPU_NOC_LPI_CONTROL		(CVP_WRAPPER_BASE_OFFS + 0x5C)
 #define CVP_WRAPPER_CPU_NOC_LPI_STATUS		(CVP_WRAPPER_BASE_OFFS + 0x60)
 #define CVP_WRAPPER_SPARE_0			(CVP_WRAPPER_BASE_OFFS + 0x78)
+#define CVP_WRAPPER_CORE_POWER_STATUS  (CVP_WRAPPER_BASE_OFFS + 0x80)
+#define CVP_WRAPPER_CORE_POWER_CONTROL  (CVP_WRAPPER_BASE_OFFS + 0x84)
 #define CVP_WRAPPER_CORE_CLOCK_CONFIG		(CVP_WRAPPER_BASE_OFFS + 0x88)
 
 #define CVP_CTRL_INIT		CVP_CPU_CS_SCIACMD
@@ -257,7 +259,7 @@
 #define CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW \
 		(CVP_NOC_CORE_BASE_OFFS + 0xE018)
 #define CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW \
-		(CVP_NOC_CORE_BASE_OFFS + 0xE028)
+		(CVP_NOC_CORE_BASE_OFFS + 0xE020)
 /* NoC QoS registers */
 #define CVP_NOC_A_PRIORITYLUT_LOW \
 		(CVP_NOC_CORE_BASE_OFFS + 0x3030)
@@ -321,14 +323,14 @@
 #define CVP_CC_MVS0_GDSCR			(CVP_CC_BASE_OFFS + 0x68)
 #define CVP_CC_MVS0_CBCR			(CVP_CC_BASE_OFFS + 0x7C)
 #define CVP_CC_AHB_CBCR				(CVP_CC_BASE_OFFS + 0xA4)
-#define CVP_CC_SLEEP_CBCR			(CVP_CC_BASE_OFFS + 0xE4)
+#define CVP_CC_SLEEP_CBCR			(CVP_CC_BASE_OFFS + 0xF8)
 #define CVP_CC_SPARE1				(CVP_CC_BASE_OFFS + 0x1F24)
 
 /*Added to debug HW Hang*/
 #define CVP_GCC_EVA_AHB_CBCR			(0x8F004)
 #define CVP_GCC_EVA_AXI0_CBCR			(0x8F008)
-#define CVP_GCC_EVA_AXI0C_CBCR			(0x8F01C)
-#define CVP_GCC_EVA_XO_CBCR			(0x8F024)
+#define CVP_GCC_EVA_AXI0C_CBCR			(0x8F018)
+#define CVP_GCC_EVA_XO_CBCR			(0x8F01C)
 
 #define CVP_CC_MVS0_FREERUN_CBCR		(CVP_CC_BASE_OFFS + 0x8C)
 #define CVP_CC_MVS0C_FREERUN_CBCR		(CVP_CC_BASE_OFFS + 0x5C)

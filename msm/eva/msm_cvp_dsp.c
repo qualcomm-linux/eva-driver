@@ -342,8 +342,10 @@ search_again:
 
 	mutex_lock(&me->fastrpc_driver_list.lock);
 	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
-		if (!ptr)
+		if (!ptr) {
+			frpc_node = NULL;
 			break;
+		}
 		frpc_node = list_entry(ptr,
 			struct cvp_dsp_fastrpc_driver_entry, list);
 
@@ -387,8 +389,10 @@ search_again:
 
 	mutex_lock(&me->fastrpc_driver_list.lock);
 	list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
-		if (!ptr)
+		if (!ptr) {
+			frpc_node = NULL;
 			break;
+		}
 		frpc_node = list_entry(ptr,
 			struct cvp_dsp_fastrpc_driver_entry, list);
 
@@ -424,7 +428,7 @@ static void cvp_dsp_rpmsg_remove(struct rpmsg_device *rpdev)
 
 	mutex_lock(&me->rx_lock);
 	while (max_num_retries > 0) {
-		if (me->pending_dsp2cpu_cmd.type !=
+		if (me->pending_dsp2cpu_cmd_header.type !=
 				CVP_INVALID_RPMSG_TYPE) {
 			mutex_unlock(&me->rx_lock);
 			usleep_range(1000, 5000);
@@ -475,28 +479,52 @@ static int cvp_dsp_rpmsg_callback(struct rpmsg_device *rpdev,
 			goto exit;
 		}
 	} else if (rsp->type < CVP_DSP_MAX_CMD
-			&& len == sizeof(struct cvp_dsp2cpu_cmd)
-			) {
-		if (me->pending_dsp2cpu_cmd.type != CVP_INVALID_RPMSG_TYPE) {
+			&& (len == sizeof(struct cvp_dsp2cpu_cmd)
+			|| len == sizeof(struct cvp_dsp2cpu_cmd_v2))) {
+		if (len < sizeof(struct cvp_dsp_cmd_header)) {
+			dprintk(CVP_ERR, "%s: CPU2DSP header not large enough\n",
+				__func__);
+			goto exit;
+		}
+
+		if (me->pending_dsp2cpu_cmd_header.type != CVP_INVALID_RPMSG_TYPE) {
 			dprintk(CVP_ERR,
 				"%s: DSP2CPU cmd:%d pending %d %d expect %d\n",
 					__func__, rsp->type,
-				me->pending_dsp2cpu_cmd.type, len,
+				me->pending_dsp2cpu_cmd_header.type, len,
 				sizeof(struct cvp_dsp2cpu_cmd));
 			goto exit;
 		}
-		memcpy(&me->pending_dsp2cpu_cmd, rsp,
-			sizeof(struct cvp_dsp2cpu_cmd));
-		complete(&me->completions[CPU2DSP_MAX_CMD]);
+
+		memcpy(&me->pending_dsp2cpu_cmd_header, rsp,
+			sizeof(struct cvp_dsp_cmd_header));
+		if (me->pending_dsp2cpu_cmd_header.ver == 0
+			&& len == sizeof(struct cvp_dsp2cpu_cmd)) {
+			// This is original version
+
+			memcpy(&me->pending_dsp2cpu_cmd, rsp,
+			  sizeof(struct cvp_dsp2cpu_cmd));
+		} else if (me->pending_dsp2cpu_cmd_header.ver == 1 &&
+			len == sizeof(struct cvp_dsp2cpu_cmd_v2)) {
+			// This is V2
+			memcpy(&me->pending_dsp2cpu_cmd_v2, rsp,
+				sizeof(struct cvp_dsp2cpu_cmd_v2));
+		} else {
+			dprintk(CVP_ERR, "%s: Invalid version: %d, or cmd len: %d\n",
+				__func__, me->pending_dsp2cpu_cmd_header.ver, len);
+			return 0;
+		}
+	    complete(&me->completions[CPU2DSP_MAX_CMD]);
 	} else {
 		dprintk(CVP_ERR, "%s: Invalid type: %d, cmd len: %d\n", __func__, rsp->type, len);
+		dprintk(CVP_ERR, "%s: v1=%zu v2=%zu\n", __func__,
+			sizeof(struct cvp_dsp2cpu_cmd), sizeof(struct cvp_dsp2cpu_cmd_v2));
 		return 0;
 	}
-
 	return 0;
 exit:
 	dprintk(CVP_ERR, "concurrent dsp cmd type = %d, rsp type = %d\n",
-			me->pending_dsp2cpu_cmd.type,
+			me->pending_dsp2cpu_cmd_header.type,
 			me->pending_dsp2cpu_rsp.type);
 	return 0;
 }
@@ -1338,8 +1366,6 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		DEINIT_MSM_CVP_LIST(&frpc_node->dsp_sessions);
 		DEINIT_MSM_CVP_LIST(&frpc_node->cvpdspbufs);
 
-		cvp_put_fastrpc_node(frpc_node);
-
 		__fastrpc_driver_unregister(&frpc_node->cvp_fastrpc_driver);
 		mutex_lock(&me->driver_name_lock);
 		eva_fastrpc_driver_release_name(frpc_node);
@@ -1348,7 +1374,6 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 	} else {
 		dprintk(CVP_WARN, "%s Fastrpc driver hdl %#x hdl %#x, f %d, session count is %d, abort unregistration\n",
 						__func__, handle, dsp2cpu_cmd->pid, (uint32_t)force_exit, frpc_node->session_cnt);
-		cvp_put_fastrpc_node(frpc_node);
 	}
 }
 
@@ -1546,7 +1571,10 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	uint64_t inst_handle = 0;
 	uint32_t pid;
 	int rc = 0;
+	struct cvp_dsp_cmd_header *dsp2cpu_cmd_header = &me->pending_dsp2cpu_cmd_header;
 	struct cvp_dsp2cpu_cmd *dsp2cpu_cmd = &me->pending_dsp2cpu_cmd;
+	struct cvp_dsp2cpu_cmd_v2 *dsp2cpu_cmd_v2 = &me->pending_dsp2cpu_cmd_v2;
+	uint32_t version = dsp2cpu_cmd_header->ver;
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
 	struct pid *pid_s = NULL;
 	struct task_struct *task = NULL;
@@ -1557,23 +1585,28 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 
 	cmd->ret = 0;
 
-	dprintk(CVP_DSP,
-		"%s sess Type %d Mask %d Prio %d Sec %d hdl 0x%x\n",
-		__func__, dsp2cpu_cmd->session_type,
-		dsp2cpu_cmd->kernel_mask,
-		dsp2cpu_cmd->session_prio,
-		dsp2cpu_cmd->is_secure,
-		dsp2cpu_cmd->pid);
+	if (version == 0) {
+		dprintk(CVP_DSP,
+			"%s sess Type %d Mask %d Prio %d Sec %d hdl 0x%x\n",
+			__func__, dsp2cpu_cmd->session_type,
+			dsp2cpu_cmd->kernel_mask,
+			dsp2cpu_cmd->session_prio,
+			dsp2cpu_cmd->is_secure,
+			dsp2cpu_cmd->pid);
 
-	frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd->pid);
+
+		frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd->pid);
+	} else { // Version 1
+		frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd_v2->pid);
+	}
 	if (!frpc_node) {
 		dprintk(CVP_WARN, "%s cannot get fastrpc node from pid %x\n",
-				__func__, dsp2cpu_cmd->pid);
+				__func__, version ? dsp2cpu_cmd_v2->pid : dsp2cpu_cmd->pid);
 		goto fail_lookup;
 	}
 	if (!frpc_node->cvp_fastrpc_device) {
 		dprintk(CVP_WARN, "%s invalid fastrpc device from pid %x\n",
-				__func__, dsp2cpu_cmd->pid);
+				__func__, version ? dsp2cpu_cmd_v2->pid : dsp2cpu_cmd->pid);
 		goto fail_pid;
 	}
 
@@ -1591,7 +1624,7 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 		goto fail_pid;
 	}
 	dprintk(CVP_DSP, "%s get pid_s 0x%x from hdl 0x%x\n", __func__,
-			pid_s, dsp2cpu_cmd->pid);
+			pid_s, version ? dsp2cpu_cmd_v2->pid : dsp2cpu_cmd->pid);
 
 	task = get_pid_task(pid_s, PIDTYPE_TGID);
 	if (!task) {
@@ -1605,14 +1638,44 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 		goto fail_msm_cvp_open;
 	}
 
-	inst->dsp_handle = dsp2cpu_cmd->pid;
-	inst->fastrpc_entry = frpc_node;
-	inst->prop.kernel_mask = dsp2cpu_cmd->kernel_mask;
-	inst->prop.type =  dsp2cpu_cmd->session_type;
-	inst->prop.priority = dsp2cpu_cmd->session_prio;
-	inst->prop.is_secure = dsp2cpu_cmd->is_secure;
-	inst->prop.dsp_mask = dsp2cpu_cmd->dsp_access_mask;
-	inst->prop.pkt_concurrency = 8;
+	if (version == 0) {
+		inst->dsp_handle = dsp2cpu_cmd->pid;
+		inst->fastrpc_entry = frpc_node;
+		inst->prop.kernel_mask = dsp2cpu_cmd->kernel_mask;
+		inst->prop.type =  dsp2cpu_cmd->session_type;
+		inst->prop.priority = dsp2cpu_cmd->session_prio;
+		inst->prop.is_secure = dsp2cpu_cmd->is_secure;
+		inst->prop.dsp_mask = dsp2cpu_cmd->dsp_access_mask;
+		inst->prop.pkt_concurrency = 8;
+	} else { // Version 1
+		inst->dsp_handle = dsp2cpu_cmd->pid;
+		inst->fastrpc_entry = frpc_node;
+
+		struct eva_kmd_sys_properties *props = &dsp2cpu_cmd_v2->prop_data;
+		struct eva_kmd_sys_property *prop_array;
+		int i = 0;
+
+		if (props == NULL) {
+			dprintk(CVP_ERR, "Invalid properties\n");
+			goto fail_get_session_info;
+		}
+		if (props->prop_num > MAX_KMD_PROP_NUM_PER_PACKET) {
+			dprintk(CVP_ERR, "Too many properties %d to set\n",
+				props->prop_num);
+			goto fail_get_session_info;
+		}
+
+		prop_array = &props->prop_data[0];
+
+		for (i = 0; i < props->prop_num; i++) {
+			if (msm_cvp_set_sysprop_sess(inst, &prop_array[i], i)) {
+				dprintk(CVP_ERR,
+					"unrecognized sys property to set %d\n",
+					prop_array[i].prop_type);
+				goto fail_get_session_info;
+			}
+		}
+	}
 
 	eva_fastrpc_driver_add_sess(frpc_node, inst);
 	rc = msm_cvp_session_create(inst);
@@ -1753,6 +1816,57 @@ void __dsp_cvp_sess_delete(struct cvp_dsp_cmd_msg *cmd)
 	}
 
 dsp_fail_delete:
+	return;
+}
+
+void __dsp_cvp_set_session_configs(struct cvp_dsp_cmd_msg *cmd)
+{
+	struct cvp_dsp_apps *me = &gfa_cv;
+	struct msm_cvp_inst *inst;
+	struct cvp_dsp2cpu_cmd_v2 *dsp2cpu_cmd_v2 = &me->pending_dsp2cpu_cmd_v2;
+
+	cmd->ret = 0;
+	dprintk(CVP_DSP,
+		"%s sess id 0x%x, low 0x%x, high 0x%x\n",
+		__func__, dsp2cpu_cmd_v2->session_id,
+		dsp2cpu_cmd_v2->session_cpu_low,
+		dsp2cpu_cmd_v2->session_cpu_high);
+
+	inst = (struct msm_cvp_inst *)get_inst_from_dsp(
+			dsp2cpu_cmd_v2->session_cpu_high,
+			dsp2cpu_cmd_v2->session_cpu_low);
+
+	if (!inst) {
+		cmd->ret = -1;
+		goto dsp_fail_set_session_configs;
+	}
+
+	struct eva_kmd_sys_properties *props = &dsp2cpu_cmd_v2->prop_data;
+	struct eva_kmd_sys_property *prop_array;
+	int i = 0;
+
+	if (props == NULL) {
+		dprintk(CVP_ERR, "Invalid properties\n");
+		goto dsp_fail_set_session_configs;
+	}
+	if (props->prop_num > MAX_KMD_PROP_NUM_PER_PACKET) {
+		dprintk(CVP_ERR, "Too many properties %d to set\n",
+			props->prop_num);
+		goto dsp_fail_set_session_configs;
+	}
+
+	prop_array = &props->prop_data[0];
+
+	for (i = 0; i < props->prop_num; i++) {
+		if (msm_cvp_set_sysprop_sess(inst, &prop_array[i], i)) {
+			dprintk(CVP_ERR,
+				"unrecognized sys property to set %d\n",
+				prop_array[i].prop_type);
+			goto dsp_fail_set_session_configs;
+		}
+	}
+
+dsp_fail_set_session_configs:
 	return;
 }
 
@@ -2608,7 +2722,7 @@ wait_dsp:
 
 	/* Set the cmd to 0 to avoid sending previous session values in case the command fails*/
 	memset(&cmd, 0, sizeof(struct cvp_dsp_cmd_msg));
-	cmd.type = me->pending_dsp2cpu_cmd.type;
+	cmd.type = me->pending_dsp2cpu_cmd_header.type;
 
 	if (rc == -ERESTARTSYS) {
 		dprintk(CVP_WARN, "%s received interrupt signal\n", __func__);
@@ -2619,7 +2733,7 @@ wait_dsp:
 			mutex_unlock(&me->rx_lock);
 			goto wait_dsp;
 		}
-		switch (me->pending_dsp2cpu_cmd.type) {
+		switch (me->pending_dsp2cpu_cmd_header.type) {
 		case DSP2CPU_POWERON:
 		{
 			mutex_lock(&me->tx_lock);
@@ -2665,6 +2779,12 @@ wait_dsp:
 		case DSP2CPU_POWER_REQUEST:
 		{
 			__dsp_cvp_power_req(&cmd);
+
+			break;
+		}
+		case DSP2CPU_SET_SESSION_CONFIGS:
+		{
+			__dsp_cvp_set_session_configs(&cmd);
 
 			break;
 		}
@@ -2719,10 +2839,12 @@ wait_dsp:
 
 		default:
 			dprintk(CVP_ERR, "unrecognaized dsp cmds: %d\n",
-					me->pending_dsp2cpu_cmd.type);
+					me->pending_dsp2cpu_cmd_header.type);
 			break;
 		}
 		me->pending_dsp2cpu_cmd.type = CVP_INVALID_RPMSG_TYPE;
+		me->pending_dsp2cpu_cmd_v2.header.type = CVP_INVALID_RPMSG_TYPE;
+		me->pending_dsp2cpu_cmd_header.type = CVP_INVALID_RPMSG_TYPE;
 		mutex_unlock(&me->rx_lock);
 	}
 	/* Responds to DSP */
@@ -2757,6 +2879,8 @@ int cvp_dsp_device_init(void)
 		init_completion(&me->completions[i]);
 
 	me->pending_dsp2cpu_cmd.type = CVP_INVALID_RPMSG_TYPE;
+	me->pending_dsp2cpu_cmd_v2.header.type = CVP_INVALID_RPMSG_TYPE;
+	me->pending_dsp2cpu_cmd_header.type = CVP_INVALID_RPMSG_TYPE;
 	me->pending_dsp2cpu_rsp.type = CVP_INVALID_RPMSG_TYPE;
 
 	INIT_MSM_CVP_LIST(&me->fastrpc_driver_list);

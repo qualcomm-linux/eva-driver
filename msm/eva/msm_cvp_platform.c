@@ -37,6 +37,11 @@
 	.bank_spreading = bsp,	\
 }
 
+struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX];
+struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX];
+struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX];
+struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX];
+
 static struct msm_cvp_common_data default_common_data[] = {
 	{
 		.key = "qcom,auto-pil",
@@ -424,6 +429,14 @@ static struct msm_cvp_common_data sm8845_common_data[] = {
 #else
 		.value = 0,
 #endif
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_a_bitmask",
+		.value = 0x30,
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_b_bitmask",
+		.value = 0x3,
 	}
 };
 
@@ -460,13 +473,10 @@ static struct msm_cvp_platform_data default_data = {
 	.ubwc_config = 0x0,
 	.noc_qos = 0x0,
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8450_data = {
@@ -477,13 +487,10 @@ static struct msm_cvp_platform_data sm8450_data = {
 	.ubwc_config = kona_ubwc_data,
 	.noc_qos = &waipio_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8550_data = {
@@ -494,13 +501,10 @@ static struct msm_cvp_platform_data sm8550_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8550_tvm_data = {
@@ -511,13 +515,10 @@ static struct msm_cvp_platform_data sm8550_tvm_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 2,
-#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8650_data = {
@@ -528,13 +529,10 @@ static struct msm_cvp_platform_data sm8650_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &waipio_noc_qos,	/*Reuse Waipio setting*/
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
 	.cvp_hfi = cvp_hfi_defs_v1,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8750_data = {
@@ -545,13 +543,10 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
-	.cvp_hfi = cvp_hfi_defs_v1,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 2,
+	.hal_version = DEFAULT_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8850_data = {
@@ -562,13 +557,10 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
-#ifdef CONFIG_SUN_HFI
-	.cvp_hfi = cvp_hfi_defs_v1,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-#else
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-#endif
+	.hfi_ver = 2,
+	.hal_version = KNP_HAL_VER,
 };
 
 static struct msm_cvp_platform_data sm8845_data = {
@@ -579,6 +571,10 @@ static struct msm_cvp_platform_data sm8845_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v2,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
+	.hfi_ver = 2,
+	.hal_version = KNP_HAL_VER,
 };
 
 static const struct of_device_id msm_cvp_dt_match[] = {
@@ -2156,201 +2152,166 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX] = {
 	}
 };
 #endif
+
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr)
 {
-#ifdef CONFIG_SUN_HFI
-	return get_pkt_index_v1(hdr);
-#else
-	return get_pkt_index_v2(hdr);
-#endif
+	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
+	uint32_t hfi_ver = pdata->hfi_ver;
+
+	if (hfi_ver == 1) {
+		if (!hdr || (hdr->packet_type < HFI_CMD_SESSION_CVP_START)
+			|| hdr->packet_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
+			return -EINVAL;
+
+		if (cvp_hfi_defs[hdr->packet_type - HFI_CMD_SESSION_CVP_START].size)
+			return (hdr->packet_type - HFI_CMD_SESSION_CVP_START);
+
+		return -EINVAL;
+	} else {
+		int pkt_idx;
+		u32 thirteenth_bit;
+		u32 fourteenth_bit;
+
+		if (!hdr)
+			return -EINVAL;
+
+		thirteenth_bit = (hdr->packet_type >> 12) & 1;
+		fourteenth_bit = (hdr->packet_type >> 13) & 1;
+
+		if (thirteenth_bit && fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
+		else if (!thirteenth_bit && fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
+		else if (thirteenth_bit && !fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
+		else
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
+
+		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+			return -EINVAL;
+
+		if (cvp_hfi_defs[pkt_idx].size)
+			return pkt_idx;
+
+		return -EINVAL;
+	}
 }
 
 int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr)
 {
-#ifdef CONFIG_SUN_HFI
-	return get_pkt_fenceoverride_v1(hdr);
-#else
-	return get_pkt_fenceoverride_v2(hdr);
-#endif
+	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
+	uint32_t hfi_ver = pdata->hfi_ver;
+
+	if (hfi_ver == 1)
+		return cvp_hfi_defs[hdr->packet_type -
+			HFI_CMD_SESSION_CVP_START].force_kernel_fence;
+	else {
+		int pkt_idx;
+		u32 thirteenth_bit;
+		u32 fourteenth_bit;
+
+		thirteenth_bit = (hdr->packet_type >> 12) & 1;
+		fourteenth_bit = (hdr->packet_type >> 13) & 1;
+
+		if (thirteenth_bit && fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
+		else if (!thirteenth_bit && fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
+		else if (thirteenth_bit && !fourteenth_bit)
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
+		else
+			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
+
+
+		return cvp_hfi_defs[pkt_idx].force_kernel_fence;
+	}
 }
 
 int get_pkt_index_from_type(u32 pkt_type)
 {
-#ifdef CONFIG_SUN_HFI
-	return get_pkt_index_from_type_v1(pkt_type);
-#else
-	return get_pkt_index_from_type_v2(pkt_type);
-#endif
+	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
+	uint32_t hfi_ver = pdata->hfi_ver;
+
+	if (hfi_ver == 1) {
+		if ((pkt_type < HFI_CMD_SESSION_CVP_START) ||
+			pkt_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
+			return -EINVAL;
+
+		if (cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].size)
+			return (pkt_type - HFI_CMD_SESSION_CVP_START);
+	} else {
+		int pkt_idx;
+		u32 thirteenth_bit;
+		u32 fourteenth_bit;
+
+		thirteenth_bit = (pkt_type >> 12) & 1;
+		fourteenth_bit = (pkt_type >> 13) & 1;
+
+		if (thirteenth_bit && fourteenth_bit)
+			pkt_idx = pkt_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
+		else if (!thirteenth_bit && fourteenth_bit)
+			pkt_idx = pkt_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
+		else if (thirteenth_bit && !fourteenth_bit)
+			pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
+		else
+			pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_OFFSET;
+
+		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+			return -EINVAL;
+
+		if (cvp_hfi_defs[pkt_idx].size)
+			return pkt_idx;
+	}
+
+	return -EINVAL;
 }
 
 const char *get_pkt_name_from_type(u32 pkt_type)
 {
-#ifdef CONFIG_SUN_HFI
-	return get_pkt_name_from_type_v1(pkt_type);
-#else
-	return get_pkt_name_from_type_v2(pkt_type);
-#endif
-}
-#ifdef CONFIG_SUN_HFI
-int get_pkt_index_v1(struct cvp_hal_session_cmd_pkt *hdr)
-{
-	if (!hdr || (hdr->packet_type < HFI_CMD_SESSION_CVP_START)
-		|| hdr->packet_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-		return -EINVAL;
+	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
+	uint32_t hfi_ver = pdata->hfi_ver;
 
-	if (cvp_hfi_defs[hdr->packet_type - HFI_CMD_SESSION_CVP_START].size)
-		return (hdr->packet_type - HFI_CMD_SESSION_CVP_START);
-
-	return -EINVAL;
-}
-
-int get_pkt_fenceoverride_v1(struct cvp_hal_session_cmd_pkt *hdr)
-{
-	return cvp_hfi_defs[hdr->packet_type - HFI_CMD_SESSION_CVP_START].force_kernel_fence;
-}
-
-int get_pkt_index_from_type_v1(u32 pkt_type)
-{
-	if ((pkt_type < HFI_CMD_SESSION_CVP_START) ||
-		pkt_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-		return -EINVAL;
-
-	if (cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].size)
-		return (pkt_type - HFI_CMD_SESSION_CVP_START);
-
-	return -EINVAL;
-}
-
-const char *get_pkt_name_from_type_v1(u32 pkt_type)
-{
-	if (pkt_type > HFI_CMD_SESSION_CVP_START &&
-		pkt_type <= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-		return cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].name;
-	else if (pkt_type > HFI_MSG_SESSION_CVP_START &&
-		pkt_type <= (HFI_MSG_SESSION_CVP_START + MAX_PKT_IDX))
-		return cvp_hfi_msg_defs[pkt_type - HFI_MSG_SESSION_CVP_START].name;
-	else
-		return "";
-}
-#else
-int get_pkt_fenceoverride_v2(struct cvp_hal_session_cmd_pkt *hdr)
-{
-	int pkt_idx;
-	u32 thirteenth_bit;
-	u32 fourteenth_bit;
-
-	thirteenth_bit = (hdr->packet_type >> 12) & 1; //(hdr->packet_type << 13);
-	fourteenth_bit = (hdr->packet_type >> 13) & 1; //(hdr->packet_type << 14);
-
-	if (thirteenth_bit && fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
-	else if (!thirteenth_bit && fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
-	else if (thirteenth_bit && !fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
-	else
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
-
-	return cvp_hfi_defs[pkt_idx].force_kernel_fence;
-}
-
-int get_pkt_index_v2(struct cvp_hal_session_cmd_pkt *hdr)
-{
-	int pkt_idx;
-	u32 thirteenth_bit;
-	u32 fourteenth_bit;
-
-	if (!hdr)
-		return -EINVAL;
-
-	thirteenth_bit = (hdr->packet_type >> 12) & 1;
-	fourteenth_bit = (hdr->packet_type >> 13) & 1;
-
-	if (thirteenth_bit && fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
-	else if (!thirteenth_bit && fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
-	else if (thirteenth_bit && !fourteenth_bit)
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
-	else
-		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
-
-
-	if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-		return -EINVAL;
-
-	if (cvp_hfi_defs[pkt_idx].size)
-		return pkt_idx;
-
-	return -EINVAL;
-}
-
-int get_pkt_index_from_type_v2(u32 pkt_type)
-{
-	int pkt_idx;
-	u32 thirteenth_bit;
-	u32 fourteenth_bit;
-
-	thirteenth_bit = (pkt_type >> 12) & 1;
-	fourteenth_bit = (pkt_type >> 13) & 1;
-
-	if (thirteenth_bit && fourteenth_bit)
-		pkt_idx = pkt_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
-	else if (!thirteenth_bit && fourteenth_bit)
-		pkt_idx = pkt_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
-	else if (thirteenth_bit && !fourteenth_bit)
-		pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
-	else
-		pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_OFFSET;
-
-
-	if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-		return -EINVAL;
-
-	if (cvp_hfi_defs[pkt_idx].size)
-		return pkt_idx;
-
-	return -EINVAL;
-}
-
-const char *get_pkt_name_from_type_v2(u32 pkt_type)
-{
-	u32 mask;
-	int pkt_idx;
-
-	if ((pkt_type & 0x03000000) == HFI_CMD_SESSION_EVA_OFFSET) {
-		pkt_idx = get_pkt_index_from_type(pkt_type);
-		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-			return "";
+	if (hfi_ver == 1) {
+		if (pkt_type > HFI_CMD_SESSION_CVP_START &&
+			pkt_type <= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
+			return cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].name;
+		else if (pkt_type > HFI_MSG_SESSION_CVP_START &&
+			pkt_type <= (HFI_MSG_SESSION_CVP_START + MAX_PKT_IDX))
+			return cvp_hfi_msg_defs[pkt_type - HFI_MSG_SESSION_CVP_START].name;
 		else
-			return cvp_hfi_defs[pkt_idx].name;
+			return "";
+	} else {
+		u32 mask;
+		int pkt_idx;
 
-	} else if ((pkt_type & 0x03000000) == HFI_MSG_SESSION_EVA_OFFSET) {
-		mask = pkt_type & 0x3000;
-		pkt_idx = -EINVAL;
+		if ((pkt_type & 0x03000000) == HFI_CMD_SESSION_EVA_OFFSET) {
+			int pkt_idx = get_pkt_index_from_type(pkt_type);
 
-		switch (mask) {
-		case 0x3000:
-			pkt_idx = pkt_type - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX;
-			break;
-		case 0x1000:
-			pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-						+ MSG_SESSION_EVA_CTRL_INDEX;
-			break;
-		case 0:
-			pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_OFFSET;
-			break;
-		default:
-			break;
+			if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+				return "";
+			else
+				return cvp_hfi_defs[pkt_idx].name;
+		} else if (((pkt_type & 0x03000000) == HFI_MSG_SESSION_EVA_OFFSET)) {
+			mask = pkt_type & 0x3000;
+			pkt_idx = -EINVAL;
+
+			if (mask == 0x3000)
+				pkt_idx = pkt_type - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX;
+			else if (mask == 0x1000)
+				pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_CTRL_OFFSET
+					+ MSG_SESSION_EVA_CTRL_INDEX;
+			else if (mask == 0)
+				pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_OFFSET;
+
+			if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+				return "";
+			else
+				return cvp_hfi_msg_defs[pkt_idx].name;
 		}
-		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-			return "";
-		else
-			return cvp_hfi_msg_defs[pkt_idx].name;
-	} else
 		return "";
+	}
 }
-#endif
+
 const char *get_feature_name_from_type(u32 pkt_type)
 {
 	switch (pkt_type) {
@@ -2400,6 +2361,7 @@ const char *get_feature_name_from_type(u32 pkt_type)
 		return " ";
 	}
 }
+
 MODULE_DEVICE_TABLE(of, msm_cvp_dt_match);
 
 int cvp_of_fdt_get_ddrtype(void)

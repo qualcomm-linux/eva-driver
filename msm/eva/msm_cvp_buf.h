@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #ifndef _MSM_CVP_BUF_H_
@@ -54,6 +54,17 @@ enum cp_context_bank {
 struct msm_cvp_list {
 	struct list_head list;
 	struct mutex lock;
+};
+
+struct persist_info {
+	char feature[20];
+	uint32_t persist_size;
+};
+
+struct msm_cvp_persist_list {
+	struct list_head list;
+	struct mutex lock;
+	struct persist_info info;
 };
 
 static inline void INIT_MSM_CVP_LIST(struct msm_cvp_list *mlist)

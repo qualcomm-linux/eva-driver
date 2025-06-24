@@ -1630,7 +1630,7 @@ static int cvp_session_name_copy_u32(u32 idx,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
+int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array, int i)
 {
 	struct cvp_session_prop *session_prop;
@@ -1682,7 +1682,7 @@ static int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop_pwr_hw(struct msm_cvp_inst *inst,
+int msm_cvp_set_sysprop_pwr_hw(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array)
 {
 	struct cvp_session_prop *session_prop;
@@ -1735,7 +1735,7 @@ static int msm_cvp_set_sysprop_pwr_hw(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop_pwr_op(struct msm_cvp_inst *inst,
+int msm_cvp_set_sysprop_pwr_op(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array)
 {
 	struct cvp_session_prop *session_prop;
@@ -1788,7 +1788,7 @@ static int msm_cvp_set_sysprop_pwr_op(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop_pwr_fps(struct msm_cvp_inst *inst,
+int msm_cvp_set_sysprop_pwr_fps(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array)
 {
 	struct cvp_session_prop *session_prop;

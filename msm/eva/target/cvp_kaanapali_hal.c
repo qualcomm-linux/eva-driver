@@ -748,8 +748,13 @@ int __set_registers_kaanapali(struct iris_hfi_device *device)
 			 pdata->noc_qos->prioritylut_low);
 	__write_register(device, CVP_NOC_A_PRIORITYLUT_HIGH,
 			 pdata->noc_qos->prioritylut_high);
+	/*
+	 * XOR'ed with bitmask to allow the urgency low value
+	 * to be modify differently for ALOR and CANOE
+	 */
 	__write_register(device, CVP_NOC_A_URGENCY_LOW,
-			 pdata->noc_qos->urgency_low);
+			 (pdata->noc_qos->urgency_low) ^
+			 (device->res->qos_noc_urgency_low_a_bitmask));
 	__write_register(device, CVP_NOC_A_DANGERLUT_LOW,
 			 pdata->noc_qos->dangerlut_low);
 	__write_register(device, CVP_NOC_A_SAFELUT_LOW,
@@ -758,8 +763,13 @@ int __set_registers_kaanapali(struct iris_hfi_device *device)
 			 pdata->noc_qos->prioritylut_low);
 	__write_register(device, CVP_NOC_B_PRIORITYLUT_HIGH,
 			 pdata->noc_qos->prioritylut_high);
+	/*
+	 * XOR'ed with bitmask to allow the urgency low value
+	 * to be modify differently for ALOR and CANOE
+	 */
 	__write_register(device, CVP_NOC_B_URGENCY_LOW,
-			 pdata->noc_qos->urgency_low);
+			 (pdata->noc_qos->urgency_low) ^
+			 (device->res->qos_noc_urgency_low_b_bitmask));
 	__write_register(device, CVP_NOC_B_DANGERLUT_LOW,
 			 pdata->noc_qos->dangerlut_low);
 	__write_register(device, CVP_NOC_B_SAFELUT_LOW,

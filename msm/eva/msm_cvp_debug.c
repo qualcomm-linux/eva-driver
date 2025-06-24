@@ -270,6 +270,8 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 {
 	struct msm_cvp_core *core = file->private_data;
 	struct msm_cvp_inst *inst = NULL;
+	struct msm_cvp_persist_list *list_node;
+
 	char *dbuf, *cur, *end;
 	ssize_t len = 0;
 	ssize_t debug_buf_len = 4096*4;
@@ -299,7 +301,12 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
-		cur += write_str(cur, end - cur, "persist memory size: %d\n", inst->persist_usage);
+		cur += write_str(cur, end - cur, "total internal memory size: %d bytes\n",
+					inst->persist_usage);
+		list_for_each_entry(list_node, &inst->persist_list.list, list) {
+			cur += write_str(cur, end - cur, "%s size: %d bytes\n",
+				list_node->info.feature, list_node->info.persist_size);
+		}
 	}
 	mutex_unlock(&core->lock);
 
@@ -355,10 +362,6 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 			&msm_cvp_syscache_disable);
 	debugfs_create_bool("disable_dcvs", 0644, dir,
 			&msm_cvp_dcvs_disable);
-	debugfs_create_u32("session_error_recovery", 0644, dir,
-			&msm_cvp_session_error_recovery);
-	debugfs_create_u32("hw_hang_recovery", 0644, dir,
-			&msm_cvp_hw_hang_recovery);
 
 	debugfs_create_file("cvp_power", 0644, dir, NULL, &cvp_pwr_fops);
 
@@ -554,6 +557,11 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 	debugfs_create_u32("sw_dbg_buf_dump", 0644, dir,
 		&msm_cvp_sw_dbg_buf_dump);
 #endif
+
+	debugfs_create_u32("session_error_recovery", 0644, dir,
+			&msm_cvp_session_error_recovery);
+	debugfs_create_u32("hw_hang_recovery", 0644, dir,
+			&msm_cvp_hw_hang_recovery);
 
 	if (!debugfs_create_file("session_info", 0444, dir, core, &session_info_fops)) {
 		dprintk(CVP_ERR, "debugfs_create_file: fail\n");
