@@ -776,6 +776,49 @@ void __write_register(struct iris_hfi_device *device,
 	wmb();
 }
 
+
+int __read_tcsr_register(struct iris_hfi_device *device, u32 reg)
+{
+	int rc = 0;
+	u8 *base_addr;
+
+	if (!device) {
+		dprintk(CVP_ERR, "Invalid params: %pK\n", device);
+		return -EINVAL;
+	}
+
+	__strict_check(device);
+
+	if (!device->power_enabled) {
+		dprintk(CVP_WARN,
+			"%s HFI Read register failed : Power is OFF\n",
+			__func__);
+		msm_cvp_res_handle_fatal_hw_error(device->res, true);
+		return -EINVAL;
+	}
+
+	base_addr = device->cvp_hal_data->tcsr_reg_base;
+
+	if (!base_addr) {
+		dprintk(CVP_WARN,
+			"%s: TCSR Registers not mapped\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	rc = readl_relaxed(base_addr + reg);
+	/*
+	 * Memory barrier to make sure value is read correctly from the
+	 * register.
+	 */
+	rmb();
+	dprintk(CVP_REG,
+		"TCSR Base addr: %pK, read from: %#x, value: %#x...\n",
+		base_addr, reg, rc);
+
+	return rc;
+}
+
 int __read_gcc_register(struct iris_hfi_device *device, u32 reg)
 {
 	int rc = 0;
@@ -4717,6 +4760,7 @@ static int __iris_power_on(struct iris_hfi_device *device)
 {
 	struct msm_cvp_core *core;
 	int rc = 0;
+	u32 reg;
 
 	if (device->power_enabled)
 		return 0;
@@ -4752,6 +4796,10 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	/* Thomas input to debug CPU NoC hang */
 	__write_register(device, CVP_NOC_SBM_FAULTINEN0_LOW, 0x1);
 	__write_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS, 0x3);
+
+	/* Send TCSR SOC VERSION to FW */
+	reg = __read_tcsr_register(device, TCSR_SOW_HW_VERSION);
+	__write_register(device, CVP_CPU_CS_SCIBCMDARG3, reg);
 
 	/* Remove below 2 register writes after HW_VERSION has valid version */
 	core = cvp_driver->cvp_core;
