@@ -1187,13 +1187,17 @@ static int iris_hfi_suspend(void *dev)
 	}
 
 	dprintk(CVP_CORE, "Suspending Iris\n");
-	mutex_lock(&device->lock);
-	rc = __power_collapse(device, true);
-	if (rc) {
-		dprintk(CVP_WARN, "%s: Iris is busy\n", __func__);
-		rc = -EBUSY;
+	if (mutex_trylock(&device->lock)) {
+		rc = __power_collapse(device, true);
+		if (rc) {
+			dprintk(CVP_WARN, "%s: Iris is busy\n", __func__);
+			rc = -EBUSY;
+		}
+		mutex_unlock(&device->lock);
+	} else {
+		dprintk(CVP_ERR, "%s: Failed to acquire lock\n", __func__);
+		return -EBUSY;
 	}
-	mutex_unlock(&device->lock);
 
 	/* Cancel pending delayed works if any */
 	if (!rc)
