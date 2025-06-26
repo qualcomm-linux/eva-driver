@@ -1329,7 +1329,7 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 	struct msm_cvp_smem *smem2;
 	struct rb_node *node;
 	struct msm_cvp_core *core;
-	int index;
+	int index = 0;
 
 	core = cvp_driver->cvp_core;
 	mutex_lock(&inst->dma_cache.lock);
@@ -1798,6 +1798,11 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 		buf = &frame->bufs[i];
 		smem = buf->smem;
 		msm_cvp_cache_operations(smem, type, buf->offset, buf->size);
+
+		if (!smem) {
+			dprintk(CVP_ERR, "%s: Invalid smem\n", __func__);
+			continue;
+		}
 
 #ifdef USE_PRESIL42
 	presil42_unmap_frame_buf(smem, buf);
@@ -2317,6 +2322,11 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 	struct cvp_hal_session *session;
 	u32 session_id;
 
+	if (!inst) {
+		dprintk(CVP_ERR, "%s - invalid param %pK\n",
+			__func__, inst);
+		return;
+	}
 	session = (struct cvp_hal_session *)inst->session;
 	session_id = hash32_ptr(session);
 
@@ -2326,12 +2336,6 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 			core->kmd_trace.kmd_debug_log.log.snapshot_index];
 		snap->session = inst->session;
 		core->kmd_trace.kmd_debug_log.log.snapshot_index++;
-	}
-
-	if (!inst) {
-		dprintk(CVP_ERR, "%s - invalid param %pK\n",
-			__func__, inst);
-		return;
 	}
 
 	dprintk(CVP_ERR,

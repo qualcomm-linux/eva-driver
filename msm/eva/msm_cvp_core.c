@@ -186,8 +186,8 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	inst = kzalloc(sizeof(*inst), GFP_KERNEL);
 	if (!inst) {
-		dprintk(CVP_ERR, "Failed to allocate memory\n");
 		rc = -ENOMEM;
+		dprintk(CVP_ERR, "Failed to allocate memory %d\n", rc);
 		goto err_invalid_core;
 	}
 

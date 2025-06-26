@@ -3343,6 +3343,12 @@ static void __process_sys_error(struct iris_hfi_device *device)
 	u32 sfr_buf_size = 0;
 
 	vsfr = (struct cvp_hfi_sfr_struct *)device->sfr.align_virtual_addr;
+
+	if (!vsfr) {
+		dprintk(CVP_ERR, "Failed to print SFR Message\n");
+		return;
+	}
+
 	sfr_buf_size = vsfr->bufSize;
 	if (vsfr && sfr_buf_size <= ALIGNED_SFR_SIZE) {
 		void *p = memchr(vsfr->rg_data, '\0', sfr_buf_size);
