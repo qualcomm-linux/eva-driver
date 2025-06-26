@@ -543,9 +543,9 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
 	.vm_id = 1,
-	.cvp_hfi = cvp_hfi_defs_v2,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
-	.hfi_ver = 2,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
+	.hfi_ver = 1,
 	.hal_version = DEFAULT_HAL_VER,
 };
 
@@ -619,7 +619,7 @@ struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
  * NOTE: the def entry index for the command packet is
  *	 "the packet type - HFI_CMD_SESSION_CVP_START"
  */
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 	[HFI_CMD_SESSION_CVP_DFS_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = HFI_DFS_CONFIG_CMD_SIZE,
@@ -666,12 +666,12 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.name = "HFI_CMD_SESSION_CVP_WARP_NCC_FRAME",
 			.force_kernel_fence = false,
 		},
-	[HFI_CMD_SESSION_EVA_WARP_CONFIG - HFI_CMD_SESSION_CVP_START] = {
+	[HFI_CMD_SESSION_CVP_WARP_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_WARP_CONFIG,
+			.type = HFI_CMD_SESSION_CVP_WARP_CONFIG,
 			.is_config_pkt = true,
 			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_WARP_CONFIG",
+			.name = "HFI_CMD_SESSION_CVP_WARP_CONFIG",
 		},
 	[HFI_CMD_SESSION_CVP_WARP_DS_PARAMS - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
@@ -680,12 +680,12 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_CVP_WARP_DS_PARAMS",
 		},
-	[HFI_CMD_SESSION_EVA_WARP_FRAME - HFI_CMD_SESSION_CVP_START] = {
+	[HFI_CMD_SESSION_CVP_WARP_FRAME - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_WARP_FRAME,
+			.type = HFI_CMD_SESSION_CVP_WARP_FRAME,
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_WARP_FRAME",
+			.name = "HFI_CMD_SESSION_CVP_WARP_FRAME",
 			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_CVP_DMM_CONFIG - HFI_CMD_SESSION_CVP_START] = {

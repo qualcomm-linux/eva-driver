@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/dma-direction.h>
@@ -218,8 +218,9 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	inst->clk_data.ddr_bw = 0;
 	inst->clk_data.sys_cache_bw = 0;
 	inst->clk_data.bitrate = 0;
+#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = core->resources.pm_qos.latency_us;
-
+#endif
 	for (i = SESSION_MSG_INDEX(SESSION_MSG_START);
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
 		init_completion(&inst->completions[i]);
@@ -347,7 +348,9 @@ exit:
 		dprintk_rl(CVP_WARN,
 			"Failed to release persist buffers\n");
 
+#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+#endif
 	ops_tbl = inst->core->dev_ops;
 	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 

@@ -157,7 +157,7 @@ void eva_kmd_debug_log_dump(void)
 #endif
 }
 
-static int eva_queue_dump(struct cvp_iface_q_info *iface_q,
+int eva_queue_dump(struct cvp_iface_q_info *iface_q,
 		u8 *align_virtual_addr, uint32_t queue_idx)
 {
 #ifdef CVP_SW_DBG_BUF_ENABLED
@@ -180,8 +180,8 @@ static int eva_queue_dump(struct cvp_iface_q_info *iface_q,
 	write_ptr = (u32 *)(align_virtual_addr + queue_idx
 			+ sizeof(struct cvp_hfi_queue_header));
 	memcpy(write_ptr, iface_q->q_array.align_virtual_addr, iface_q->q_array.mem_size);
-	return 0;
 #endif
+	return 0;
 }
 
 void eva_cmd_msg_queue_dump(void)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/pid.h>
@@ -1578,6 +1578,7 @@ exit:
 	return ret;
 }
 
+#ifndef CVP_PAKALA_LONGEVITY
 enum cp_context_bank msm_cvp_get_cb(u32 flags)
 {
 	enum cp_context_bank buf_cb;
@@ -1596,6 +1597,7 @@ enum cp_context_bank msm_cvp_get_cb(u32 flags)
 	}
 	return buf_cb;
 }
+#endif
 
 static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 				struct cvp_buf_type *buf,
@@ -1665,9 +1667,9 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 		ret = -ENOMEM;
 		goto exit;
 	}
-
+#ifndef CVP_PAKALA_LONGEVITY
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
-
+#endif
 	smem->pkt_type = pkt_type;
 	smem->buf_idx = buf_idx;
 	smem->fd = buf->fd;
@@ -1744,9 +1746,9 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 	smem = msm_cvp_session_get_smem(inst, buf, false, pkt_type);
 	if (!smem)
 		return 0;
-
+#ifndef CVP_PAKALA_LONGEVITY
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
-
+#endif
 	smem->buf_idx = buf_idx;
 
 	frame->bufs[nr].fd = buf->fd;

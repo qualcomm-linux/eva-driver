@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "msm_cvp.h"
@@ -101,8 +101,12 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 				struct eva_kmd_hfi_packet *out)
 {
 	struct cvp_session_msg *msg = NULL;
+	struct cvp_hfi_msg_session_hdr_old_format *hdr_v1;
 	struct cvp_hfi_msg_session_hdr *hdr;
+	struct msm_cvp_platform_data *pdata;
 	int rc = 0;
+
+	pdata = cvp_driver->cvp_core->platform_data;
 	CVPKERNEL_ATRACE_BEGIN("cvp_wait_process_message");
 	if (wait_event_timeout(sq->wq,
 		cvp_msg_pending(sq, &msg, ktid), timeout) == 0) {
@@ -136,12 +140,21 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 		goto exit;
 	}
 
-	hdr = (struct cvp_hfi_msg_session_hdr *)&msg->pkt;
-	CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
-	memcpy(out, &msg->pkt, get_msg_size(hdr));
-	CVPKERNEL_ATRACE_END("before and after memcpy");
-	if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
-		msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
+	if (pdata->hfi_ver == 1) {
+		hdr_v1 = (struct cvp_hfi_msg_session_hdr_old_format *)&msg->pkt;
+		CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
+		memcpy(out, &msg->pkt, sizeof(struct cvp_hfi_msg_session_hdr_old_format));
+		CVPKERNEL_ATRACE_END("before and after memcpy");
+		if (hdr_v1->client_data.kdata >= MAX_PKT_IDX)
+			msm_cvp_unmap_frame(inst, hdr_v1->client_data.kdata);
+	} else {
+		hdr = (struct cvp_hfi_msg_session_hdr *)&msg->pkt;
+		CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
+		memcpy(out, &msg->pkt, get_msg_size(hdr));
+		CVPKERNEL_ATRACE_END("before and after memcpy");
+		if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
+			msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
+	}
 	cvp_kmem_cache_free(&cvp_driver->msg_cache, msg);
 
 exit:
@@ -396,7 +409,12 @@ receive_msg:
 	rc = cvp_wait_process_message(inst, sq, &ktid, timeout,
 				(struct eva_kmd_hfi_packet *)&hdr);
 
+#ifdef CVP_PAKALA_LONGEVITY
+	hfi_err = hdr.header.error_type;
+#else
 	hfi_err = hdr.error_type;
+#endif
+
 	if (rc) {
 		dprintk(CVP_ERR, "%s %s: cvp_wait_process_message rc %d\n",
 			current->comm, __func__, rc);
@@ -1654,11 +1672,13 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		case EVA_KMD_PROP_SESSION_DSPMASK:
 			session_prop->dsp_mask = prop_array->data;
 			break;
+#ifdef CVP_DYNAMIC_PMQOS
 		case EVA_KMD_PROP_SESSION_LATENCY:
 			inst->pm_qos_latency = prop_array->data;
 			dprintk(CVP_INFO, "inst %pK - New latency value from user %d\n",
 				inst, inst->pm_qos_latency);
 			break;
+#endif
 		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
 			session_prop->dump_offset = prop_array->data;
 			break;

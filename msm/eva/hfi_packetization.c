@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "hfi_packetization.h"
@@ -458,7 +458,7 @@ int cvp_create_pkt_cmd_sys_image_version(
 	pkt->size = sizeof(struct cvp_hfi_cmd_sys_get_property_packet) + sizeof(u32);
 	pkt->packet_type = HFI_CMD_SYS_GET_PROPERTY;
 	pkt->num_properties = 1;
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 	pkt->rg_property_data[0] = HFI_PROPERTY_SYS_IMAGE_VERSION;
 #else
 	pkt->rg_property_data[0] = HFI_PROPERTY_SYS_EVA_FW_VERSION;

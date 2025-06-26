@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __H_CVP_CORE_HFI_H__
@@ -296,7 +296,9 @@ struct iris_hfi_device {
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	struct cvp_mem_addr sw_dbg_buf;
 #endif
+#ifdef CVP_DYNAMIC_PMQOS
 	u32 global_pm_qos_latency_us;
+#endif
 };
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev);

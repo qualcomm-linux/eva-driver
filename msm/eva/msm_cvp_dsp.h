@@ -54,7 +54,9 @@ struct fastrpc_driver {
 #define CVP_DSP_RESPONSE_TIMEOUT 600
 #define CVP_INVALID_RPMSG_TYPE 0xBADDFACE
 #define MAX_FRAME_BUF_NUM 16
+#ifndef CVP_PAKALA_LONGEVITY
 #define CVP_HW_THREADS_RESERVED 20
+#endif
 
 #define BITPTRSIZE32 (4)
 #define BITPTRSIZE64 (8)
@@ -112,6 +114,24 @@ enum CVP_DSP_COMMAND {
 	CVP_DSP_MAX_CMD = 26,
 };
 
+#ifdef CVP_PAKALA_LONGEVITY
+struct eva_power_req {
+	uint32_t clock_fdu;
+	uint32_t clock_ica;
+	uint32_t clock_od;
+	uint32_t clock_mpu;
+	uint32_t clock_fw;
+	uint32_t bw_ddr;
+	uint32_t bw_sys_cache;
+	uint32_t op_clock_fdu;
+	uint32_t op_clock_ica;
+	uint32_t op_clock_od;
+	uint32_t op_clock_mpu;
+	uint32_t op_clock_fw;
+	uint32_t op_bw_ddr;
+	uint32_t op_bw_sys_cache;
+};
+#else
 struct eva_power_req {
 	uint32_t clock_fdu;
 	uint32_t clock_mpu;
@@ -139,6 +159,7 @@ struct eva_power_req {
 	uint32_t op_bw_sys_cache;
 	uint32_t reserved[CVP_HW_THREADS_RESERVED];
 } __packed;
+#endif
 
 struct eva_mem_remote {
 	uint32_t type;
@@ -149,7 +170,11 @@ struct eva_mem_remote {
 	uint32_t iova;
 	uint32_t dsp_remote_map;
 	uint64_t v_dsp_addr;
+#ifdef CVP_PAKALA_LONGEVITY
+};
+#else
 } __packed;
+#endif
 
 struct eva_mem_remote_batch {
 	uint32_t cnt;

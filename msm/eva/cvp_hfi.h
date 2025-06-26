@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __H_CVP_HFI_H__
 #define __H_CVP_HFI_H__
 
 #ifdef CONFIG_EVA_SUN
-#include "cvp_hfi_v2.h"
+#include "cvp_hfi_v1.h"
 #endif
 
 #ifdef CONFIG_EVA_CANOE

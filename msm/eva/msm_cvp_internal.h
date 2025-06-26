@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _MSM_CVP_INTERNAL_H_
@@ -27,7 +27,11 @@
 #include "cvp_hfi.h"
 #include "msm_cvp_sw_dbg.h"
 
+#ifdef CONFIG_EVA_SUN
+#define MAX_SUPPORTED_INSTANCES 16
+#else
 #define MAX_SUPPORTED_INSTANCES 32
+#endif
 #define MAX_CV_INSTANCES MAX_SUPPORTED_INSTANCES
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
@@ -363,7 +367,9 @@ struct msm_cvp_inst {
 	struct synx_session *synx_session_id;
 	struct cvp_fence_queue fence_cmd_queue;
 	char proc_name[TASK_COMM_LEN];
+#ifdef CVP_DYNAMIC_PMQOS
 	u32 pm_qos_latency;
+#endif
 	atomic_t va_inst_watermark;
 };
 

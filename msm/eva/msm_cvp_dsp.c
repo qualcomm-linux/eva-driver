@@ -239,7 +239,9 @@ static int delete_dsp_session(struct msm_cvp_inst *inst,
 	task = inst->task;
 
 	ops_tbl = inst->core->dev_ops;
+#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+#endif
 	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
 
 	rc = msm_cvp_close(inst);
@@ -1541,22 +1543,26 @@ static void *get_inst_from_dsp(uint32_t session_cpu_high, uint32_t session_cpu_l
 static void print_power(const struct eva_power_req *pwr_req)
 {
 	if (pwr_req) {
-		dprintk(CVP_DSP, "Clock: Fdu %d Mpu %d Od %d Ica %d Vadl %d",
+		dprintk(CVP_DSP, "Clock: Fdu %d Mpu %d Od %d Ica %d Fw %d",
 				pwr_req->clock_fdu, pwr_req->clock_mpu,
 				pwr_req->clock_od, pwr_req->clock_ica,
-				pwr_req->clock_vadl);
-		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Fw %d\n",
+				pwr_req->clock_fw);
+#ifndef CVP_PAKALA_LONGEVITY
+		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Vadl %d\n",
 				pwr_req->clock_tof, pwr_req->clock_rge,
 				pwr_req->clock_xra, pwr_req->clock_lsr,
-				pwr_req->clock_fw);
-		dprintk(CVP_DSP, "OpClock: Fdu %d Mpu %d Od %d Ica %d Vadl %d",
+				pwr_req->clock_vadl);
+#endif
+		dprintk(CVP_DSP, "OpClock: Fdu %d Mpu %d Od %d Ica %d Fw %d",
 				pwr_req->op_clock_fdu, pwr_req->op_clock_mpu,
 				pwr_req->op_clock_od, pwr_req->op_clock_ica,
-				pwr_req->op_clock_vadl);
-		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Fw %d\n",
+				pwr_req->op_clock_fw);
+#ifndef CVP_PAKALA_LONGEVITY
+		dprintk(CVP_DSP, "Tof %d, Rge %d, Xra %d, Lsr %d, Vadl %d\n",
 				pwr_req->op_clock_tof, pwr_req->op_clock_rge,
 				pwr_req->op_clock_xra, pwr_req->op_clock_lsr,
-				pwr_req->op_clock_fw);
+				pwr_req->op_clock_vadl);
+#endif
 		dprintk(CVP_DSP, "Actual Bw: Ddr %d, SysCache %d",
 				pwr_req->bw_ddr, pwr_req->bw_sys_cache);
 		dprintk(CVP_DSP, "OpBw: Ddr %d, SysCache %d\n",
@@ -1570,6 +1576,7 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	struct msm_cvp_inst *inst = NULL, *inst_temp = NULL;
 	uint64_t inst_handle = 0;
 	uint32_t pid;
+	struct msm_cvp_platform_data *pdata;
 	int rc = 0;
 	struct cvp_dsp_cmd_header *dsp2cpu_cmd_header = &me->pending_dsp2cpu_cmd_header;
 	struct cvp_dsp2cpu_cmd *dsp2cpu_cmd = &me->pending_dsp2cpu_cmd;
@@ -1594,11 +1601,20 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 			dsp2cpu_cmd->is_secure,
 			dsp2cpu_cmd->pid);
 
-
+		pdata = cvp_driver->cvp_core->platform_data;
+		if (pdata->hfi_ver == 1) {
+			rc = eva_fastrpc_driver_register(dsp2cpu_cmd->pid);
+			if (rc) {
+				dprintk(CVP_ERR, "%s Register fastrpc driver fail\n", __func__);
+				cmd->ret = -1;
+				return;
+			}
+		}
 		frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd->pid);
-	} else { // Version 1
+	} else {
 		frpc_node = cvp_get_fastrpc_node_with_handle(dsp2cpu_cmd_v2->pid);
 	}
+
 	if (!frpc_node) {
 		dprintk(CVP_WARN, "%s cannot get fastrpc node from pid %x\n",
 				__func__, version ? dsp2cpu_cmd_v2->pid : dsp2cpu_cmd->pid);
@@ -1897,13 +1913,16 @@ void __dsp_cvp_power_req(struct cvp_dsp_cmd_msg *cmd)
 
 	inst->prop.cycles[HFI_HW_FDU] = dsp2cpu_cmd->power_req.clock_fdu;
 	inst->prop.cycles[HFI_HW_MPU] = dsp2cpu_cmd->power_req.clock_mpu;
+	inst->prop.cycles[HFI_HW_MPU] = dsp2cpu_cmd->power_req.clock_mpu;
 	inst->prop.cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.clock_od;
 	inst->prop.cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.clock_ica;
+#ifndef CVP_PAKALA_LONGEVITY
 	inst->prop.cycles[HFI_HW_VADL] = dsp2cpu_cmd->power_req.clock_vadl;
 	inst->prop.cycles[HFI_HW_TOF] = dsp2cpu_cmd->power_req.clock_tof;
 	inst->prop.cycles[HFI_HW_RGE] = dsp2cpu_cmd->power_req.clock_rge;
 	inst->prop.cycles[HFI_HW_XRA] = dsp2cpu_cmd->power_req.clock_xra;
 	inst->prop.cycles[HFI_HW_LSR] = dsp2cpu_cmd->power_req.clock_lsr;
+#endif
 	inst->prop.fw_cycles = dsp2cpu_cmd->power_req.clock_fw;
 	inst->prop.ddr_bw = dsp2cpu_cmd->power_req.bw_ddr;
 	inst->prop.ddr_cache = dsp2cpu_cmd->power_req.bw_sys_cache;
@@ -1911,11 +1930,14 @@ void __dsp_cvp_power_req(struct cvp_dsp_cmd_msg *cmd)
 	inst->prop.op_cycles[HFI_HW_MPU] = dsp2cpu_cmd->power_req.op_clock_mpu;
 	inst->prop.op_cycles[HFI_HW_OD] = dsp2cpu_cmd->power_req.op_clock_od;
 	inst->prop.op_cycles[HFI_HW_ICA] = dsp2cpu_cmd->power_req.op_clock_ica;
+#ifndef CVP_PAKALA_LONGEVITY
 	inst->prop.op_cycles[HFI_HW_VADL] = dsp2cpu_cmd->power_req.op_clock_vadl;
 	inst->prop.op_cycles[HFI_HW_TOF] = dsp2cpu_cmd->power_req.op_clock_tof;
 	inst->prop.op_cycles[HFI_HW_RGE] = dsp2cpu_cmd->power_req.op_clock_rge;
 	inst->prop.op_cycles[HFI_HW_XRA] = dsp2cpu_cmd->power_req.op_clock_xra;
 	inst->prop.op_cycles[HFI_HW_LSR] = dsp2cpu_cmd->power_req.op_clock_lsr;
+#endif
+
 	inst->prop.fw_op_cycles = dsp2cpu_cmd->power_req.op_clock_fw;
 	inst->prop.ddr_op_bw = dsp2cpu_cmd->power_req.op_bw_ddr;
 	inst->prop.ddr_op_cache = dsp2cpu_cmd->power_req.op_bw_sys_cache;

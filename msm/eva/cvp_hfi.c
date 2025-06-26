@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <asm/memory.h>
@@ -313,6 +313,14 @@ static int __dsp_shutdown(struct iris_hfi_device *device)
 	return rc;
 }
 
+int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
+{
+#ifdef CVP_GENPD_ENABLE
+	return dev_pm_genpd_set_hwmode(dev, enable);
+#else
+	return -EINVAL;
+#endif
+}
 /* Function to switch core GDSC bw SW control and HW control.
  * Make sure controller GDSC and controller clock are ON before
  * calling this function.
@@ -329,7 +337,7 @@ int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest de
 		if (pd_info->has_hw_power_collapse) {
 			dprintk(CVP_CORE, "Moving core GDSC to %s\n",
 						dest?"HW control":"SW control");
-			rc = dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
+			rc = __dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
 			if (rc) {
 				dprintk(CVP_ERR, "Failed to move core GDSC to %s\n",
 						dest?"HW control":"SW control");
@@ -2175,10 +2183,19 @@ static void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
 	u32 latency;
 	int i, err = 0;
 
+#ifndef CVP_DYNAMIC_PMQOS
+	latency = vote_on ? device->res->pm_qos.latency_us :
+			PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+#else
 	latency = vote_on ? device->global_pm_qos_latency_us :
 			PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+#endif
 
+#ifndef CVP_DYNAMIC_PMQOS
+	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
+#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
+#endif
 		for (i = 0; i < device->res->pm_qos.silver_count; i++) {
 			if (!cpu_possible(device->res->pm_qos.silver_cores[i]))
 				continue;
@@ -2199,6 +2216,25 @@ static void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
 		}
 }
 
+#ifndef CVP_DYNAMIC_PMQOS
+static int iris_pm_qos_update(void *device)
+{
+	struct iris_hfi_device *dev;
+
+	if (!device) {
+		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
+		return -ENODEV;
+	}
+
+	dev = device;
+
+	mutex_lock(&dev->lock);
+	cvp_pm_qos_update(dev, true);
+	mutex_unlock(&dev->lock);
+
+	return 0;
+}
+#else
 static int iris_pm_qos_aggregate(void *device)
 {
 	struct iris_hfi_device *dev = NULL;
@@ -2243,6 +2279,7 @@ static int iris_pm_qos_aggregate(void *device)
 
 	return 0;
 }
+#endif
 
 static int __hwfence_regs_map(struct iris_hfi_device *device)
 {
@@ -2473,7 +2510,11 @@ static int iris_hfi_core_init(void *device)
 	__set_ubwc_config(device);
 	__sys_set_idle_indicator(device, true);
 
+#ifndef CVP_DYNAMIC_PMQOS
+	if (dev->res->pm_qos.latency_us) {
+#else
 	if (dev->global_pm_qos_latency_us) {
+#endif
 		int err = 0;
 		u32 i, cpu;
 
@@ -2491,6 +2532,13 @@ static int iris_hfi_core_init(void *device)
 			cpu = dev->res->pm_qos.silver_cores[i];
 			if (!cpu_possible(cpu))
 				continue;
+#ifndef CVP_DYNAMIC_PMQOS
+			err = dev_pm_qos_add_request(
+				get_cpu_device(cpu),
+				&dev->res->pm_qos.pm_qos_hdls[i],
+				DEV_PM_QOS_RESUME_LATENCY,
+				dev->res->pm_qos.latency_us);
+#else
 			dprintk(CVP_PWR, "%s, core %d, adding latency %d\n",
 				__func__, i, dev->global_pm_qos_latency_us);
 			err = dev_pm_qos_add_request(
@@ -2498,6 +2546,7 @@ static int iris_hfi_core_init(void *device)
 				&dev->res->pm_qos.pm_qos_hdls[i],
 				DEV_PM_QOS_RESUME_LATENCY,
 				dev->global_pm_qos_latency_us);
+#endif
 			if (err < 0)
 				dprintk(CVP_WARN,
 					"%s pm_qos_add_req %d failed\n",
@@ -2550,7 +2599,11 @@ static int iris_hfi_core_release(void *dev)
 
 	mutex_lock(&device->lock);
 	dprintk(CVP_WARN, "Core releasing\n");
+#ifndef CVP_DYNAMIC_PMQOS
+	if (device->res->pm_qos.latency_us &&
+#else
 	if (device->global_pm_qos_latency_us &&
+#endif
 		device->res->pm_qos.pm_qos_hdls) {
 		for (i = 0; i < device->res->pm_qos.silver_count; i++) {
 			if (!cpu_possible(device->res->pm_qos.silver_cores[i]))
@@ -2906,7 +2959,7 @@ static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
 		dprintk(CVP_ERR, "%s: invalid in_pkt\n", __func__);
 		return -1;
 	}
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 	if (msm_cvp_fw_debug & HFI_DEBUG_MSG_CRC_EN) {
 #else
 	if (msm_cvp_fw_debug & HFI_DEBUG_CFG_BUF_CRC_EN) {
@@ -3550,14 +3603,12 @@ static void print_msg_hdr(void *hdr)
 {
 	struct cvp_hfi_msg_session_hdr *new_hdr =
 			(struct cvp_hfi_msg_session_hdr *)hdr;
-	dprintk(CVP_HFI, "HFI MSG received: %x %x %x %x %x %x %x %x %x %#llx\n",
+	dprintk(CVP_HFI, "HFI MSG received: %x %x %x %x %x %x %x %#llx\n",
 			new_hdr->header.size, new_hdr->header.packet_type,
 			new_hdr->header.session_id,
 			new_hdr->header.client_data.transaction_id,
 			new_hdr->header.client_data.data1,
 			new_hdr->header.client_data.data2,
-			new_hdr->header.client_data.data3,
-			new_hdr->header.client_data.data4,
 			new_hdr->error_type,
 			new_hdr->header.client_data.kdata);
 }
@@ -4388,6 +4439,15 @@ static int __enable_regulator(struct iris_hfi_device *device,
 	return -EINVAL;
 }
 
+static int __pm_runtime_get_sync(struct device *dev)
+{
+#ifdef CVP_GENPD_ENABLE
+	return pm_runtime_get_sync(dev);
+#else
+	return -EINVAL;
+#endif
+}
+
 /* This API will enable the requested power_domain.
  * If HW_CNTRL is supported for given pd, this API moves
  * the power domain to HW control immediately.
@@ -4401,7 +4461,7 @@ static int __enable_power_domain(struct iris_hfi_device *device,
 	iris_hfi_for_each_pwr_domain(device, pd_info) {
 		if (strcmp(pd_info->name, name))
 			continue;
-		rc = pm_runtime_get_sync(pd_info->pd_device);
+		rc = __pm_runtime_get_sync(pd_info->pd_device);
 		if (rc < 0) {
 			dprintk(CVP_ERR, "Failed to enable PD for %s: %d\n",
 					pd_info->name, rc);
@@ -4489,6 +4549,15 @@ static int __disable_regulator(struct iris_hfi_device *device,
 	return -EINVAL;
 }
 
+static int __pm_runtime_put_sync(struct device *dev)
+{
+#ifdef CVP_GENPD_ENABLE
+	return pm_runtime_put_sync(dev);
+#else
+	return -EINVAL;
+#endif
+}
+
 /* This API will move the requested power_domain
  * to SW control(if HW_CNTRL is supported) and disable it immediately.
  */
@@ -4501,7 +4570,7 @@ static int __disable_power_domain(struct iris_hfi_device *device,
 	iris_hfi_for_each_pwr_domain(device, pd_info) {
 		if (strcmp(pd_info->name, name))
 			continue;
-		rc = pm_runtime_put_sync(pd_info->pd_device);
+		rc = __pm_runtime_put_sync(pd_info->pd_device);
 		if (rc < 0) {
 			dprintk(CVP_ERR, "Failed to disable PD for %s: %d\n",
 					pd_info->name, rc);
@@ -4885,7 +4954,11 @@ static inline int __suspend(struct iris_hfi_device *device)
 
 	power_off_iris2(device);
 
+#ifndef CVP_DYNAMIC_PMQOS
+	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
+#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
+#endif
 		cvp_pm_qos_update(device, false);
 
 	return rc;
@@ -4964,7 +5037,11 @@ int __resume(struct iris_hfi_device *device)
 	 */
 	__set_threshold_registers(device);
 
+#ifndef CVP_DYNAMIC_PMQOS
+	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
+#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
+#endif
 		cvp_pm_qos_update(device, true);
 
 	__sys_set_debug(device, msm_cvp_fw_debug);
@@ -5207,8 +5284,9 @@ static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *r
 
 	hdevice->res = res;
 	hdevice->callback = callback;
+#ifdef CVP_DYNAMIC_PMQOS
 	hdevice->global_pm_qos_latency_us = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-
+#endif
 	__init_cvp_ops(hdevice);
 
 	hdevice->cvp_workq = create_singlethread_workqueue(
@@ -5332,7 +5410,11 @@ static void iris_init_hfi_callbacks(struct cvp_hfi_ops *ops_tbl)
 	ops_tbl->flush_debug_queue = iris_hfi_flush_debug_queue;
 	ops_tbl->noc_error_info = iris_hfi_noc_error_info;
 	ops_tbl->validate_session = iris_hfi_validate_session;
+#ifndef CVP_DYNAMIC_PMQOS
+	ops_tbl->pm_qos_update = iris_pm_qos_update;
+#else
 	ops_tbl->pm_qos_update = iris_pm_qos_aggregate;
+#endif
 	ops_tbl->debug_hook = iris_debug_hook;
 }
 

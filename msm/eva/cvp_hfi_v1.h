@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __H_CVP_HFI_V1_H__
@@ -19,6 +19,14 @@
 
 #define  HFI_CMD_START_OFFSET		(0x00010000)
 #define  HFI_MSG_START_OFFSET		(0x00020000)
+
+#define  HFI_CMD_SESSION_EVA_OFFSET                     0x1200000
+#define  HFI_CMD_SESSION_EVA_CTRL_OFFSET                0x1201000
+#define  HFI_CMD_SESSION_CONFIG_OFFSET                  0x1202000
+#define  HFI_CMD_SESSION_FRAME_OFFSET                   0x1203000
+#define  HFI_MSG_SESSION_OFFSET                         0x2000000
+#define  HFI_MSG_SESSION_EVA_OFFSET                     0x2200000
+#define  HFI_MSG_SESSION_EVA_CTRL_OFFSET                0x2201000
 
 #define  HFI_ERR_NONE                                   (HFI_COMMON_BASE)        /**< Status: No error */
 #define  HFI_ERR_SYS_FATAL                              (HFI_COMMON_BASE + 0x1)  /**< Fatal system error */
@@ -739,12 +747,10 @@ struct cvp_hfi_cmd_session_set_property_packet {
 };
 
 struct cvp_hfi_client {
+	u32 transaction_id;
 	u32 data1;
 	u32 data2;
-	u32 data3;
-	u32 data4;
 	u64 kdata;
-	u64 transaction_id;
 	u32 reserved1;
 	u32 reserved2;
 } __packed;
@@ -788,7 +794,6 @@ struct cvp_hfi_header_type {
 	u32 session_id;
 	struct cvp_hfi_client client_data;
 	u32 stream_idx;
-	u32 packet_crc;
 } __packed;
 
 struct cvp_hfi_cmd_session_hdr {
@@ -834,8 +839,7 @@ enum hfi_hw_thread {
 };
 
 struct cvp_hfi_msg_session_hdr_ext {
-	struct cvp_hfi_header_type header;
-	u32 error_type;
+	struct cvp_hfi_msg_session_hdr_old_format header;
 	u32 busy_cycles;
 	u32 total_cycles;
 	u32 hw_cycles[HFI_MAX_HW_THREADS][HFI_MAX_HW_ACTIVATIONS_PER_FRAME];
@@ -953,7 +957,6 @@ struct cvp_buf_type {
 	__u32 output_handle;
 	__u32 debug_flags;
 	__u32 crc;
-	__u32 context_bank_id;
 };
 
 struct cvp_hfi_persist_buffer_packet {

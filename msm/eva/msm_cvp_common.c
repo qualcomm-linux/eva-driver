@@ -1640,15 +1640,19 @@ static int set_internal_buf_on_fw(struct msm_cvp_inst *inst,
 int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 {
 	int rc = 0;
-	u32 pkt_concurrency;
-	struct cvp_internal_buf *buf;
+#ifndef CONFIG_EVA_SUN
 	struct cvp_session_prop *session_prop;
+	u32 pkt_concurrency;
+#endif
+	struct cvp_internal_buf *buf;
 
 	if (!inst || !inst->core || !inst->core->dev_ops) {
 		dprintk(CVP_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
-
+#ifdef CONFIG_EVA_SUN
+	buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
+#else
 	session_prop = &inst->prop;
 
 	if (!session_prop) {
@@ -1666,6 +1670,7 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 	}
 
 	buf = cvp_allocate_arp_bufs(inst, ALIGN(ARP_CHUNK_SIZE, SZ_4K) * pkt_concurrency);
+#endif
 	if (!buf) {
 		rc = -ENOMEM;
 		goto error;

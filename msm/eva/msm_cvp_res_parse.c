@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iommu.h>
@@ -692,6 +692,17 @@ err_reg_tbl_alloc:
 	return rc;
 }
 
+struct device *__dev_pm_domain_attach_by_name(struct device *dev, const char *name)
+{
+	struct device *device = NULL;
+#ifdef CVP_GENPD_ENABLE
+	device = dev;
+	return dev_pm_domain_attach_by_name(device, name);
+#else
+	return device;
+#endif
+}
+
 static int msm_cvp_load_PD_table(
 		struct msm_cvp_platform_resources *res)
 {
@@ -754,7 +765,7 @@ static int msm_cvp_load_PD_table(
 				goto err_has_hw_pc_alloc;
 			}
 
-			pd_info->pd_device = dev_pm_domain_attach_by_name(&pdev->dev,
+			pd_info->pd_device = __dev_pm_domain_attach_by_name(&pdev->dev,
 									pd_info->name);
 			if (IS_ERR_OR_NULL(pd_info->pd_device)) {
 				rc = PTR_ERR(pd_info->pd_device);

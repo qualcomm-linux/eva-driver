@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/bitops.h>
@@ -559,6 +559,8 @@ static int hfi_process_session_dump_notify(u32 device_id,
 static int hfi_process_session_cvp_msg(u32 device_id,
 		void *hdr, struct msm_cvp_cb_info *info)
 {
+
+	struct cvp_hfi_msg_session_hdr_old_format *pkt_old;
 	struct cvp_hfi_msg_session_hdr *pkt =
 			(struct cvp_hfi_msg_session_hdr *)hdr;
 	struct cvp_session_msg *sess_msg;
@@ -567,6 +569,7 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	struct iris_hfi_device *dev;
 	unsigned int session_id;
 	struct cvp_session_queue *sq;
+	struct msm_cvp_platform_data *pdata;
 
 	if (!pkt) {
 		dprintk(CVP_ERR, "%s: invalid param\n", __func__);
@@ -584,16 +587,25 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	core = cvp_driver->cvp_core;
 	inst = cvp_get_inst_from_id(core, session_id);
 	dev = core->dev_ops->hfi_device_data;
+	pdata = core->platform_data;
 
 	if (!inst) {
 		dprintk(CVP_ERR, "%s: invalid session\n", __func__);
 		return -EINVAL;
 	}
 
-	if (pkt->header.client_data.kdata & FENCE_BIT)
-		sq = &inst->session_queue_fence;
-	else
-		sq = &inst->session_queue;
+	if (pdata->hfi_ver == 1) {
+		pkt_old = (struct cvp_hfi_msg_session_hdr_old_format *)hdr;
+		if (pkt_old->client_data.kdata & FENCE_BIT)
+			sq = &inst->session_queue_fence;
+		else
+			sq = &inst->session_queue;
+	} else {
+		if (pkt->header.client_data.kdata & FENCE_BIT)
+			sq = &inst->session_queue_fence;
+		else
+			sq = &inst->session_queue;
+	}
 
 	sess_msg = cvp_kmem_cache_zalloc(&cvp_driver->msg_cache, GFP_KERNEL);
 	if (sess_msg == NULL) {
@@ -602,7 +614,6 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	}
 
 	memcpy(&sess_msg->pkt, pkt, get_msg_size(pkt));
-
 	dprintk(CVP_HFI,
 		"%s: Received msg %x cmd_done.status=%d sessionid=%x\n",
 		__func__, pkt->header.packet_type,
@@ -695,7 +706,7 @@ static int hfi_process_sys_property_info(u32 device_id,
 	}
 
 	switch (pkt->rg_property_data[0]) {
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 	case HFI_PROPERTY_SYS_IMAGE_VERSION:
 #else
 	case HFI_PROPERTY_SYS_EVA_FW_VERSION:
@@ -757,14 +768,14 @@ int cvp_hfi_process_msg_packet(u32 device_id, void *hdr,
 	case HFI_MSG_SESSION_CVP_FLUSH:
 		pkt_func = (pkt_func_def)hfi_process_session_flush_done;
 		break;
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 	case HFI_MSG_SESSION_EVA_START:
 #else
 	case HFI_MSG_SESSION_EVA_START_DONE:
 #endif
 		pkt_func = (pkt_func_def)hfi_process_session_start_done;
 		break;
-#ifdef CONFIG_SUN_HFI
+#ifdef CONFIG_EVA_SUN
 	case HFI_MSG_SESSION_EVA_STOP:
 #else
 	case HFI_MSG_SESSION_EVA_STOP_DONE:
