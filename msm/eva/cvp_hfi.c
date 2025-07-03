@@ -776,6 +776,49 @@ void __write_register(struct iris_hfi_device *device,
 	wmb();
 }
 
+
+int __read_tcsr_register(struct iris_hfi_device *device, u32 reg)
+{
+	int rc = 0;
+	u8 *base_addr;
+
+	if (!device) {
+		dprintk(CVP_ERR, "Invalid params: %pK\n", device);
+		return -EINVAL;
+	}
+
+	__strict_check(device);
+
+	if (!device->power_enabled) {
+		dprintk(CVP_WARN,
+			"%s HFI Read register failed : Power is OFF\n",
+			__func__);
+		msm_cvp_res_handle_fatal_hw_error(device->res, true);
+		return -EINVAL;
+	}
+
+	base_addr = device->cvp_hal_data->tcsr_reg_base;
+
+	if (!base_addr) {
+		dprintk(CVP_WARN,
+			"%s: TCSR Registers not mapped\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	rc = readl_relaxed(base_addr + reg);
+	/*
+	 * Memory barrier to make sure value is read correctly from the
+	 * register.
+	 */
+	rmb();
+	dprintk(CVP_REG,
+		"TCSR Base addr: %pK, read from: %#x, value: %#x...\n",
+		base_addr, reg, rc);
+
+	return rc;
+}
+
 int __read_gcc_register(struct iris_hfi_device *device, u32 reg)
 {
 	int rc = 0;
@@ -1187,13 +1230,17 @@ static int iris_hfi_suspend(void *dev)
 	}
 
 	dprintk(CVP_CORE, "Suspending Iris\n");
-	mutex_lock(&device->lock);
-	rc = __power_collapse(device, true);
-	if (rc) {
-		dprintk(CVP_WARN, "%s: Iris is busy\n", __func__);
-		rc = -EBUSY;
+	if (mutex_trylock(&device->lock)) {
+		rc = __power_collapse(device, true);
+		if (rc) {
+			dprintk(CVP_WARN, "%s: Iris is busy\n", __func__);
+			rc = -EBUSY;
+		}
+		mutex_unlock(&device->lock);
+	} else {
+		dprintk(CVP_ERR, "%s: Failed to acquire lock\n", __func__);
+		return -EBUSY;
 	}
-	mutex_unlock(&device->lock);
 
 	/* Cancel pending delayed works if any */
 	if (!rc)
@@ -1551,6 +1598,8 @@ static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
 	dma_addr_t dma_handle;
 	dma_addr_t iova;
 	struct context_bank_info *cb;
+	int count = 0;
+	const int max_retries = 10;
 
 	q_size = ALIGN(QUEUE_SIZE, SZ_1M);
 	mem_data = &dev->dsp_iface_q_table.mem_data;
@@ -1560,9 +1609,21 @@ static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
 		cvp_dsp_init_hfi_queue_hdr(dev);
 		return 0;
 	}
-	/* Allocate dsp queues from CDSP device memory */
-	kvaddr = dma_alloc_coherent(dev->res->mem_cdsp.dev, q_size,
+
+	while (count < max_retries) {
+		/* Allocate dsp queues from CDSP device memory */
+		kvaddr = dma_alloc_coherent(dev->res->mem_cdsp.dev, q_size,
 				&dma_handle, GFP_KERNEL);
+		if (IS_ERR_OR_NULL(kvaddr)) {
+			dprintk(CVP_ERR, "%s: failed dma allocation, retry %d\n",
+					__func__, count);
+			usleep_range(100000, 105000);
+			count++;
+		} else {
+			dprintk(CVP_INFO, "%s: DMA Allocation success\n", __func__);
+			break;
+		}
+	}
 	if (IS_ERR_OR_NULL(kvaddr)) {
 		dprintk(CVP_ERR, "%s: failed dma allocation\n", __func__);
 		goto fail_dma_alloc;
@@ -3282,6 +3343,12 @@ static void __process_sys_error(struct iris_hfi_device *device)
 	u32 sfr_buf_size = 0;
 
 	vsfr = (struct cvp_hfi_sfr_struct *)device->sfr.align_virtual_addr;
+
+	if (!vsfr) {
+		dprintk(CVP_ERR, "Failed to print SFR Message\n");
+		return;
+	}
+
 	sfr_buf_size = vsfr->bufSize;
 	if (vsfr && sfr_buf_size <= ALIGNED_SFR_SIZE) {
 		void *p = memchr(vsfr->rg_data, '\0', sfr_buf_size);
@@ -4699,6 +4766,7 @@ static int __iris_power_on(struct iris_hfi_device *device)
 {
 	struct msm_cvp_core *core;
 	int rc = 0;
+	u32 reg;
 
 	if (device->power_enabled)
 		return 0;
@@ -4734,6 +4802,10 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	/* Thomas input to debug CPU NoC hang */
 	__write_register(device, CVP_NOC_SBM_FAULTINEN0_LOW, 0x1);
 	__write_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS, 0x3);
+
+	/* Send TCSR SOC VERSION to FW */
+	reg = __read_tcsr_register(device, TCSR_SOW_HW_VERSION);
+	__write_register(device, CVP_CPU_CS_SCIBCMDARG3, reg);
 
 	/* Remove below 2 register writes after HW_VERSION has valid version */
 	core = cvp_driver->cvp_core;

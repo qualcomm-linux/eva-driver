@@ -640,7 +640,7 @@ static int eva_fastrpc_remove_buffers(struct cvp_dsp_fastrpc_driver_entry *frpc_
 	struct msm_cvp_list *buf_list = NULL;
 	struct list_head *ptr_dsp_buf = NULL, *next_dsp_buf = NULL;
 	struct cvp_internal_buf *buf = NULL;
-	int rc;
+	int rc = 0;
 
 	if (!frpc_node)
 		return -EINVAL;
@@ -2434,11 +2434,6 @@ static bool __is_buf_valid(struct msm_cvp_inst *inst,
 
 	if (!inst || !inst->core || !buf || !frpc_node) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
-		return false;
-	}
-
-	if (buf->fd < 0) {
-		dprintk(CVP_ERR, "%s: Invalid fd = %d", __func__, buf->fd);
 		return false;
 	}
 

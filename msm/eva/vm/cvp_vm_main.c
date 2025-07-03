@@ -148,6 +148,14 @@ static int msm_cvp_vm_init_reg_and_irq(struct iris_hfi_device *device,
 		goto error_irq_fail;
 	}
 
+	hal->tcsr_reg_base = devm_ioremap(&res->pdev->dev,
+			TCSR_REG_BASE, TCSR_REG_SIZE);
+	if (!hal->tcsr_reg_base) {
+		dprintk(CVP_ERR,
+		"could not map DDR reg addr %pa of size %d\n",
+		TCSR_REG_BASE, TCSR_REG_SIZE);
+	}
+
 	if (res->gcc_reg_base) {
 		hal->gcc_reg_base = devm_ioremap(&res->pdev->dev,
 				res->gcc_reg_base, res->gcc_reg_size);

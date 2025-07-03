@@ -207,6 +207,7 @@ struct cvp_hal_data {
 	phys_addr_t firmware_base;
 	u8 __iomem *register_base;
 	u8 __iomem *gcc_reg_base;
+	u8 __iomem *tcsr_reg_base;
 	u32 register_size;
 	u32 gcc_reg_size;
 };
