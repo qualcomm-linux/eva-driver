@@ -315,7 +315,7 @@ static int __dsp_shutdown(struct iris_hfi_device *device)
 
 int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
 {
-#ifdef CVP_GENPD_ENABLE
+#if (KERNEL_VERSION(6, 12, 0) <= LINUX_VERSION_CODE)
 	return dev_pm_genpd_set_hwmode(dev, enable);
 #else
 	return -EINVAL;
@@ -4439,15 +4439,6 @@ static int __enable_regulator(struct iris_hfi_device *device,
 	return -EINVAL;
 }
 
-static int __pm_runtime_get_sync(struct device *dev)
-{
-#ifdef CVP_GENPD_ENABLE
-	return pm_runtime_get_sync(dev);
-#else
-	return -EINVAL;
-#endif
-}
-
 /* This API will enable the requested power_domain.
  * If HW_CNTRL is supported for given pd, this API moves
  * the power domain to HW control immediately.
@@ -4461,7 +4452,7 @@ static int __enable_power_domain(struct iris_hfi_device *device,
 	iris_hfi_for_each_pwr_domain(device, pd_info) {
 		if (strcmp(pd_info->name, name))
 			continue;
-		rc = __pm_runtime_get_sync(pd_info->pd_device);
+		rc = pm_runtime_get_sync(pd_info->pd_device);
 		if (rc < 0) {
 			dprintk(CVP_ERR, "Failed to enable PD for %s: %d\n",
 					pd_info->name, rc);
@@ -4549,15 +4540,6 @@ static int __disable_regulator(struct iris_hfi_device *device,
 	return -EINVAL;
 }
 
-static int __pm_runtime_put_sync(struct device *dev)
-{
-#ifdef CVP_GENPD_ENABLE
-	return pm_runtime_put_sync(dev);
-#else
-	return -EINVAL;
-#endif
-}
-
 /* This API will move the requested power_domain
  * to SW control(if HW_CNTRL is supported) and disable it immediately.
  */
@@ -4570,7 +4552,7 @@ static int __disable_power_domain(struct iris_hfi_device *device,
 	iris_hfi_for_each_pwr_domain(device, pd_info) {
 		if (strcmp(pd_info->name, name))
 			continue;
-		rc = __pm_runtime_put_sync(pd_info->pd_device);
+		rc = pm_runtime_put_sync(pd_info->pd_device);
 		if (rc < 0) {
 			dprintk(CVP_ERR, "Failed to disable PD for %s: %d\n",
 					pd_info->name, rc);

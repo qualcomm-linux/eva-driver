@@ -50,7 +50,6 @@ enum queue_state {
 #define CVP_SYNX_ENABLED 1
 #define CVP_FASTRPC_ENABLED 1
 #define CVP_MMRM_ENABLED 1
-#define CVP_PAKALA_LONGEVITY 1
 #endif /* End of CONFIG_EVA_SUN*/
 
 #ifdef CONFIG_EVA_CANOE
@@ -58,7 +57,6 @@ enum queue_state {
 #define CVP_SYNX_ENABLED 1
 #define CVP_MMRM_ENABLED 1
 #define CVP_SW_DBG_BUF_ENABLED 1
-#define CVP_GENPD_ENABLE 1
 #define CVP_DYNAMIC_PMQOS 1
 #endif /* End of CONFIG_EVA_CANOE*/
 

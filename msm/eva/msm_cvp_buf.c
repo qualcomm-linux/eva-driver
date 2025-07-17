@@ -1578,7 +1578,7 @@ exit:
 	return ret;
 }
 
-#ifndef CVP_PAKALA_LONGEVITY
+#ifndef CONFIG_EVA_SUN
 enum cp_context_bank msm_cvp_get_cb(u32 flags)
 {
 	enum cp_context_bank buf_cb;
@@ -1667,7 +1667,7 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 		ret = -ENOMEM;
 		goto exit;
 	}
-#ifndef CVP_PAKALA_LONGEVITY
+#ifndef CONFIG_EVA_SUN
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 #endif
 	smem->pkt_type = pkt_type;
@@ -1746,7 +1746,7 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 	smem = msm_cvp_session_get_smem(inst, buf, false, pkt_type);
 	if (!smem)
 		return 0;
-#ifndef CVP_PAKALA_LONGEVITY
+#ifndef CONFIG_EVA_SUN
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 #endif
 	smem->buf_idx = buf_idx;

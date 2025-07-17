@@ -409,7 +409,7 @@ receive_msg:
 	rc = cvp_wait_process_message(inst, sq, &ktid, timeout,
 				(struct eva_kmd_hfi_packet *)&hdr);
 
-#ifdef CVP_PAKALA_LONGEVITY
+#ifdef CONFIG_EVA_SUN
 	hfi_err = hdr.header.error_type;
 #else
 	hfi_err = hdr.error_type;

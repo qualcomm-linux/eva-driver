@@ -54,9 +54,7 @@ struct fastrpc_driver {
 #define CVP_DSP_RESPONSE_TIMEOUT 600
 #define CVP_INVALID_RPMSG_TYPE 0xBADDFACE
 #define MAX_FRAME_BUF_NUM 16
-#ifndef CVP_PAKALA_LONGEVITY
 #define CVP_HW_THREADS_RESERVED 20
-#endif
 
 #define BITPTRSIZE32 (4)
 #define BITPTRSIZE64 (8)
@@ -114,7 +112,7 @@ enum CVP_DSP_COMMAND {
 	CVP_DSP_MAX_CMD = 26,
 };
 
-#ifdef CVP_PAKALA_LONGEVITY
+#ifdef CONFIG_EVA_SUN
 struct eva_power_req {
 	uint32_t clock_fdu;
 	uint32_t clock_ica;
@@ -170,7 +168,7 @@ struct eva_mem_remote {
 	uint32_t iova;
 	uint32_t dsp_remote_map;
 	uint64_t v_dsp_addr;
-#ifdef CVP_PAKALA_LONGEVITY
+#ifdef CONFIG_EVA_SUN
 };
 #else
 } __packed;
