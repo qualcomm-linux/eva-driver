@@ -252,6 +252,7 @@ struct cvp_hal_ops {
 	void (*dump_noc_regs)(struct iris_hfi_device *device);
 	int (*enable_hw_power_collapse)(struct iris_hfi_device *device);
 	void (*check_tensilica_in_reset)(struct iris_hfi_device *device);
+	int (*pm_qos_update)(struct iris_hfi_device *device);
 };
 
 struct iris_hfi_device {
@@ -296,9 +297,7 @@ struct iris_hfi_device {
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	struct cvp_mem_addr sw_dbg_buf;
 #endif
-#ifdef CVP_DYNAMIC_PMQOS
 	u32 global_pm_qos_latency_us;
-#endif
 };
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev);
@@ -315,6 +314,7 @@ int unload_cvp_fw_impl(struct iris_hfi_device *device);
 void cvp_clock_reg_print(struct iris_hfi_device *dev);
 struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 	unsigned int session_id);
+void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on);
 
 #define msm_cvp_cmd_tracing_from_sw(cmd_hdr, tag) ({ \
 	if (((msm_cvp_debug & CVP_TRACE) == CVP_TRACE) && \

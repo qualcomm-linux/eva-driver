@@ -8,6 +8,24 @@
 
 extern struct cvp_hal_ops hal_ops;
 
+int iris_pm_qos_update_pakala(struct iris_hfi_device *device)
+{
+	struct iris_hfi_device *dev;
+
+	if (!device) {
+		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
+		return -ENODEV;
+	}
+
+	dev = device;
+
+	mutex_lock(&dev->lock);
+	cvp_pm_qos_update(dev, true);
+	mutex_unlock(&dev->lock);
+
+	return 0;
+}
+
 void __check_tensilica_in_reset_pakala(struct iris_hfi_device *device)
 {
 	u32 xtss_reset_ro = 1;
@@ -1031,5 +1049,6 @@ int set_pakala_hal_functions(void)
 	hal_ops.set_registers = __set_registers_pakala;
 	hal_ops.dump_noc_regs = __dump_noc_regs_pakala;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_pakala;
+	hal_ops.pm_qos_update = iris_pm_qos_update_pakala;
 	return 0;
 }

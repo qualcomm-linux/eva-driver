@@ -367,9 +367,7 @@ struct msm_cvp_inst {
 	struct synx_session *synx_session_id;
 	struct cvp_fence_queue fence_cmd_queue;
 	char proc_name[TASK_COMM_LEN];
-#ifdef CVP_DYNAMIC_PMQOS
 	u32 pm_qos_latency;
-#endif
 	atomic_t va_inst_watermark;
 };
 

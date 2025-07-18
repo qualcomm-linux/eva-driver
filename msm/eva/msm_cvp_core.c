@@ -218,9 +218,8 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	inst->clk_data.ddr_bw = 0;
 	inst->clk_data.sys_cache_bw = 0;
 	inst->clk_data.bitrate = 0;
-#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = core->resources.pm_qos.latency_us;
-#endif
+
 	for (i = SESSION_MSG_INDEX(SESSION_MSG_START);
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
 		init_completion(&inst->completions[i]);
@@ -294,7 +293,7 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 	int rc, max_retries;
 	struct msm_cvp_frame *frame;
 	struct cvp_session_queue *sq, *sqf;
-	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *device;
 	struct msm_cvp_inst *tmp;
 
 	if (!inst) {
@@ -348,11 +347,10 @@ exit:
 		dprintk_rl(CVP_WARN,
 			"Failed to release persist buffers\n");
 
-#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-#endif
-	ops_tbl = inst->core->dev_ops;
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+
+	device = inst->core->dev_ops->hfi_device_data;
+	call_iris_op(device, pm_qos_update, device);
 
 	return 0;
 err_timeout:

@@ -9,6 +9,51 @@
 
 extern struct cvp_hal_ops hal_ops;
 
+int iris_pm_qos_aggregate_kaanapali(struct iris_hfi_device *device)
+{
+	struct iris_hfi_device *dev = NULL;
+	struct msm_cvp_core *core = NULL;
+	struct msm_cvp_inst *inst = NULL;
+	struct cvp_session_queue *sq = NULL;
+	u32 min_pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
+
+	if (!device) {
+		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
+		return -ENODEV;
+	}
+
+	dev = device;
+	core = cvp_driver->cvp_core;
+	mutex_lock(&core->lock);
+	list_for_each_entry(inst, &core->instances, list) {
+		sq = &inst->session_queue;
+		spin_lock(&sq->lock);
+		/* Consider the latency for aggregation only if session is in start state */
+		if (sq->state == QUEUE_START)
+			min_pm_qos_latency = min_pm_qos_latency < inst->pm_qos_latency
+				? min_pm_qos_latency : inst->pm_qos_latency;
+		spin_unlock(&sq->lock);
+	}
+	mutex_unlock(&core->lock);
+
+	if (min_pm_qos_latency != dev->global_pm_qos_latency_us) {
+		mutex_lock(&dev->lock);
+		dprintk(CVP_PWR, "%s New aggregated minmum latency %d\n",
+				__func__, min_pm_qos_latency);
+		/* Put a threshold on user latency so that user can only use the latency
+		 * to acheive power saving. Malicius user must not be allowed to keep the
+		 * apps core away from LPM.
+		 */
+		if (min_pm_qos_latency > core->resources.pm_qos.latency_us) {
+			dev->global_pm_qos_latency_us = min_pm_qos_latency;
+			cvp_pm_qos_update(dev, true);
+		}
+		mutex_unlock(&dev->lock);
+	}
+
+	return 0;
+}
+
 /*
  * Based on fal10_veto, X2RPMh, core_pwr_on and PWAitMode value, infer
  * value of xtss_sw_reset. xtss_sw_reset is a TZ register bit. Driver
@@ -1076,5 +1121,6 @@ int set_kaanapali_hal_functions(void)
 	hal_ops.set_registers = __set_registers_kaanapali;
 	hal_ops.dump_noc_regs = __dump_noc_regs_kaanapali;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_kaanapali;
+	hal_ops.pm_qos_update = iris_pm_qos_aggregate_kaanapali;
 	return 0;
 }

@@ -299,9 +299,7 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "session id: %#x\n",hash32_ptr(inst->session));
 		cur += write_str(cur, end - cur, "is secure: %u\n", inst->prop.is_secure);
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
-#ifdef CVP_DYNAMIC_PMQOS
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
-#endif
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
 		cur += write_str(cur, end - cur, "total internal memory size: %d bytes\n",
 					inst->persist_usage);
