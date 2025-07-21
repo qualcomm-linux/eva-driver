@@ -978,6 +978,9 @@ int cvp_read_platform_resources_from_drv_data(
 	res->max_secure_inst_count = find_key_value(platform_data,
 			"qcom,max-secure-instances");
 
+	res->max_supported_inst_count = find_key_value(platform_data,
+			"qcom,max-supported-instances");
+
 	res->thermal_mitigable = find_key_value(platform_data,
 			"qcom,enable-thermal-mitigation");
 	res->msm_cvp_pwr_collapse_delay = find_key_value(platform_data,

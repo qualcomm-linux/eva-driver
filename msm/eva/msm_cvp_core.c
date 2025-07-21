@@ -83,7 +83,8 @@ static bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *inst
 
 	if (*instance_count >= core->resources.max_inst_count) {
 		overload = true;
-		dprintk(CVP_WARN, "Reached %d generic CV session limit\n", MAX_CV_INSTANCES);
+		dprintk(CVP_WARN, "Reached %d generic CV session limit\n",
+				core->resources.max_supported_inst_count);
 	} else if (secure_instance_count >= core->resources.max_secure_inst_count) {
 		overload = true;
 		dprintk(CVP_WARN, "Reached %d secure CV session limit\n",
@@ -173,7 +174,7 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 		goto err_invalid_core;
 	}
 
-	core->resources.max_inst_count = MAX_SUPPORTED_INSTANCES;
+	core->resources.max_inst_count = core->resources.max_supported_inst_count;
 	if (msm_cvp_check_for_inst_overload(core, &instance_count)) {
 		dprintk(CVP_ERR, "Instance num reached Max, rejecting session");
 		mutex_lock(&core->lock);

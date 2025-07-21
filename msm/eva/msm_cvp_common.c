@@ -109,7 +109,8 @@ static void handle_sys_init_done(enum hal_command_response cmd, void *data)
 	core->resources.max_inst_count =
 		sys_init_msg->max_sessions_supported ?
 		min_t(u32, sys_init_msg->max_sessions_supported,
-		MAX_SUPPORTED_INSTANCES) : MAX_SUPPORTED_INSTANCES;
+		core->resources.max_supported_inst_count) :
+		core->resources.max_supported_inst_count;
 
 	core->resources.max_secure_inst_count =
 		core->resources.max_secure_inst_count ?
@@ -1640,37 +1641,39 @@ static int set_internal_buf_on_fw(struct msm_cvp_inst *inst,
 int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 {
 	int rc = 0;
-#ifndef CONFIG_EVA_SUN
 	struct cvp_session_prop *session_prop;
 	u32 pkt_concurrency;
-#endif
 	struct cvp_internal_buf *buf;
+	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
+	uint32_t hfi_ver = pdata->hfi_ver;
 
 	if (!inst || !inst->core || !inst->core->dev_ops) {
 		dprintk(CVP_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
-#ifdef CONFIG_EVA_SUN
-	buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
-#else
-	session_prop = &inst->prop;
 
-	if (!session_prop) {
-		dprintk(CVP_WARN, "Incorrect Props in inst %pK sess %x\n",
-			inst, hash32_ptr(inst->session));
-		return -EINVAL;
+	if (hfi_ver == 1)
+		buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
+	else {
+		session_prop = &inst->prop;
+
+		if (!session_prop) {
+			dprintk(CVP_WARN, "Incorrect Props in inst %pK sess %x\n",
+				inst, hash32_ptr(inst->session));
+			return -EINVAL;
+		}
+
+		pkt_concurrency = session_prop->pkt_concurrency;
+
+		if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
+			dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
+				inst, hash32_ptr(inst->session), pkt_concurrency);
+			return -EINVAL;
+		}
+
+		buf = cvp_allocate_arp_bufs(inst, ALIGN(ARP_CHUNK_SIZE, SZ_4K) * pkt_concurrency);
 	}
 
-	pkt_concurrency = session_prop->pkt_concurrency;
-
-	if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
-		dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
-			inst, hash32_ptr(inst->session), pkt_concurrency);
-		return -EINVAL;
-	}
-
-	buf = cvp_allocate_arp_bufs(inst, ALIGN(ARP_CHUNK_SIZE, SZ_4K) * pkt_concurrency);
-#endif
 	if (!buf) {
 		rc = -ENOMEM;
 		goto error;

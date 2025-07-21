@@ -74,6 +74,10 @@ static struct msm_cvp_common_data sm8450_common_data[] = {
 					 */
 	},
 	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
+	},
+	{
 		.key = "qcom,max-ssr-allowed",
 		.value = 1,		/*
 					 * Maxinum number of SSR before BUG_ON
@@ -124,6 +128,10 @@ static struct msm_cvp_common_data sm8550_common_data[] = {
 					 * secure sessions would be
 					 * max-secure-instances + 1.
 					 */
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
 	},
 	{
 		.key = "qcom,max-ssr-allowed",
@@ -178,6 +186,10 @@ static struct msm_cvp_common_data sm8550_tvm_common_data[] = {
 					 */
 	},
 	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
+	},
+	{
 		.key = "qcom,max-ssr-allowed",
 		.value = 1,		/*
 					 * Maxinum number of SSR before BUG_ON
@@ -228,6 +240,10 @@ static struct msm_cvp_common_data sm8650_common_data[] = {
 					* secure sessions would be
 					* max-secure-instances + 1.
 					*/
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
 	},
 	{
 		.key = "qcom,max-ssr-allowed",
@@ -284,6 +300,10 @@ static struct msm_cvp_common_data sm8750_common_data[] = {
 					* secure sessions would be
 					* max-secure-instances + 1.
 					*/
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
 	},
 	{
 		.key = "qcom,max-ssr-allowed",
@@ -346,6 +366,10 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 					*/
 	},
 	{
+		.key = "qcom,max-supported-instances",
+		.value = 32,
+	},
+	{
 		.key = "qcom,max-ssr-allowed",
 		.value = 1,	/*
 					* Maxinum number of SSR before BUG_ON
@@ -397,6 +421,10 @@ static struct msm_cvp_common_data sm8845_common_data[] = {
 	{
 		.key = "qcom,max-secure-instances",
 		.value = 2,
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 32,
 	},
 	{
 		.key = "qcom,max-ssr-allowed",

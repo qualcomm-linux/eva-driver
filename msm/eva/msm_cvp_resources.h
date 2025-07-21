@@ -215,6 +215,7 @@ struct msm_cvp_platform_resources {
 	struct cvp_pm_qos pm_qos;
 	uint32_t max_inst_count;
 	uint32_t max_secure_inst_count;
+	uint32_t max_supported_inst_count;
 	int msm_cvp_hw_rsp_timeout;
 	int msm_cvp_dsp_rsp_timeout;
 	int qos_noc_urgency_low_a_bitmask;

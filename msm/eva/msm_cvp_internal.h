@@ -27,12 +27,6 @@
 #include "cvp_hfi.h"
 #include "msm_cvp_sw_dbg.h"
 
-#ifdef CONFIG_EVA_SUN
-#define MAX_SUPPORTED_INSTANCES 16
-#else
-#define MAX_SUPPORTED_INSTANCES 32
-#endif
-#define MAX_CV_INSTANCES MAX_SUPPORTED_INSTANCES
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
 #define FENCE_WAIT_SIGNAL_TIMEOUT 100
