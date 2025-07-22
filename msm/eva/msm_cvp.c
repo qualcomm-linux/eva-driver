@@ -1155,6 +1155,7 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 {
 	struct cvp_session_queue *sq;
 	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *device;
 	int rc;
 	enum queue_state old_state;
 	u64 ktid;
@@ -1180,7 +1181,8 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	spin_unlock(&sq->lock);
 
 	ops_tbl = inst->core->dev_ops;
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+	device = (struct iris_hfi_device *)ops_tbl->hfi_device_data;
+	call_iris_op(device, pm_qos_update, device);
 
 	/*
 	 * cvp_fence_thread_start will increment reference to instance.
@@ -1321,6 +1323,7 @@ int msm_cvp_session_stop(struct msm_cvp_inst *inst,
 	struct eva_kmd_session_control *sc = NULL;
 	struct msm_cvp_inst *s;
 	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *device;
 	u64 ktid;
 	int rc;
 
@@ -1396,7 +1399,8 @@ stop_thread:
 
 	cvp_fence_thread_stop(inst);
 
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+	device = (struct iris_hfi_device *)ops_tbl->hfi_device_data;
+	call_iris_op(device, pm_qos_update, device);
 
 exit:
 	cvp_put_inst(s);
@@ -1672,13 +1676,11 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		case EVA_KMD_PROP_SESSION_DSPMASK:
 			session_prop->dsp_mask = prop_array->data;
 			break;
-#ifdef CVP_DYNAMIC_PMQOS
 		case EVA_KMD_PROP_SESSION_LATENCY:
 			inst->pm_qos_latency = prop_array->data;
 			dprintk(CVP_INFO, "inst %pK - New latency value from user %d\n",
 				inst, inst->pm_qos_latency);
 			break;
-#endif
 		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
 			session_prop->dump_offset = prop_array->data;
 			break;

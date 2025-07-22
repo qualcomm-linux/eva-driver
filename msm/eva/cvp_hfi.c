@@ -2178,24 +2178,15 @@ static int __sys_set_power_control(struct iris_hfi_device *device,
 	return 0;
 }
 
-static void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
+void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
 {
 	u32 latency;
 	int i, err = 0;
 
-#ifndef CVP_DYNAMIC_PMQOS
-	latency = vote_on ? device->res->pm_qos.latency_us :
-			PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-#else
 	latency = vote_on ? device->global_pm_qos_latency_us :
 			PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-#endif
 
-#ifndef CVP_DYNAMIC_PMQOS
-	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
-#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
-#endif
 		for (i = 0; i < device->res->pm_qos.silver_count; i++) {
 			if (!cpu_possible(device->res->pm_qos.silver_cores[i]))
 				continue;
@@ -2215,71 +2206,6 @@ static void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
 			}
 		}
 }
-
-#ifndef CVP_DYNAMIC_PMQOS
-static int iris_pm_qos_update(void *device)
-{
-	struct iris_hfi_device *dev;
-
-	if (!device) {
-		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
-		return -ENODEV;
-	}
-
-	dev = device;
-
-	mutex_lock(&dev->lock);
-	cvp_pm_qos_update(dev, true);
-	mutex_unlock(&dev->lock);
-
-	return 0;
-}
-#else
-static int iris_pm_qos_aggregate(void *device)
-{
-	struct iris_hfi_device *dev = NULL;
-	struct msm_cvp_core *core = NULL;
-	struct msm_cvp_inst *inst = NULL;
-	struct cvp_session_queue *sq = NULL;
-	u32 min_pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-
-	if (!device) {
-		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
-		return -ENODEV;
-	}
-
-	dev = device;
-	core = cvp_driver->cvp_core;
-	mutex_lock(&core->lock);
-	list_for_each_entry(inst, &core->instances, list) {
-		sq = &inst->session_queue;
-		spin_lock(&sq->lock);
-		/* Consider the latency for aggregation only if session is in start state */
-		if (sq->state == QUEUE_START)
-			min_pm_qos_latency = min_pm_qos_latency < inst->pm_qos_latency ?
-							min_pm_qos_latency:inst->pm_qos_latency;
-		spin_unlock(&sq->lock);
-	}
-	mutex_unlock(&core->lock);
-
-	if (min_pm_qos_latency != dev->global_pm_qos_latency_us) {
-		mutex_lock(&dev->lock);
-		dprintk(CVP_PWR, "%s New aggregated minmum latency %d\n",
-				__func__, min_pm_qos_latency);
-		/* Put a threshold on user latency so that user can only use the latency
-		 * to acheive power saving. Malicius user must not be allowed to keep the
-		 * apps core away from LPM.
-		 */
-		if (min_pm_qos_latency > core->resources.pm_qos.latency_us) {
-			dev->global_pm_qos_latency_us = min_pm_qos_latency;
-			cvp_pm_qos_update(dev, true);
-		}
-		mutex_unlock(&dev->lock);
-	}
-
-	return 0;
-}
-#endif
 
 static int __hwfence_regs_map(struct iris_hfi_device *device)
 {
@@ -2510,11 +2436,7 @@ static int iris_hfi_core_init(void *device)
 	__set_ubwc_config(device);
 	__sys_set_idle_indicator(device, true);
 
-#ifndef CVP_DYNAMIC_PMQOS
-	if (dev->res->pm_qos.latency_us) {
-#else
 	if (dev->global_pm_qos_latency_us) {
-#endif
 		int err = 0;
 		u32 i, cpu;
 
@@ -2532,13 +2454,6 @@ static int iris_hfi_core_init(void *device)
 			cpu = dev->res->pm_qos.silver_cores[i];
 			if (!cpu_possible(cpu))
 				continue;
-#ifndef CVP_DYNAMIC_PMQOS
-			err = dev_pm_qos_add_request(
-				get_cpu_device(cpu),
-				&dev->res->pm_qos.pm_qos_hdls[i],
-				DEV_PM_QOS_RESUME_LATENCY,
-				dev->res->pm_qos.latency_us);
-#else
 			dprintk(CVP_PWR, "%s, core %d, adding latency %d\n",
 				__func__, i, dev->global_pm_qos_latency_us);
 			err = dev_pm_qos_add_request(
@@ -2546,7 +2461,6 @@ static int iris_hfi_core_init(void *device)
 				&dev->res->pm_qos.pm_qos_hdls[i],
 				DEV_PM_QOS_RESUME_LATENCY,
 				dev->global_pm_qos_latency_us);
-#endif
 			if (err < 0)
 				dprintk(CVP_WARN,
 					"%s pm_qos_add_req %d failed\n",
@@ -2599,11 +2513,7 @@ static int iris_hfi_core_release(void *dev)
 
 	mutex_lock(&device->lock);
 	dprintk(CVP_WARN, "Core releasing\n");
-#ifndef CVP_DYNAMIC_PMQOS
-	if (device->res->pm_qos.latency_us &&
-#else
 	if (device->global_pm_qos_latency_us &&
-#endif
 		device->res->pm_qos.pm_qos_hdls) {
 		for (i = 0; i < device->res->pm_qos.silver_count; i++) {
 			if (!cpu_possible(device->res->pm_qos.silver_cores[i]))
@@ -4936,11 +4846,7 @@ static inline int __suspend(struct iris_hfi_device *device)
 
 	power_off_iris2(device);
 
-#ifndef CVP_DYNAMIC_PMQOS
-	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
-#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
-#endif
 		cvp_pm_qos_update(device, false);
 
 	return rc;
@@ -5019,11 +4925,7 @@ int __resume(struct iris_hfi_device *device)
 	 */
 	__set_threshold_registers(device);
 
-#ifndef CVP_DYNAMIC_PMQOS
-	if (device->res->pm_qos.latency_us && device->res->pm_qos.pm_qos_hdls)
-#else
 	if (device->global_pm_qos_latency_us && device->res->pm_qos.pm_qos_hdls)
-#endif
 		cvp_pm_qos_update(device, true);
 
 	__sys_set_debug(device, msm_cvp_fw_debug);
@@ -5266,7 +5168,10 @@ static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *r
 
 	hdevice->res = res;
 	hdevice->callback = callback;
-#ifdef CVP_DYNAMIC_PMQOS
+
+#ifdef CONFIG_EVA_SUN
+	hdevice->global_pm_qos_latency_us = res->pm_qos.latency_us;
+#else
 	hdevice->global_pm_qos_latency_us = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
 #endif
 	__init_cvp_ops(hdevice);
@@ -5392,11 +5297,6 @@ static void iris_init_hfi_callbacks(struct cvp_hfi_ops *ops_tbl)
 	ops_tbl->flush_debug_queue = iris_hfi_flush_debug_queue;
 	ops_tbl->noc_error_info = iris_hfi_noc_error_info;
 	ops_tbl->validate_session = iris_hfi_validate_session;
-#ifndef CVP_DYNAMIC_PMQOS
-	ops_tbl->pm_qos_update = iris_pm_qos_update;
-#else
-	ops_tbl->pm_qos_update = iris_pm_qos_aggregate;
-#endif
 	ops_tbl->debug_hook = iris_debug_hook;
 }
 

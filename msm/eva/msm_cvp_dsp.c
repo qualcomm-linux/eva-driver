@@ -230,7 +230,7 @@ static int delete_dsp_session(struct msm_cvp_inst *inst,
 		struct cvp_dsp_fastrpc_driver_entry *frpc_node)
 {
 	struct task_struct *task = NULL;
-	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *device;
 	int rc;
 
 	if (!inst)
@@ -238,11 +238,10 @@ static int delete_dsp_session(struct msm_cvp_inst *inst,
 
 	task = inst->task;
 
-	ops_tbl = inst->core->dev_ops;
-#ifdef CVP_DYNAMIC_PMQOS
 	inst->pm_qos_latency = PM_QOS_RESUME_LATENCY_DEFAULT_VALUE;
-#endif
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+
+	device = inst->core->dev_ops->hfi_device_data;
+	call_iris_op(device, pm_qos_update, device);
 
 	rc = msm_cvp_close(inst);
 	if (rc)
@@ -1583,7 +1582,7 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
 	struct pid *pid_s = NULL;
 	struct task_struct *task = NULL;
-	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *device;
 	struct fastrpc_device *frpc_device;
 	struct list_head *s = NULL, *next_s = NULL;
 	bool found_inst = false;
@@ -1719,8 +1718,8 @@ void __dsp_cvp_sess_create(struct cvp_dsp_cmd_msg *cmd)
 		__func__, cmd->session_id, cmd->session_cpu_low,
 		cmd->session_cpu_high, inst, inst->session);
 
-	ops_tbl = inst->core->dev_ops;
-	call_hfi_op(ops_tbl, pm_qos_update, ops_tbl->hfi_device_data);
+	device = inst->core->dev_ops->hfi_device_data;
+	call_iris_op(device, pm_qos_update, device);
 
 	return;
 

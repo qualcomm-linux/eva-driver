@@ -9,6 +9,11 @@
 
 extern struct cvp_hal_ops hal_ops;
 
+int iris_pm_qos_aggregate_hawi(struct iris_hfi_device *device)
+{
+	return 0;
+}
+
 void __check_tensilica_in_reset_hawi(struct iris_hfi_device *device)
 {
 }
@@ -93,5 +98,6 @@ int set_hawi_hal_functions(void)
 	hal_ops.set_registers = __set_registers_hawi;
 	hal_ops.dump_noc_regs = __dump_noc_regs_hawi;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_hawi;
+	hal_ops.pm_qos_update = iris_pm_qos_aggregate_hawi;
 	return 0;
 }
