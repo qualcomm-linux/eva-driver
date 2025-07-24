@@ -420,6 +420,13 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		size, align);
 	}
 
+	if (!heap) {
+		dprintk(CVP_ERR, "%s: Failed to find heap for qcom,system",
+		__func__);
+		rc = -ENOMEM;
+		goto fail_shared_mem_alloc;
+	}
+
 	dbuf = dma_heap_buffer_alloc(heap, size, user_access, 0);
 	if (IS_ERR_OR_NULL(dbuf)) {
 		dprintk(CVP_ERR,

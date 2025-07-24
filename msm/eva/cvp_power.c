@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only
  *
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "msm_cvp.h"
@@ -100,6 +100,10 @@ static void aggregate_power_update(struct msm_cvp_core *core,
 	for (i = 0; i < 2; i++) {
 		max_cycle[i] = find_max(&blocks_sum[i][0], HFI_MAX_HW_THREADS);
 		op_max_cycle[i] = find_max(&op_blocks_max[i][0], HFI_MAX_HW_THREADS);
+
+		/* Allow FW to overwrite max cycles as well */
+		max_cycle[i] = max_cycle[i] >= fw_sum[i] ? max_cycle[i] : fw_sum[i];
+		op_max_cycle[i] = op_max_cycle[i] >= op_fw_max[i] ? op_max_cycle[i] : op_fw_max[i];
 
 		op_max_cycle[i] =
 			(op_max_cycle[i] > max_clk_rate) ?

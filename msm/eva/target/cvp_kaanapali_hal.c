@@ -980,7 +980,7 @@ void __noc_error_info_iris2_kaanapali(struct iris_hfi_device *device)
 
 	core = cvp_driver->cvp_core;
 
-	if (!core->ssr_count && core->resources.max_ssr_allowed >= 1)
+	if (core->resources.max_ssr_allowed >= 1)
 		log_required = true;
 
 	noc_log = &core->kmd_trace.kmd_debug_log.log.noc_log;

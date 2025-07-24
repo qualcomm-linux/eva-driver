@@ -33,7 +33,7 @@ struct cvp_buf_data {
 };
 
 struct inst_snapshot {
-	void *session;
+	u32 session;
 	u32 smem_index;
 	u32 dsp_index;
 	u32 persist_index;

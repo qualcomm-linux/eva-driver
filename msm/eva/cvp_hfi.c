@@ -1987,6 +1987,7 @@ sfr_init:
 		if (core) {
 			core->kmd_dbg.kmd_sess_cnt = 0;
 			core->kmd_dbg.kmd_queue_dump_cnt = 0;
+			memset(&(core->kmd_trace), 0, sizeof(struct eva_kmd_trace));
 		}
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
@@ -2005,6 +2006,7 @@ sfr_init:
 				core->kmd_dbg.kmd_buf_cnt = 0;
 				core->kmd_dbg.kmd_sess_cnt = 0;
 				core->kmd_dbg.kmd_queue_dump_cnt = 0;
+				memset(&(core->kmd_trace), 0, sizeof(struct eva_kmd_trace));
 			}
 		}
 	}

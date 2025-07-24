@@ -108,6 +108,12 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 
 	pdata = cvp_driver->cvp_core->platform_data;
 	CVPKERNEL_ATRACE_BEGIN("cvp_wait_process_message");
+
+	if (!inst) {
+		dprintk(CVP_ERR, "%s: Invalid inst", __func__);
+		goto exit;
+	}
+
 	if (wait_event_timeout(sq->wq,
 		cvp_msg_pending(sq, &msg, ktid), timeout) == 0) {
 		dprintk(CVP_WARN, "session queue wait timeout and session_id = %#x\n",
@@ -441,6 +447,7 @@ exit:
 	if (fc->signature == 0xFEEDFACE)
 		rc = inst->core->synx_ftbl->cvp_synx_ops(
 			inst, CVP_OUTPUT_SYNX, fc, &synx_state);
+	fc->msg_pkt = NULL;
 	CVPKERNEL_ATRACE_END("cvp_synx_ops CVP_OUTPUT_SYNX");
 	CVPKERNEL_ATRACE_END("cvp_fence_proc");
 	return rc;
@@ -760,6 +767,14 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 
 	CVPKERNEL_ATRACE_BEGIN("cvp_enqueue_pkt");
 
+	if (in_offset > MAX_HFI_PKT_SIZE ||
+			in_buf_num > MAX_HFI_PKT_SIZE) {
+		dprintk(CVP_ERR, "%s: Offset:%d or Buf num:%d incorrect",
+				__func__, in_offset, in_buf_num);
+		rc = -EINVAL;
+		return rc;
+	}
+
 	ops_tbl = inst->core->dev_ops;
 
 	pkt_type = in_pkt->pkt_data[1];
@@ -825,8 +840,13 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 					/* Update the in_pkt s.t iova is replaced back with fd */
 					buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
 					offset += sizeof(*buf) >> 2;
+
+					if (offset > MAX_HFI_PKT_SIZE)
+						break;
+
 					if (!buf->size || fd_arr[i] < 0)
 						continue;
+
 					buf->fd = fd_arr[i];
 				}
 				rc = msm_cvp_unmap_user_persist(inst,
@@ -847,8 +867,13 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 				/* Update the in_pkt s.t iova is replaced back with fd */
 				buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
 				offset += sizeof(*buf) >> 2;
+
+				if (offset > MAX_HFI_PKT_SIZE)
+					break;
+
 				if (!buf->size || fd_arr[i] < 0)
 					continue;
+
 				buf->fd = fd_arr[i];
 			}
 			rc = msm_cvp_unmap_user_persist(inst,

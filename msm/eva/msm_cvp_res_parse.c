@@ -1203,7 +1203,6 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 	struct msm_cvp_core *core = token;
 	struct iris_hfi_device *hdev;
 	struct msm_cvp_inst *inst;
-	bool log = false;
 
 	if (!domain || !core) {
 		dprintk(CVP_ERR, "%s - invalid param %pK %pK\n",
@@ -1214,6 +1213,9 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 	pr_err_ratelimited(CVP_PID_TAG "%s - faulting address: %lx fault cnt %d\n",
 			current->pid, current->tgid, "err",
 			__func__, iova, core->smmu_fault_count);
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	core->kmd_trace.kmd_debug_log.smmu_debug.smmu_fault_cnt = core->smmu_fault_count;
+#endif
 	if (core->smmu_fault_count > 0) {
 		core->smmu_fault_count++;
 		return -ENOSYS;
@@ -1226,10 +1228,9 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 	if (!core->last_fault_addr)
 		core->last_fault_addr = iova;
 
-	log = (core->kmd_trace.kmd_debug_log.log.snapshot_index > 0) ? false : true;
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
-		msm_cvp_print_inst_bufs(inst, log);
+		msm_cvp_print_inst_bufs(inst, true);
 	}
 	hdev = core->dev_ops->hfi_device_data;
 	if (hdev) {
