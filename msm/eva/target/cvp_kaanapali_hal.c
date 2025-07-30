@@ -71,9 +71,7 @@ void __check_tensilica_in_reset_kaanapali(struct iris_hfi_device *device)
 {
 	u32 xtss_reset_ro = 1;
 
-#ifdef CONFIG_EVA_SUN
 	xtss_reset_ro = __read_register(device, CVP_WRAPPER_XTSS_SW_RESET_RO);
-#endif
 	dprintk(CVP_WARN, "tensilica xtss_reset_ro %#x\n", xtss_reset_ro);
 }
 
