@@ -15,6 +15,10 @@
 #include "cvp_hfi_v2.h"
 #endif
 
+#ifdef CONFIG_EVA_ART
+#include "cvp_hfi_v2.h"
+#endif
+
 #include "msm_cvp_resources.h"
 
 enum tzbsp_subsys_state {

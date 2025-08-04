@@ -16,3 +16,7 @@
 #ifdef CONFIG_EVA_CANOE
 #include "target/cvp_kaanapali_io.h"
 #endif
+
+#ifdef CONFIG_EVA_ART
+#include "target/cvp_hawi_io.h"
+#endif

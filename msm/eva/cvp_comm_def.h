@@ -60,6 +60,10 @@ enum queue_state {
 #endif /* End of CONFIG_EVA_CANOE*/
 
 
+#ifdef CONFIG_EVA_ART
+#define USE_PRESIL 1
+#endif /* End of CONFIG_EVA_ART*/
+
 #ifdef CONFIG_EVA_WAIPIO
 #define CVP_MINIDUMP_ENABLED 1
 #endif
