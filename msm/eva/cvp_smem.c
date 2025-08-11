@@ -202,7 +202,7 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 
 	dma_addr_t iova = 0;
 	u32 temp = 0, checksum = 0;
-	u32 align = SZ_4K;
+	u32 align = PAGE_SIZE;
 	struct dma_buf *dma_buf;
 	bool is_config_pkt = false;
 	struct cvp_dma_buf_vmap vmap = {0};
@@ -407,13 +407,13 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		return -EINVAL;
 	}
 
-	align = ALIGN(align, SZ_4K);
-	size = ALIGN(size, SZ_4K);
+	align = ALIGN(align, PAGE_SIZE);
+	size = ALIGN(size, PAGE_SIZE);
 
 	if (is_iommu_present(res)) {
 		heap = dma_heap_find("qcom,system");
-		dprintk(CVP_MEM, "%s size %zx align %d flag %d\n",
-		__func__, size, align, mem->flags);
+		dprintk(CVP_MEM, "%s size %zx align %d flag %d pagesize %d\n",
+		__func__, size, align, mem->flags, PAGE_SIZE);
 	} else {
 		dprintk(CVP_ERR,
 		"No IOMMU CB: allocate shared memory heap size %zx align %d\n",
