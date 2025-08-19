@@ -404,14 +404,17 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		dprintk(CVP_DSP, "DSP interface not enabled\n");
 	}
 
-	if (core->platform_data->hal_version == DEFAULT_HAL_VER)
+	if (core->platform_data->hal_version == DEFAULT_HAL_VER) {
 		set_pakala_hal_functions();
-	else if (core->platform_data->hal_version == KNP_HAL_VER)
+	} else if (core->platform_data->hal_version == KNP_HAL_VER) {
 		set_kaanapali_hal_functions();
-	else {
+	} else if (core->platform_data->hal_version == HAWI_HAL_VER) {
+		set_hawi_hal_functions();
+	} else {
 		dprintk(CVP_ERR, "Invalid hal_version %d\n", core->platform_data->hal_version);
 		rc = -EINVAL;
 	}
+
 	return rc;
 
 err_fail_sub_device_probe:

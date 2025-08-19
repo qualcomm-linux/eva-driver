@@ -1163,6 +1163,10 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 		dprintk(CVP_ERR, "Failed to enabled inter-frame PC\n");
 
 	ctrl_init_val = BIT(0);
+#ifdef USE_PRESIL
+	/*Disable HW Synx if RUMI Support for Synx unavailable*/
+	ctrl_init_val |= BIT(3);
+#endif
 	/* RUMI: CVP_CTRL_INIT in MPTest has bit 0 and 3 set */
 	__write_register(device, CVP_CTRL_INIT, ctrl_init_val);
 	while (!(ctrl_status & CVP_CTRL_INIT_STATUS__M) && count < max_tries) {
@@ -1200,10 +1204,6 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_END("__boot_firmware");
 
-#ifdef USE_PRESIL
-	/*Disable HW Synx if RUMI Support for Synx unavailable*/
-	__write_register(device, CVP_CPU_CS_SCIACMD, 0x8);
-#endif
 	return rc;
 }
 
@@ -1931,8 +1931,10 @@ static void __sfr_init(struct iris_hfi_device *dev)
 		return;
 
 	vsfr = (struct cvp_hfi_sfr_struct *) dev->sfr.align_virtual_addr;
-	if (vsfr)
+	if (vsfr) {
 		vsfr->bufSize = ALIGNED_SFR_SIZE;
+		dprintk(CVP_CORE, "SFR vaddr %llx\n", vsfr);
+	}
 
 }
 
@@ -3386,8 +3388,8 @@ static void __process_sys_error(struct iris_hfi_device *device)
 #ifdef USE_PRESIL42
 		presil42_retrieve_sfr_buffer(device);
 #endif
-		dprintk(CVP_ERR, "SFR Message from FW: %s\n",
-				vsfr->rg_data);
+		dprintk(CVP_ERR, "%llx: SFR Message from FW: %s\n",
+				vsfr, vsfr->rg_data);
 	}
 }
 
@@ -3856,7 +3858,7 @@ static void iris_hfi_wd_work_handler(struct work_struct *work)
 	else {
 		dprintk(CVP_ERR, "Crashing the device as HW WD recovery is disable %d\n",
 				msm_cvp_hw_wd_recovery);
-		BUG_ON(1);
+		msm_cvp_bug_on(true);
 	}
 }
 
@@ -4172,7 +4174,7 @@ static void __deinit_subcaches(struct iris_hfi_device *device)
 		goto exit;
 	}
 
-	if (!is_sys_cache_present(device))
+	if (!is_sys_cache_present(device) || msm_cvp_syscache_disable)
 		goto exit;
 
 	iris_hfi_for_each_subcache_reverse(device, sinfo) {
@@ -4199,7 +4201,7 @@ static int __init_subcaches(struct iris_hfi_device *device)
 		return -EINVAL;
 	}
 
-	if (!is_sys_cache_present(device))
+	if (!is_sys_cache_present(device) || msm_cvp_syscache_disable)
 		return 0;
 
 	iris_hfi_for_each_subcache(device, sinfo) {
@@ -4358,6 +4360,9 @@ int __enable_gdsc(struct iris_hfi_device *device,
 		const char *name)
 {
 	int rc = 0;
+	struct msm_cvp_core *core;
+
+	core = cvp_driver->cvp_core;
 
 	if (device->res->gdsc_framework_type) {
 		if (!strcmp(name, "controller")) {
@@ -4368,6 +4373,12 @@ int __enable_gdsc(struct iris_hfi_device *device,
 			rc = __enable_power_domain(device, "core_pd");
 			if (rc)
 				dprintk(CVP_ERR, "Failed to enable core pd: %d\n", rc);
+
+			if (core->platform_data->hal_version > KNP_HAL_VER) {
+				rc = __enable_power_domain(device, "core_noc_pd");
+				if (rc)
+					dprintk(CVP_WARN, "Failed to enable core noc pd: %d\n", rc);
+			}
 		}
 	} else {
 		if (!strcmp(name, "controller")) {
@@ -4461,6 +4472,9 @@ int __disable_gdsc(struct iris_hfi_device *device,
 		const char *name)
 {
 	int rc = 0;
+	struct msm_cvp_core *core;
+
+	core = cvp_driver->cvp_core;
 
 	if (device->res->gdsc_framework_type) {
 		if (!strcmp(name, "controller")) {
@@ -4477,6 +4491,13 @@ int __disable_gdsc(struct iris_hfi_device *device,
 				rc = __disable_power_domain(device, "core_pd");
 				if (rc)
 					dprintk(CVP_ERR, "Failed to disable core pd: %d\n", rc);
+
+				if (core->platform_data->hal_version > KNP_HAL_VER) {
+					rc = __disable_power_domain(device, "core_noc_pd");
+					if (rc)
+						dprintk(CVP_WARN,
+							"Failed to disable core noc pd: %d\n", rc);
+				}
 			} else {
 				/* Bring attention to this issue */
 				msm_cvp_res_handle_fatal_hw_error(device->res, true);

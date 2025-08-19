@@ -348,4 +348,12 @@
 
 #define TCSR_SOW_HW_VERSION				0x88000
 
+/* Add to keep the header platform independent.
+ * They don't exist for KNP
+ */
+#define CVP_WRAPPER_GPIO_IN		0xDEADBEEF
+#define CVP_WRAPPER_GPIO_OUT		0xDEADBEEF
+#define CVP_CC_MVS0C_DEBUG_CBCR		0xDEADBEEF
+#define CVP_EVA_CC_MVS0_CFG_GDSCR	0xDEADBEEF
+
 #endif

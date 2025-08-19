@@ -26,6 +26,16 @@
 atomic_t cvp_error_count;
 bool trigger_smmu_fault;
 
+void msm_cvp_bug_on(bool flag)
+{
+#ifdef USE_PRESIL
+	while (flag)
+		usleep_range(1000, 2000);
+#else
+	BUG_ON(flag);
+#endif
+}
+
 static void dump_hfi_queue(struct iris_hfi_device *device)
 {
 	struct cvp_hfi_queue_header *queue;
@@ -364,6 +374,7 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 {
 	int rc = 0;
 	struct cvp_hfi_ops *ops_tbl;
+	struct iris_hfi_device *hfi_device = NULL;
 
 	CVPKERNEL_ATRACE_BEGIN("wait_for_sess_signal_receipt");
 	if (!IS_HAL_SESSION_CMD(cmd)) {
@@ -371,6 +382,8 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 		return -EINVAL;
 	}
 	ops_tbl = (struct cvp_hfi_ops *)(inst->core->dev_ops);
+	hfi_device = ops_tbl->hfi_device_data;
+
 	rc = wait_for_completion_timeout(
 		&inst->completions[SESSION_MSG_INDEX(cmd)],
 		msecs_to_jiffies(
@@ -378,8 +391,10 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 	if (!rc) {
 		dprintk(CVP_WARN, "Wait interrupted or timed out: %d session_id = %#x\n",
 				SESSION_MSG_INDEX(cmd), inst->sess_id);
-		if (inst->state != MSM_CVP_CORE_INVALID)
+		if (inst->state != MSM_CVP_CORE_INVALID) {
 			print_hfi_queue_info(ops_tbl);
+			__print_sfr_msg(hfi_device);
+		}
 		if (cmd != HAL_SESSION_STOP_DONE &&
 			cmd != HAL_SESSION_FLUSH_DONE &&
 			cmd != HAL_SESSION_SET_BUFFER_DONE &&
@@ -603,7 +618,7 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 		wake_up_all(&inst->event_handler.wq);
 	}
 
-	BUG_ON(!msm_cvp_session_error_recovery);
+	msm_cvp_bug_on(!msm_cvp_session_error_recovery);
 	cvp_put_inst(inst);
 }
 
@@ -710,7 +725,7 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 		&inst->event_handler.lock, flags);
 	wake_up_all(&inst->event_handler.wq);
 
-	BUG_ON(!msm_cvp_session_error_recovery);
+	msm_cvp_bug_on(!msm_cvp_session_error_recovery);
 	if (stop_required)
 		msm_cvp_session_flush_stop(inst);
 
@@ -845,7 +860,7 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	mutex_unlock(&core->lock);
 
 	dprintk(CVP_WARN, "SYS_ERROR handled.\n");
-	BUG_ON(core->resources.fatal_ssr);
+	msm_cvp_bug_on(core->resources.fatal_ssr);
 }
 
 void msm_cvp_comm_session_clean(struct msm_cvp_inst *inst)
@@ -1546,7 +1561,7 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core)
 		if (msm_cvp_smmu_fault_recovery)
 			core->resources.non_fatal_pagefaults = 1;
 
-		BUG_ON(!core->resources.non_fatal_pagefaults);
+		msm_cvp_bug_on(!core->resources.non_fatal_pagefaults);
 	}
 
 	return 0;
