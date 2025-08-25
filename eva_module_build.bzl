@@ -81,28 +81,48 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
 
     kernel_build = "{}_{}".format(target, variant)
 
-    kernel_build_label = select({
-        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_{}_base_kernel".format(target, variant),
-        "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}_{}".format(target, variant),
-    })
+    if target == "sun" or target == "pineapple" :
+        kernel_build_label = select({
+            "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_{}_base_kernel".format(target, variant),
+            "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}_{}".format(target, variant),
+        })
+    else:
+        kernel_build_label = select({
+            "//build/qcom_build_extensions:qtisocrepo_true": "//soc-repo:{}_{}_base_kernel".format(target, variant),
+            "//build/qcom_build_extensions:qtisocrepo_false": "//msm-kernel:{}_{}".format(target, variant),
+        })
 
     modules = [registry.get(module_name) for module_name in modules]
     options = _get_kernel_build_options(modules, config_options)
     build_print = lambda message: print("{}: {}".format(kernel_build, message))
     formatter = lambda s: s.replace("%b", kernel_build).replace("%t", target)
 
-    headers = select({
-         "//build/kernel/kleaf:socrepo_true": [
-            "//soc-repo:all_headers",
-            "//soc-repo:{}_{}/drivers/firmware/qcom/qcom-scm".format(target, variant),
-            "//soc-repo:{}_{}/drivers/soc/qcom/mdt_loader".format(target, variant),
-            "//soc-repo:{}_{}/drivers/soc/qcom/llcc-qcom".format(target, variant),
-            "//soc-repo:{}_{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(target, variant),
-            "//soc-repo:{}_{}/drivers/virt/gunyah/gh_rm_drv".format(target, variant),
-            "//soc-repo:{}_{}/drivers/virt/gunyah/gh_msgq".format(target, variant),
-            ],
-         "//build/kernel/kleaf:socrepo_false":["//msm-kernel:all_headers"],
-    })
+    if target == "sun" or target == "pineapple" :
+        headers = select({
+             "//build/kernel/kleaf:socrepo_true": [
+                "//soc-repo:all_headers",
+                "//soc-repo:{}_{}/drivers/firmware/qcom/qcom-scm".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/mdt_loader".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/llcc-qcom".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(target, variant),
+                "//soc-repo:{}_{}/drivers/virt/gunyah/gh_rm_drv".format(target, variant),
+                "//soc-repo:{}_{}/drivers/virt/gunyah/gh_msgq".format(target, variant),
+                ],
+             "//build/kernel/kleaf:socrepo_false":["//msm-kernel:all_headers"],
+        })
+    else:
+        headers = select({
+             "//build/qcom_build_extensions:qtisocrepo_true": [
+                "//soc-repo:all_headers",
+                "//soc-repo:{}_{}/drivers/firmware/qcom/qcom-scm".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/mdt_loader".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/llcc-qcom".format(target, variant),
+                "//soc-repo:{}_{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(target, variant),
+                "//soc-repo:{}_{}/drivers/virt/gunyah/gh_rm_drv".format(target, variant),
+                "//soc-repo:{}_{}/drivers/virt/gunyah/gh_msgq".format(target, variant),
+                ],
+             "//build/kernel/kleaf:socrepo_false":["//msm-kernel:all_headers"],
+        })
 
     all_module_rules = []
 
