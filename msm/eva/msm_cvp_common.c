@@ -1796,6 +1796,9 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 
 		pkt_concurrency = session_prop->pkt_concurrency;
 
+		if (pkt_concurrency == 0)
+			pkt_concurrency = 8;
+
 		if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
 			dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
 			inst, inst->sess_id, pkt_concurrency);
