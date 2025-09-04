@@ -473,7 +473,6 @@ advance:
 	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
 	__enter_core_noc_lpi(device);
 
-#ifdef CONFIG_EVA_CANOE
 	/* New sequence additions for canoe */
 	/* HPG Section 3.4.4 Steps 6-10 in canoe*/
 	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
@@ -513,7 +512,6 @@ advance:
 
 	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
 	__write_register(device, CVP_NOC_RESET_REQ, 0x0);
-#endif
 
 	/* HPG 3.4.4 step 5 in sun */
 	/* HPG 3.4.4 step 11 in canoe */
