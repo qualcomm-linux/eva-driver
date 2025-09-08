@@ -2719,16 +2719,12 @@ static int iris_hfi_session_clean(void *session)
 static int iris_debug_hook(void *device)
 {
 	struct iris_hfi_device *dev = device;
-	u32 val;
 
 	if (!device) {
 		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
 		return -ENODEV;
 	}
-	//__write_register(dev, CVP_WRAPPER_CORE_CLOCK_CONFIG, 0x11);
-	//__write_register(dev, CVP_WRAPPER_TZ_CPU_CLOCK_CONFIG, 0x1);
-	val = __read_register(dev, CVP_WRAPPER_CORE_CLOCK_CONFIG);
-	dprintk(CVP_ERR, "Halt Tensilica and core and axi\n");
+	call_iris_op(dev, stop_transactions_interrupt, dev);
 	return 0;
 }
 
@@ -3852,6 +3848,8 @@ static void iris_hfi_wd_work_handler(struct work_struct *work)
 				msm_cvp_hw_wd_recovery);
 		call_iris_op(device, print_sbm_regs, device);
 		response.device_id = 0;
+		dprintk(CVP_WARN, "Halt Tensilica\n");
+		__write_register(device, CVP_WRAPPER_TZ_CPU_CLOCK_CONFIG, 0x1);
 		handle_sys_error(cmd, (void *) &response);
 		enable_irq(device->cvp_hal_data->irq_wd);
 	}
@@ -4867,6 +4865,15 @@ static int __iris_power_on(struct iris_hfi_device *device)
 			__write_register(device, CVP_CC_SPARE1, 1);
 	}
 
+	/* New addition to put CPU/Tensilica NOC to low power Section 6.14 (Steps 15-17)*/
+	call_iris_op(device, enter_cpu_noc_lpi, device, IRIS_POWER_ON);
+
+	/* New addition to put CVP_VIDEO_CTL NOC to low power Section 6.14 (Steps 19-21)*/
+	call_iris_op(device, enter_video_ctl_noc_lpi, device, IRIS_POWER_ON);
+
+	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
+	call_iris_op(device, enter_core_noc_lpi, device, IRIS_POWER_ON);
+
 	/*
 	 * Re-program all of the registers that get reset as a result of
 	 * regulator_disable() and _enable()
@@ -5092,6 +5099,11 @@ fail_load_fw:
 
 static void __unload_fw(struct iris_hfi_device *device)
 {
+	struct msm_cvp_core *core = NULL;
+
+	core = cvp_driver->cvp_core;
+	if (!core)
+		return;
 	if (!device->resources.fw.cookie)
 		return;
 
