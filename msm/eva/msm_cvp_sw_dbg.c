@@ -30,7 +30,7 @@ void eva_kmd_buf_dump(struct msm_cvp_inst *inst,
 	else {
 		mutex_lock(&core->kmd_dbg.dbg_lock);
 		trace_buf = &(core->kmd_trace.kmd_buf[core->kmd_dbg.kmd_buf_cnt]);
-		trace_buf->session_id = hash32_ptr(inst->session);
+		trace_buf->session_id = inst->sess_id;
 		trace_buf->map_type = buf_map_type;
 		trace_buf->iova = smem->device_addr;
 		trace_buf->size = smem->size;
@@ -101,7 +101,7 @@ void eva_kmd_session_dump(struct msm_cvp_inst *inst)
 	mutex_unlock(&core->kmd_dbg.dbg_lock);
 
 	kmd_trace_sess = &(core->kmd_trace.kmd_session[trace_index]);
-	kmd_trace_sess->session_id = hash32_ptr(inst->session);
+	kmd_trace_sess->session_id = inst->sess_id;
 	kmd_trace_sess->instance_state = inst->state;
 	kmd_trace_sess->session_type = inst->session_type;
 	kmd_trace_sess->hfi_error_code = inst->hfi_error_code;

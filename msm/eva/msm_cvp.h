@@ -50,5 +50,6 @@ int cvp_clean_session_queues(struct msm_cvp_inst *inst);
 int cvp_session_flush_all(struct msm_cvp_inst *inst);
 int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 	struct eva_kmd_sys_property *prop_array, int i);
-
+void *get_sess_from_idr(struct msm_cvp_inst *inst);
+u32 get_sess_id_from_idr(void *session);
 #endif

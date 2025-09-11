@@ -627,15 +627,23 @@ static long cvp_ioctl(struct msm_cvp_inst *inst,
 		(karg->type == EVA_KMD_SEND_CMD_PKT)) {
 		u32 pkt_id = 0;
 		u64 aontimer = 0;
+		u32 session_id = 0;
+		u32 stream_idx = 0;
+		u64 transaction_id = 0;
 		const char *command_name = "";
 		struct cvp_hfi_cmd_session_hdr *hdr = NULL;
 
 		hdr = (struct cvp_hfi_cmd_session_hdr *)&karg->data.hfi_pkt;
+		session_id = hdr->header.session_id;
+		stream_idx = hdr->header.stream_idx;
+		transaction_id = hdr->header.client_data.transaction_id;
 		pkt_id  = hdr->header.packet_type;
 		command_name = get_pkt_name_from_type(pkt_id);
 		aontimer = get_aon_time();
-		dprintk(CVP_PERF, "%s: msg packet %s received from umd at aontimer %llu\n",
-			__func__, command_name, aontimer);
+		dprintk(CVP_PERF,
+			"%s: msg packet %s received from umd at aontimer %llu session_id 0x%x, stream_idx 0x%x transaction_id 0x%x\n",
+			__func__, command_name, aontimer, session_id,
+			stream_idx, transaction_id);
 	}
 	rc = msm_cvp_private((void *)inst, cmd, karg);
 	if (rc) {

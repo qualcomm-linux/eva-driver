@@ -2381,14 +2381,14 @@ const char *get_pkt_name_from_type(u32 pkt_type)
 		u32 mask;
 		int pkt_idx;
 
-		if ((pkt_type & 0x03000000) == HFI_CMD_SESSION_EVA_OFFSET) {
+		if ((pkt_type & 0x03000000) == HFI_CMD_OFFSET) {
 			int pkt_idx = get_pkt_index_from_type(pkt_type);
 
 			if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
 				return "";
 			else
 				return cvp_hfi_defs[pkt_idx].name;
-		} else if (((pkt_type & 0x03000000) == HFI_MSG_SESSION_EVA_OFFSET)) {
+		} else if (((pkt_type & 0x03000000) == HFI_MSG_OFFSET)) {
 			mask = pkt_type & 0x3000;
 			pkt_idx = -EINVAL;
 

@@ -316,6 +316,9 @@ struct msm_cvp_core {
 	ktime_t last_fw_fetch_ts;
 	u32 cur_cmd_q_read_offset;
 	u32 prev_cmd_q_read_offset;
+
+	struct idr sess_idr;
+	struct mutex idr_lock;
 };
 
 struct msm_cvp_inst {
@@ -332,6 +335,7 @@ struct msm_cvp_inst {
 	struct cvp_session_queue session_queue_fence;
 	struct cvp_session_event event_handler;
 	void *session;
+	u32 sess_id;
 	enum instance_state state;
 	struct msm_cvp_list freqs;
 	struct msm_cvp_list persistbufs;

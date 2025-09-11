@@ -298,7 +298,7 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 			inst->session_type == MSM_CVP_USER ? "User" : "Kernel");
 		cur += write_str(cur, end - cur, "proc name: %s\n", inst->proc_name);
 		cur += write_str(cur, end - cur, "session name: %s\n", inst->prop.session_name);
-		cur += write_str(cur, end - cur, "session id: %#x\n",hash32_ptr(inst->session));
+		cur += write_str(cur, end - cur, "session id: %#x\n", inst->sess_id);
 		cur += write_str(cur, end - cur, "is secure: %u\n", inst->prop.is_secure);
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);

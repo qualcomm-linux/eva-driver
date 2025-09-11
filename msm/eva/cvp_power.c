@@ -221,12 +221,17 @@ int msm_cvp_update_power(struct msm_cvp_inst *inst)
 		return -EINVAL;
 	}
 
-	s = cvp_get_inst_validate(inst->core, inst);
+	core = cvp_driver->cvp_core;
+	if (!core) {
+		dprintk(CVP_ERR, "%s: core is NULL", __func__);
+		return -EINVAL;
+	}
+
+	s = cvp_get_inst_validate(core, inst);
 	if (!s)
 		return -ECONNRESET;
 
-	core = inst->core;
-	if (!core || core->state == CVP_CORE_UNINIT) {
+	if (core->state == CVP_CORE_UNINIT) {
 		rc = -ECONNRESET;
 		goto adjust_exit;
 	}

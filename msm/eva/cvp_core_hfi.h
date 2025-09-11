@@ -318,7 +318,7 @@ void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on);
 
 #define msm_cvp_cmd_tracing_from_sw(cmd_hdr, tag) ({ \
 	if (((msm_cvp_debug & CVP_TRACE) == CVP_TRACE) && \
-			(cmd_hdr->header.packet_type > HFI_CMD_SESSION_CVP_START) && \
+			(cmd_hdr->header.packet_type > HFI_CMD_SESSION_CONFIG_OFFSET) && \
 			(cmd_hdr->header.size >= sizeof(struct cvp_hfi_cmd_session_hdr))) { \
 		u64 aon_cycles = 0; \
 		u32 sess_id = 0; \
@@ -346,7 +346,7 @@ void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on);
 
 #define msm_cvp_msg_tracing_from_sw(msg_hdr, tag) ({ \
 	if (((msm_cvp_debug & CVP_TRACE) == CVP_TRACE) && \
-			(msg_hdr->header.packet_type > HFI_MSG_SESSION_CVP_START) && \
+			(msg_hdr->header.packet_type > HFI_MSG_SESSION_EVA_OFFSET) && \
 			(msg_hdr->header.size >= sizeof(struct cvp_hfi_msg_session_hdr))) { \
 		u64 aon_cycles = 0; \
 		u32 pkt_id = 0; \
