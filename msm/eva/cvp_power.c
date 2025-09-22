@@ -29,10 +29,11 @@ static bool is_subblock_profile_existed(struct msm_cvp_inst *inst)
 			inst->prop.cycles[HFI_HW_XRA] ||
 			inst->prop.cycles[HFI_HW_LSR]);
 }
-
-static char hw_names[HFI_MAX_HW_THREADS][8] = {{"FDU"}, {"MPU"}, {"OD"}, {"ICA"},
+char hw_names[HFI_MAX_HW_THREADS][8] = {{"FDU"}, {"MPU"}, {"OD"}, {"ICA"},
 				{"VADL"}, {"TOF"}, {"RGE"}, {"XRA"},
 				{"LSR"}};
+EXPORT_SYMBOL_GPL(hw_names);
+
 static void aggregate_power_update(struct msm_cvp_core *core,
 	struct cvp_power_level *nrt_pwr,
 	struct cvp_power_level *rt_pwr,
@@ -82,6 +83,9 @@ static void aggregate_power_update(struct msm_cvp_core *core,
 		op_fw_max[i] =
 			(op_fw_max[i] >= inst->prop.fw_op_cycles) ?
 			op_fw_max[i] : inst->prop.fw_op_cycles;
+
+		dprintk(CVP_PWR, " ddr_bw %u ddr_op_bw %u\n", inst->prop.ddr_bw,
+						inst->prop.ddr_op_bw);
 
 		bw_sum[i] += inst->prop.ddr_bw;
 
