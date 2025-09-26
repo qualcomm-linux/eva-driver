@@ -33,6 +33,7 @@ enum queue_state {
 
 #define DEFAULT_HAL_VER 1
 #define KNP_HAL_VER 2
+#define HAWI_HAL_VER 3
 
 #ifdef CONFIG_EVA_KALAMA
 #define CVP_SYNX_ENABLED 1
