@@ -452,8 +452,12 @@ static void handle_session_init_done(enum hal_command_response cmd, void *data)
 	if (!inst) {
 		dprintk(CVP_WARN, "%s:Got a response for an inactive session %#x\n",
 				__func__, response->session_id);
-		list_for_each_entry(inst, &core->instances, list)
-			cvp_print_inst(CVP_WARN, inst);
+		list_for_each_entry(inst, &core->instances, list) {
+			if (kref_get_unless_zero(&inst->kref)) {
+				cvp_print_inst(CVP_WARN, inst);
+				cvp_put_inst(inst);
+			}
+		}
 		return;
 	}
 
