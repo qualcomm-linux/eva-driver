@@ -265,6 +265,8 @@ static int session_info_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
+extern char hw_names[HFI_MAX_HW_THREADS][8];
+
 static ssize_t session_info_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
@@ -307,6 +309,17 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 			cur += write_str(cur, end - cur, "%s size: %d bytes\n",
 				list_node->info.feature, list_node->info.persist_size);
 		}
+		cur += write_str(cur, end - cur, "Power info:\n");
+		for (int j = 0; j < HFI_MAX_HW_THREADS; j++)
+			if (inst->prop.cycles[j])
+				cur += write_str(cur, end - cur, "%s clock: %u clock_op: %u\n",
+					hw_names[j], inst->prop.cycles[j],
+					inst->prop.op_cycles[j]);
+
+		cur += write_str(cur, end - cur, "fw clock %u fw clock_op %u\n",
+				inst->prop.fw_cycles, inst->prop.fw_op_cycles);
+		cur += write_str(cur, end - cur, "ddr_bw %u ddr_op_bw %u\n",
+				inst->prop.ddr_bw, inst->prop.ddr_op_bw);
 	}
 	mutex_unlock(&core->lock);
 
