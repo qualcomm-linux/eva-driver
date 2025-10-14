@@ -500,7 +500,7 @@ static struct msm_cvp_common_data sm8975_common_data[] = {
 	{
 		.key = "qcom,hw-resp-timeout",
 #ifdef USE_PRESIL
-		.value = 15000000,
+		.value = 60000,
 #else
 		.value = 2000,
 #endif

@@ -24,8 +24,16 @@ EXPORT_SYMBOL(msm_cvp_debug_out);
 
 #ifdef USE_PRESIL
 int msm_cvp_fw_low_power_mode = !1;
+bool msm_cvp_syscache_disable = true;
+int msm_cvp_session_error_recovery = !1;
+int msm_cvp_hw_hang_recovery = !1;
+int msm_cvp_hw_wd_recovery = !1;
 #else
 int msm_cvp_fw_low_power_mode = 1;
+bool msm_cvp_syscache_disable = !true;
+int msm_cvp_session_error_recovery = 1;
+int msm_cvp_hw_hang_recovery = 1;
+int msm_cvp_hw_wd_recovery = 1;
 #endif
 #ifdef USE_PRESIL42
 bool msm_cvp_auto_pil = !true;
@@ -41,7 +49,6 @@ bool msm_cvp_thermal_mitigation_disabled = !true;
 bool msm_cvp_cacheop_disabled = !true;
 bool msm_cvp_probe_allowed = true;
 int msm_cvp_clock_voting = !1;
-bool msm_cvp_syscache_disable = !true;
 bool msm_cvp_dsp_disable = !true;
 #ifdef CVP_MMRM_ENABLED
 bool msm_cvp_mmrm_enabled = true;
@@ -51,10 +58,7 @@ bool msm_cvp_mmrm_enabled = !true;
 bool msm_cvp_dcvs_disable = !true;
 int msm_cvp_minidump_enable = !1;
 int cvp_kernel_fence_enabled = 2;
-int msm_cvp_hw_wd_recovery = 1;
 int msm_cvp_smmu_fault_recovery = !1;
-int msm_cvp_session_error_recovery = 1;
-int msm_cvp_hw_hang_recovery = 1;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 int msm_cvp_sw_dbg_buf_dump = 1;
 #endif
