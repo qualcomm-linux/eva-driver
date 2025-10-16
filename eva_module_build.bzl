@@ -81,7 +81,7 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
 
     kernel_build = "{}_{}".format(target, variant)
 
-    if target == "sun" or target == "pineapple" :
+    if target == "sun" or target == "pineapple" or target == "tuna":
         kernel_build_label = select({
             "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_{}_base_kernel".format(target, variant),
             "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}_{}".format(target, variant),
@@ -97,7 +97,7 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
     build_print = lambda message: print("{}: {}".format(kernel_build, message))
     formatter = lambda s: s.replace("%b", kernel_build).replace("%t", target)
 
-    if target == "sun" or target == "pineapple" :
+    if target == "sun" or target == "pineapple" or target == "tuna":
         headers = select({
              "//build/kernel/kleaf:socrepo_true": [
                 "//soc-repo:all_headers",

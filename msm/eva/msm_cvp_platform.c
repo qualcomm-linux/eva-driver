@@ -337,6 +337,62 @@ static struct msm_cvp_common_data sm8750_common_data[] = {
 	}
 };
 
+static struct msm_cvp_common_data sm8735_common_data[] = {
+	{
+		.key = "qcom,pm-qos-latency-us",
+		.value = 50,
+	},
+	{
+		.key = "qcom,sw-power-collapse",
+#ifdef USE_PRESIL
+		.value = 0,
+#else
+		.value = 1,
+#endif
+	},
+	{
+		.key = "qcom,domain-attr-non-fatal-faults",
+		.value = 0,
+	},
+	{
+		.key = "qcom,max-secure-instances",
+		.value = 2,
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 16,
+	},
+	{
+		.key = "qcom,max-ssr-allowed",
+		.value = 1,
+	},
+	{
+		.key = "qcom,power-collapse-delay",
+		.value = 3000,
+	},
+	{
+		.key = "qcom,hw-resp-timeout",
+#ifdef USE_PRESIL
+		.value = 15000000,
+#else
+		.value = 2000,
+#endif
+	},
+	{
+		.key = "qcom,dsp-resp-timeout",
+		.value = 1000,
+	},
+	{
+		.key = "qcom,debug-timeout",
+		.value = 0,
+	},
+	{
+		.key = "qcom,dsp-enabled",
+		.value = 1,
+	}
+};
+
+
 static struct msm_cvp_common_data sm8850_common_data[] = {
 	{
 		.key = "qcom,pm-qos-latency-us",
@@ -628,6 +684,20 @@ static struct msm_cvp_platform_data sm8750_data = {
 	.hal_version = DEFAULT_HAL_VER,
 };
 
+static struct msm_cvp_platform_data sm8735_data = {
+	.common_data = sm8735_common_data,
+	.common_data_length = ARRAY_SIZE(sm8735_common_data),
+	.sku_version = 0,
+	.vpu_ver = VPU_VERSION_5,
+	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
+	.noc_qos = &pakala_noc_qos,
+	.vm_id = 1,
+	.cvp_hfi = cvp_hfi_defs_v1,
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
+	.hfi_ver = 1,
+	.hal_version = DEFAULT_HAL_VER,
+};
+
 static struct msm_cvp_platform_data sm8850_data = {
 	.common_data = sm8850_common_data,
 	.common_data_length = ARRAY_SIZE(sm8650_common_data),
@@ -690,6 +760,10 @@ static const struct of_device_id msm_cvp_dt_match[] = {
 	{
 		.compatible = "qcom,sun-cvp",
 		.data = &sm8750_data,
+	},
+	{
+		.compatible = "qcom,tuna-cvp",
+		.data = &sm8735_data,
 	},
 	{
 		.compatible = "qcom,canoe-cvp",
