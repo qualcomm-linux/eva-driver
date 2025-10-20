@@ -63,6 +63,7 @@ enum queue_state {
 
 #ifdef CONFIG_EVA_ART
 #define USE_PRESIL 1
+#define CVP_SYNX_ENABLED 1
 #endif /* End of CONFIG_EVA_ART*/
 
 #ifdef CONFIG_EVA_WAIPIO
