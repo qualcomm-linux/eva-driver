@@ -227,7 +227,6 @@ static int msm_cvp_load_regspace_mapping(struct msm_cvp_platform_resources *res)
 		aon_mapping_config, 3);
 	if (ret) {
 		dprintk(CVP_ERR, "Failed to read aon reg: %d\n", ret);
-		return ret;
 	}
 	res->reg_mappings.aon_iova = aon_mapping_config[0];
 	res->reg_mappings.aon_size = aon_mapping_config[1];
