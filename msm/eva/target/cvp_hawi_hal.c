@@ -531,14 +531,14 @@ advance:
 	count = 0;
 	do {
 		value = __read_register(device, CVP_NOC_RESET_ACK);
-		if (value & 0x0)
+		if (value == 0x0)
 			break;
 		usleep_range(1000, 2000);
 		count++;
 	} while (count < max_count);
 
 	if (count == max_count)
-		dprintk(CVP_WARN, "Failed to get Partial Reset Ack %x\n",
+		dprintk(CVP_WARN, "Failed to get de-assert Partial Reset Ack %x\n",
 			value);
 
 	__write_register(device, CVP_NOC_RESET_REQ, 0xffff0000);
@@ -618,6 +618,10 @@ int __power_off_controller_hawi(struct iris_hfi_device *device)
 	if (rc)
 		dprintk(CVP_ERR, "Failed to disable cvp_debug_clk: %d\n",
 			rc);
+
+	rc = msm_cvp_disable_unprepare_clk(device, "cvp_ctl_freerun_clk");
+	if (rc)
+		dprintk(CVP_ERR, "Failed to disable cvp_ctl_freerun_clk: %d\n", rc);
 
 	rc = msm_cvp_disable_unprepare_clk(device, "cvp_freerun_clk");
 	if (rc)
@@ -789,6 +793,7 @@ int __set_registers_hawi(struct iris_hfi_device *device)
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
 	int i;
+	u32 arcg = 0;
 
 	if (!device->res) {
 		dprintk(CVP_ERR,
@@ -807,15 +812,18 @@ int __set_registers_hawi(struct iris_hfi_device *device)
 			reg_set->reg_tbl[i].reg, reg_set->reg_tbl[i].value);
 	}
 
-	__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
-	__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
-			 0x1);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
-	usleep_range(5, 10);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
-			 0x0);
-	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x0);
+	if (arcg) {
+		__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
+		__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
+		__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
+			0x1);
+		__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
+		usleep_range(5, 10);
+		__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
+			0x0);
+		__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x0);
+	} else
+		dprintk(CVP_WARN, "Skip ARCG sequence\n");
 
 	__write_register(device, CVP_CPU_CS_AXI4_QOS, pdata->noc_qos->axi_qos);
 	__write_register(device, CVP_NOC_A_PRIORITYLUT_LOW,
