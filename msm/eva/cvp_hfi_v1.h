@@ -27,6 +27,8 @@
 #define  HFI_MSG_SESSION_OFFSET                         0x2000000
 #define  HFI_MSG_SESSION_EVA_OFFSET                     0x2200000
 #define  HFI_MSG_SESSION_EVA_CTRL_OFFSET                0x2201000
+#define  HFI_CMD_OFFSET                                 HFI_CMD_SESSION_EVA_OFFSET
+#define  HFI_MSG_OFFSET                                 HFI_MSG_SESSION_EVA_OFFSET
 
 #define  HFI_ERR_NONE                                   (HFI_COMMON_BASE)        /**< Status: No error */
 #define  HFI_ERR_SYS_FATAL                              (HFI_COMMON_BASE + 0x1)  /**< Fatal system error */
