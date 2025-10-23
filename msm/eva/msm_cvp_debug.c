@@ -702,7 +702,7 @@ struct dentry *msm_cvp_debugfs_init_inst(struct msm_cvp_inst *inst,
 		dprintk(CVP_ERR, "Invalid params, inst: %pK\n", inst);
 		goto exit;
 	}
-	snprintf(debugfs_name, MAX_DEBUGFS_NAME, "inst_%pK", inst);
+	snprintf(debugfs_name, MAX_DEBUGFS_NAME, "inst_%llx", inst);
 
 	idata = kzalloc(sizeof(*idata), GFP_KERNEL);
 	if (!idata) {
