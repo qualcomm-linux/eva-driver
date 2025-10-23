@@ -2843,6 +2843,10 @@ static int __send_session_cmd_ktid(struct cvp_hal_session *session,
 {
 	struct cvp_hfi_cmd_session_hdr pkt;
 	int rc = 0;
+	if (!session || !session->device) {
+		dprintk(CVP_ERR, "Invalid Params %s\n", __func__);
+		return -EINVAL;
+	}
 	struct iris_hfi_device *device = session->device;
 
 	if (!__is_session_valid(device, session, __func__))
@@ -2858,7 +2862,7 @@ static int __send_session_cmd_ktid(struct cvp_hal_session *session,
 		goto err_create_pkt;
 	}
 
-	if (__iface_cmdq_write(session->device, &pkt))
+	if (__iface_cmdq_write(device, &pkt))
 		rc = -ENOTEMPTY;
 
 err_create_pkt:
