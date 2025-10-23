@@ -909,7 +909,7 @@ void __noc_error_info_iris2_pakala(struct iris_hfi_device *device)
 	if (core->resources.max_ssr_allowed >= 1)
 		log_required = true;
 
-	noc_log = &core->kmd_trace.kmd_debug_log.log.noc_log;
+	noc_log = &core->kmd_trace.kmd_debug_log.log->noc_log;
 
 	if (noc_log->used) {
 		dprintk(CVP_WARN, "Data already in NoC log, skip logging\n");
