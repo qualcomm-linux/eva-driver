@@ -10,7 +10,7 @@ def define_art():
         ],
         config_options = [
             #"CONFIG_TARGET_SYNX_ENABLE",
-            #"TARGET_SYNX_ENABLE",
+            "TARGET_SYNX_ENABLE",
             #"TARGET_DSP_ENABLE",
             #"TARGET_MMRM_ENABLE",
             "CONFIG_EVA_ART",
