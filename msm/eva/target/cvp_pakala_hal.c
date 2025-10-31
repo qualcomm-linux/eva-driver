@@ -34,7 +34,8 @@ void __check_tensilica_in_reset_pakala(struct iris_hfi_device *device)
 	dprintk(CVP_WARN, "tensilica xtss_reset_ro %#x\n", xtss_reset_ro);
 }
 
-static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
+void __enter_cpu_noc_lpi_pakala(struct iris_hfi_device *device,
+				enum enter_noc_lpi_caller caller)
 {
 	u32 lpi_status, count = 0, max_count = 2000;
 
@@ -49,8 +50,8 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
 	while (count < max_count) {
 		lpi_status =
 		    __read_register(device, CVP_WRAPPER_CPU_NOC_LPI_STATUS);
-		if ((lpi_status & BIT(1)) ||
-		    ((lpi_status & BIT(2)) && (!(lpi_status & BIT(0))))) {
+		if (((lpi_status & BIT(1)) ||
+			(lpi_status & BIT(2))) && (!(lpi_status & BIT(0)))) {
 			/*
 			 * If QDENY == true, or
 			 * If QACTIVE == true && QACCEPT == false
@@ -70,10 +71,8 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
 		}
 	}
 
-	dprintk(CVP_PWR, "%s, CPU Noc: lpi_status %x (count %d)\n", __func__,
-		lpi_status, count);
 	/* HPG Step-7 of section 3.7 */
-	// __write_register(device, CVP_WRAPPER_CPU_NOC_LPI_CONTROL, 0x0);
+	__write_register(device, CVP_WRAPPER_CPU_NOC_LPI_CONTROL, 0x0);
 	if (count == max_count) {
 		u32 pc_ready, wfi_status;
 
@@ -81,17 +80,21 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
 		pc_ready = __read_register(device, CVP_CTRL_STATUS);
 
 		dprintk(CVP_WARN,
-			"%s, CPU NOC not in qaccept status %x %x %x\n",
-			__func__, lpi_status, wfi_status, pc_ready);
+			"%s - %d, CPU Noc is not in LPI: %x %x %x\n",
+			__func__, caller, lpi_status, wfi_status, pc_ready);
 
 		/* Added for debug info purpose, not part of HPG */
 		call_iris_op(device, print_sbm_regs, device);
-	}
+	} else
+		dprintk(CVP_WARN,
+			"%s - %d, CPU Noc is in LPI: lpi_status %x (count %d)\n",
+			__func__, caller, lpi_status, count);
 }
 
-static void __enter_core_noc_lpi(struct iris_hfi_device *device)
+void __enter_core_noc_lpi_pakala(struct iris_hfi_device *device,
+				enum enter_noc_lpi_caller caller)
 {
-	u32 lpi_status, value, count = 0, max_count = 2000;
+	u32 lpi_status, count = 0, max_count = 2000, val = 0;
 
 	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
 	/*
@@ -104,8 +107,8 @@ static void __enter_core_noc_lpi(struct iris_hfi_device *device)
 		/* Reading the LPI status */
 		lpi_status =
 		    __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_STATUS);
-		if ((lpi_status & BIT(1)) ||
-		    ((lpi_status & BIT(2)) && (!(lpi_status & BIT(0))))) {
+		if (((lpi_status & BIT(1)) ||
+			(lpi_status & BIT(2))) && (!(lpi_status & BIT(0)))) {
 			/*
 			 * If QDENY == true, or
 			 * If QACTIVE == true && QACCEPT == false
@@ -116,6 +119,11 @@ static void __enter_core_noc_lpi(struct iris_hfi_device *device)
 			usleep_range(10, 20);
 			__write_register(device,
 					 CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS, 0x1);
+			val = __read_register(device,
+							CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS);
+			__write_register(device,
+							CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS,
+									val & ~(BIT(0)|BIT(1)));
 			__write_register(
 			    device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, 0x1);
 			usleep_range(1000, 1200);
@@ -125,33 +133,23 @@ static void __enter_core_noc_lpi(struct iris_hfi_device *device)
 		}
 	}
 
-	dprintk(CVP_PWR, "%s, CORE Noc: lpi_status %x (count %d)\n", __func__,
-		lpi_status, count);
 	/* HPG Step-4 of section 3.4.4 */
-	// __write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, 0x0);
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, 0x0);
 	if (count == max_count) {
-		dprintk(CVP_WARN, "%s, CORE NOC not in qaccept status %x\n",
-			__func__, lpi_status);
+		dprintk(CVP_WARN,
+			"%s - %d, CORE Noc is not in LPI: lpi_status %x\n",
+			__func__, caller, lpi_status);
 
 		/* Added for debug info purpose, not part of HPG */
 		call_iris_op(device, print_sbm_regs, device);
-	}
-
-	/* HPG 3.4.4 Step 4-5 */
-	count = 0;
-	do {
-		value =
-		    __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_STATUS);
-		if (value & 0x0)
-			break;
-		usleep_range(1000, 2000);
-		count++;
-	} while (count < 10);
-
-	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL, 0x0);
+	} else
+		dprintk(CVP_WARN,
+		"%s - %d, CORE Noc is in LPI: lpi_status %x (count %d)\n",
+		__func__, caller, lpi_status, count);
 }
 
-static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
+void __enter_video_ctl_noc_lpi_pakala(struct iris_hfi_device *device,
+					enum enter_noc_lpi_caller caller)
 {
 	u32 lpi_status, count = 0, max_count = 2000;
 
@@ -164,21 +162,21 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
 	while (count < max_count) {
 		/* Reading the LPI status */
 		lpi_status = __read_register(
-		    device, CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_STATUS);
-		if ((lpi_status & BIT(1)) ||
-		    ((lpi_status & BIT(2)) && (!(lpi_status & BIT(0))))) {
+			device, CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_STATUS);
+		if (((lpi_status & BIT(1)) ||
+			(lpi_status & BIT(2))) && (!(lpi_status & BIT(0)))) {
 			/*
 			 * If QDENY == true, or
 			 * If QACTIVE == true && QACCEPT == false
 			 * Try again
 			 */
 			__write_register(
-			    device,
-			    CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL, 0x0);
+				device,
+				CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL, 0x0);
 			usleep_range(10, 20);
 			__write_register(
-			    device,
-			    CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL, 0x1);
+				device,
+				CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL, 0x1);
 			usleep_range(1000, 1200);
 			count++;
 		} else {
@@ -186,19 +184,44 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
 		}
 	}
 
-	dprintk(CVP_PWR, "%s, CVP_VIDEO_CTL Noc: lpi_status %x (count %d)\n",
-		__func__, lpi_status, count);
 	/* HPG Step-22 of section 6.14 */
 	__write_register(device, CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL,
 			 0x0);
 	if (count == max_count) {
-		dprintk(
-		    CVP_WARN,
-		    "%s, CVP_VIDEO_CTL NOC not in qaccept status %x %x %x\n",
-		    __func__, lpi_status);
+		dprintk(CVP_WARN,
+			"%s - %d, CVP_VIDEO_CTL Noc is not in LPI: lpi_status %x\n",
+			__func__, caller, lpi_status);
 
 		/* Added for debug info purpose, not part of HPG */
 		call_iris_op(device, print_sbm_regs, device);
+	} else
+		dprintk(CVP_WARN,
+		"%s - %d, CVP_VIDEO_CTL Noc is in LPI: lpi_status %x (count %d)\n",
+		__func__, caller, lpi_status, count);
+}
+
+static void __stop_transactions_interrupt_pakala(struct iris_hfi_device *device)
+{
+	struct iris_hfi_device *dev = device;
+	u32 val, mask_val = 0;
+
+	if (dev) {
+		dprintk(CVP_WARN, "Stop NOC transactions from EVA Core\n");
+		val = __read_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
+		__write_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val | BIT(2));
+		val = __read_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
+		__write_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val | BIT(2));
+		val = __read_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
+		__write_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val | BIT(2));
+
+		val = __read_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW);
+		__write_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW, val | BIT(0));
+
+		/* Masking Core and CPU interrupts */
+		mask_val = __read_register(dev, CVP_WRAPPER_INTR_MASK);
+		mask_val |= (CVP_FATAL_INTR_BMSK);
+		dprintk(CVP_WARN, "Masking Core and CPU interrupts\n");
+		__write_register(dev, CVP_WRAPPER_INTR_MASK, mask_val);
 	}
 }
 
@@ -416,7 +439,6 @@ int __power_off_core_pakala(struct iris_hfi_device *device)
 		 */
 		__disable_gdsc(device, "core");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
-		msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
 		return 0;
 	}
 
@@ -452,7 +474,7 @@ int __power_off_core_pakala(struct iris_hfi_device *device)
 
 advance:
 	/* New addition to put CORE NOC to low power Section 6.14 (Steps 4-6)*/
-	__enter_core_noc_lpi(device);
+	__enter_core_noc_lpi_pakala(device, POWER_OFF_CORE);
 
 	/* HPG 3.4.4 step 5 in sun */
 	/* HPG 3.4.4 step 11 in canoe */
@@ -480,12 +502,12 @@ int __power_off_controller_pakala(struct iris_hfi_device *device)
 	/* New addition to put CPU/Tensilica NOC to low power Section 6.14
 	 * (Steps 15-17)
 	 */
-	__enter_cpu_noc_lpi(device);
+	__enter_cpu_noc_lpi_pakala(device, POWER_OFF_CNTRL);
 
 	/* New addition to put CVP_VIDEO_CTL NOC to low power Section 6.14
 	 * (Steps 19-21)
 	 */
-	__enter_video_ctl_noc_lpi(device);
+	__enter_video_ctl_noc_lpi_pakala(device, POWER_OFF_CNTRL);
 
 	/* HPG 3.7 step 11 */
 	__write_register(device, CVP_WRAPPER_DEBUG_BRIDGE_LPI_CONTROL, 0x0);
@@ -537,6 +559,8 @@ int __power_off_controller_pakala(struct iris_hfi_device *device)
 
 	/* HPG 3.7 Step 13 and 14 */
 	__disable_gdsc(device, "controller");
+	/* Step #28: Override ARCG control to allow AXI0 clock pass through */
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x1);
 
 	/* Below sequence are missing from HPG Section 3.7.
 	 * It disables GCC clks in power on sequence
@@ -696,6 +720,7 @@ int __set_registers_pakala(struct iris_hfi_device *device)
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
 	int i;
+	u32 val = 0;
 
 	if (!device->res) {
 		dprintk(CVP_ERR,
@@ -714,10 +739,22 @@ int __set_registers_pakala(struct iris_hfi_device *device)
 			reg_set->reg_tbl[i].reg, reg_set->reg_tbl[i].value);
 	}
 
+	/* Reset both sides of 2 ahb2ahb_bridges (TZ and non-TZ)
+	 * As suggested by DV team
+	 */
+	__write_register(device, CVP_AHB_BRIDGE_SYNC_RESET, 0x2);
+	__write_register(device, CVP_AHB_BRIDGE_SYNC_RESET, 0x0);
+
+	val = __read_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+
 	__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
 	__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
-			 0x1);
+	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x1);
 	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
 	usleep_range(5, 10);
 	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
@@ -1048,5 +1085,9 @@ int set_pakala_hal_functions(void)
 	hal_ops.dump_noc_regs = __dump_noc_regs_pakala;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_pakala;
 	hal_ops.pm_qos_update = iris_pm_qos_update_pakala;
+	hal_ops.enter_cpu_noc_lpi = __enter_cpu_noc_lpi_pakala;
+	hal_ops.enter_video_ctl_noc_lpi = __enter_video_ctl_noc_lpi_pakala;
+	hal_ops.enter_core_noc_lpi = __enter_core_noc_lpi_pakala;
+	hal_ops.stop_transactions_interrupt = __stop_transactions_interrupt_pakala;
 	return 0;
 }
