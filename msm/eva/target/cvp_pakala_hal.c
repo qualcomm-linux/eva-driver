@@ -755,7 +755,8 @@ int __set_registers_pakala(struct iris_hfi_device *device)
 	__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);
 	__write_register(device, CVP_NOC_RCGCONTROLLER_WAKEUP_LOW, 0x7);
 	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW, 0x1);
-	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW, 0x1);
+	__write_register(device,
+		CVP_NOC_RCG_VNOC_NOC_CLK_ENABLE_LOW + device->res->rcg_vnoc_clk_en_low, 0x1);
 	usleep_range(5, 10);
 	__write_register(device, CVP_NOC_RCG_VNOC_NOC_CLK_FORCECLOCKON_LOW,
 			 0x0);
