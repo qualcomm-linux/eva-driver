@@ -95,7 +95,7 @@ struct eva_smmu_debug {
 };
 
 struct eva_kmd_debug_log {
-	struct cvp_debug_log log;
+	struct cvp_debug_log *log;
 	struct eva_smmu_debug smmu_debug;
 };
 

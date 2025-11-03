@@ -2336,11 +2336,13 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 	session_id = inst->sess_id;
 
 	core = cvp_driver->cvp_core;
-	if (log && core->kmd_trace.kmd_debug_log.log.snapshot_index < 16) {
-		snap = &core->kmd_trace.kmd_debug_log.log.snapshot[
-			core->kmd_trace.kmd_debug_log.log.snapshot_index];
-		snap->session = inst->sess_id;
-		core->kmd_trace.kmd_debug_log.log.snapshot_index++;
+	if (core->kmd_trace.kmd_debug_log.log) {
+		if (log && core->kmd_trace.kmd_debug_log.log->snapshot_index < 16) {
+			snap = &core->kmd_trace.kmd_debug_log.log->snapshot[
+				core->kmd_trace.kmd_debug_log.log->snapshot_index];
+			snap->session = inst->sess_id;
+			core->kmd_trace.kmd_debug_log.log->snapshot_index++;
+		}
 	}
 
 	dprintk(CVP_ERR,

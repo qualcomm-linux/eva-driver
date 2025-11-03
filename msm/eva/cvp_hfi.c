@@ -2003,7 +2003,14 @@ sfr_init:
 		if (core) {
 			core->kmd_dbg.kmd_sess_cnt = 0;
 			core->kmd_dbg.kmd_queue_dump_cnt = 0;
-			memset(&(core->kmd_trace), 0, sizeof(struct eva_kmd_trace));
+			memset(&(core->kmd_trace.kmd_buf), 0,
+				(sizeof(struct eva_kmd_buf) * DBG_BUF_CNT));
+			memset(&(core->kmd_trace.kmd_session), 0,
+				(sizeof(struct eva_kmd_session) * TRACE_SESS_SIZE));
+			memset(core->kmd_trace.kmd_debug_log.log, 0,
+				sizeof(struct cvp_debug_log));
+			memset(&(core->kmd_trace.kmd_debug_log.smmu_debug), 0,
+				sizeof(struct eva_smmu_debug));
 		}
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
@@ -2022,7 +2029,14 @@ sfr_init:
 				core->kmd_dbg.kmd_buf_cnt = 0;
 				core->kmd_dbg.kmd_sess_cnt = 0;
 				core->kmd_dbg.kmd_queue_dump_cnt = 0;
-				memset(&(core->kmd_trace), 0, sizeof(struct eva_kmd_trace));
+				memset(&(core->kmd_trace.kmd_buf), 0,
+					(sizeof(struct eva_kmd_buf) * DBG_BUF_CNT));
+				memset(&(core->kmd_trace.kmd_session), 0,
+					(sizeof(struct eva_kmd_session) * TRACE_SESS_SIZE));
+				memset(core->kmd_trace.kmd_debug_log.log, 0,
+					sizeof(struct cvp_debug_log));
+				memset(&(core->kmd_trace.kmd_debug_log.smmu_debug), 0,
+					sizeof(struct eva_smmu_debug));
 			}
 		}
 	}
