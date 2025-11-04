@@ -1989,7 +1989,7 @@ hfi_queue_init:
 				0, ALIGNED_SFR_SIZE);
 		goto sfr_init;
 	}
-	rc = __smem_alloc(dev, mem_addr, ALIGNED_SFR_SIZE, 1, SMEM_UNCACHED, 0);
+	rc = __smem_alloc(dev, mem_addr, ALIGNED_SFR_SIZE, 1, SMEM_UNCACHED, O_RDWR | O_CLOEXEC);
 	if (rc) {
 		dprintk(CVP_WARN, "sfr_alloc_fail: SFR not will work\n");
 		dev->sfr.align_device_addr = 0;
@@ -2021,7 +2021,7 @@ sfr_init:
 		}
 	} else {
 		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
-				SMEM_UNCACHED, O_RDWR);
+				SMEM_UNCACHED, O_RDWR | O_CLOEXEC);
 		if (rc) {
 			dprintk(CVP_WARN, "sfr_alloc_fail: sw_dbg_buf not will work\n");
 			dev->sw_dbg_buf.align_device_addr = 0;
