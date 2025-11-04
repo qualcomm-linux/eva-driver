@@ -307,7 +307,7 @@ int __power_on_controller_kaanapali(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_BEGIN("__power_on_controller_v1");
 
-	rc = __enable_gdsc(device, "controller");
+	rc = __enable_gdsc(device, "controller_pd");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable ctrler: %d\n", rc);
 		return rc;
@@ -356,7 +356,7 @@ fail_enable_axi0c:
 fail_enable_axi0:
 	msm_cvp_disable_unprepare_clk(device, "sleep_clk");
 fail_reset_sleep:
-	__disable_gdsc(device, "controller");
+	__disable_gdsc(device, "controller_pd");
 	CVPKERNEL_ATRACE_END("__power_on_controller_v1");
 	return rc;
 }
@@ -367,7 +367,7 @@ int __power_on_core_kaanapali(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_BEGIN("__power_on_core_v1");
 
-	rc = __enable_gdsc(device, "core");
+	rc = __enable_gdsc(device, "core_pd");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable core: %d\n", rc);
 		return rc;
@@ -402,7 +402,7 @@ fail_enable_freerun:
 fail_enable_core:
 	msm_cvp_disable_unprepare_clk(device, "eva_cc_mvs0_clk_src");
 fail_enable_clk_src:
-	__disable_gdsc(device, "core");
+	__disable_gdsc(device, "core_pd");
 	return rc;
 }
 
@@ -425,7 +425,7 @@ int __power_off_core_kaanapali(struct iris_hfi_device *device)
 				value);
 			call_iris_op(device, print_sbm_regs, device);
 		}
-		__disable_gdsc(device, "core");
+		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	} else if (!(value & 0x2) && msm_cvp_fw_low_power_mode) {
@@ -433,7 +433,7 @@ int __power_off_core_kaanapali(struct iris_hfi_device *device)
 		 * HW_CONTROL PC disabled, then core is powered on for
 		 * CVP NoC access
 		 */
-		__disable_gdsc(device, "core");
+		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
 		return 0;
@@ -523,7 +523,7 @@ advance:
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
 
 	/* HPG 3.4.4 step 6-7 */
-	__disable_gdsc(device, "core");
+	__disable_gdsc(device, "core_pd");
 	msm_cvp_disable_unprepare_clk(device, "core_clk");
 	return 0;
 }
@@ -596,7 +596,9 @@ int __power_off_controller_kaanapali(struct iris_hfi_device *device)
 		dprintk(CVP_ERR, "Failed to disable sleep clk: %d\n", rc);
 
 	/* HPG 3.7 Step 13 and 14 */
-	__disable_gdsc(device, "controller");
+	__disable_gdsc(device, "controller_pd");
+	/* Step #28: Override ARCG control to allow AXI0 clock pass through */
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x1);
 
 	/* Below sequence are missing from HPG Section 3.7.
 	 * It disables GCC clks in power on sequence
@@ -721,7 +723,7 @@ int __enable_hw_power_collapse_kaanapali(struct iris_hfi_device *device)
 	}
 
 	if (device->res->gdsc_framework_type)
-		rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+		rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core_pd");
 	else
 		rc = __hand_off_regulators(device);
 
@@ -859,7 +861,7 @@ void __dump_noc_regs_kaanapali(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+			rc = switch_core_gdsc_mode(device, TO_SW_CTRL, "core_pd");
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -948,7 +950,7 @@ void __dump_noc_regs_kaanapali(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+			rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core_pd");
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -988,7 +990,7 @@ void __noc_error_info_iris2_kaanapali(struct iris_hfi_device *device)
 	noc_log->used = 1;
 	rc = 0;
 
-	__disable_hw_power_collapse(device);
+	__disable_hw_power_collapse(device, "core_pd");
 
 	val = call_iris_op(device, check_core_power_on, device);
 	regi =

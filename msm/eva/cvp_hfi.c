@@ -329,25 +329,32 @@ int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
  * Call this in place of __acquire_regulator, hand_off_regulator.
  *
  */
-int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest)
+int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest,
+		const char *name)
 {
 	int rc = 0;
 	struct power_domain_info *pd_info;
 
 	iris_hfi_for_each_pwr_domain(device, pd_info) {
+		if (strcmp(pd_info->name, name))
+			continue;
+
 		if (pd_info->has_hw_power_collapse) {
-			dprintk(CVP_CORE, "Moving core GDSC to %s\n",
+			dprintk(CVP_CORE, "Moving %s to %s\n", name,
 						dest?"HW control":"SW control");
 			rc = __dev_pm_genpd_set_hwmode(pd_info->pd_device, (bool)dest);
 			if (rc) {
-				dprintk(CVP_ERR, "Failed to move core GDSC to %s\n",
+				dprintk(CVP_ERR, "Failed to move %s to %s\n", name,
 						dest?"HW control":"SW control");
 			}
-			break;
+			return rc;
 		}
+
+		return rc;
 	}
 
-	return rc;
+	dprintk(CVP_ERR, "Switching Failed for Power Domain %s\n", name);
+	return -EINVAL;
 }
 
 int __acquire_regulator(struct regulator_info *rinfo,
@@ -430,13 +437,13 @@ err_reg_handoff_failed:
 	return rc;
 }
 
-static int __take_back_regulators(struct iris_hfi_device *device)
+static int __take_back_regulators(struct iris_hfi_device *device, const char *name)
 {
 	struct regulator_info *rinfo;
 	int rc = 0;
 
 	if (device->res->gdsc_framework_type) {
-		rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+		rc = switch_core_gdsc_mode(device, TO_SW_CTRL, name);
 	} else {
 		iris_hfi_for_each_regulator(device, rinfo) {
 			rc = __acquire_regulator(rinfo, device);
@@ -4357,7 +4364,7 @@ disable_regulator_failed:
 	return rc;
 }
 
-int __disable_hw_power_collapse(struct iris_hfi_device *device)
+int __disable_hw_power_collapse(struct iris_hfi_device *device, const char *name)
 {
 	int rc = 0;
 
@@ -4366,7 +4373,7 @@ int __disable_hw_power_collapse(struct iris_hfi_device *device)
 		return 0;
 	}
 
-	rc = __take_back_regulators(device);
+	rc = __take_back_regulators(device, name);
 	if (rc)
 		dprintk(CVP_WARN,
 			"%s : Failed to disable HW power collapse %d\n",
@@ -4383,21 +4390,9 @@ int __enable_gdsc(struct iris_hfi_device *device,
 	core = cvp_driver->cvp_core;
 
 	if (device->res->gdsc_framework_type) {
-		if (!strcmp(name, "controller")) {
-			rc = __enable_power_domain(device, "controller_pd");
-			if (rc)
-				dprintk(CVP_ERR, "Failed to enable controller pd: %d\n", rc);
-		} else {
-			rc = __enable_power_domain(device, "core_pd");
-			if (rc)
-				dprintk(CVP_ERR, "Failed to enable core pd: %d\n", rc);
-
-			if (core->platform_data->hal_version > KNP_HAL_VER) {
-				rc = __enable_power_domain(device, "core_noc_pd");
-				if (rc)
-					dprintk(CVP_WARN, "Failed to enable core noc pd: %d\n", rc);
-			}
-		}
+		rc = __enable_power_domain(device, name);
+		if (rc)
+			dprintk(CVP_ERR, "Failed to enable %s: %d\n", name, rc);
 	} else {
 		if (!strcmp(name, "controller")) {
 			rc = __enable_regulator(device, "cvp");
@@ -4472,7 +4467,7 @@ static int __enable_power_domain(struct iris_hfi_device *device,
 		 */
 
 		if (pd_info->has_hw_power_collapse) {
-			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+			rc = switch_core_gdsc_mode(device, TO_SW_CTRL, name);
 			if (rc) {
 				dprintk(CVP_ERR,
 					"Failed to acquire core gdsc control to SW: %d\n", rc);
@@ -4495,32 +4490,13 @@ int __disable_gdsc(struct iris_hfi_device *device,
 	core = cvp_driver->cvp_core;
 
 	if (device->res->gdsc_framework_type) {
-		if (!strcmp(name, "controller")) {
-			rc = __disable_power_domain(device, "controller_pd");
+		rc = __disable_hw_power_collapse(device, name);
+		if (!rc) {
+			rc = __disable_power_domain(device, name);
 			if (rc)
-				dprintk(CVP_ERR, "Failed to disable controller pd: %d\n", rc);
-		} else {
-			/* Take back the gdsc control to SW before disabling the GDSC.
-			 * Not doing so, would not remove the votes from mmcx rail and
-			 * may lead to power issues.
-			 */
-			rc = __disable_hw_power_collapse(device);
-			if (!rc) {
-				rc = __disable_power_domain(device, "core_pd");
-				if (rc)
-					dprintk(CVP_ERR, "Failed to disable core pd: %d\n", rc);
-
-				if (core->platform_data->hal_version > KNP_HAL_VER) {
-					rc = __disable_power_domain(device, "core_noc_pd");
-					if (rc)
-						dprintk(CVP_WARN,
-							"Failed to disable core noc pd: %d\n", rc);
-				}
-			} else {
-				/* Bring attention to this issue */
-				msm_cvp_res_handle_fatal_hw_error(device->res, true);
-			}
-		}
+				dprintk(CVP_ERR, "Failed to disable %s: %d\n", name, rc);
+		} else
+			msm_cvp_res_handle_fatal_hw_error(device->res, true);
 	} else {
 		if (!strcmp(name, "controller")) {
 			rc = __disable_regulator(device, "cvp");

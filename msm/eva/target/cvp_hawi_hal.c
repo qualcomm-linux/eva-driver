@@ -134,7 +134,8 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device)
 static void __power_off_core_noc_hawi(struct iris_hfi_device *device)
 {
 	/* HPG section 3.4.4.2 Steps 1-9 */
-	__disable_gdsc(device, "core_noc_gdsc");
+	__disable_gdsc(device, "core_noc_mm_pd");
+	__disable_gdsc(device, "core_noc_cx_pd");
 }
 
 static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
@@ -261,6 +262,14 @@ int __check_core_power_on_hawi(struct iris_hfi_device *device)
 	if (reg & 0x80000000)
 		return -2;
 
+	reg = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
+	if (!(reg & 0x80000000))
+		return -3;
+
+	reg = __read_register(device, CVP_CC_MM_INT_GDSCR);
+	if (!(reg & 0x80000000))
+		return -4;
+
 	return 0;
 }
 
@@ -320,7 +329,7 @@ int __power_on_controller_hawi(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_BEGIN("__power_on_controller_v1");
 
-	rc = __enable_gdsc(device, "controller");
+	rc = __enable_gdsc(device, "controller_pd");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable ctrler: %d\n", rc);
 		return rc;
@@ -387,7 +396,7 @@ fail_enable_axi0c:
 fail_enable_axi0:
 	msm_cvp_disable_unprepare_clk(device, "sleep_clk");
 fail_reset_sleep:
-	__disable_gdsc(device, "controller");
+	__disable_gdsc(device, "controller_pd");
 	CVPKERNEL_ATRACE_END("__power_on_controller_v1");
 	return rc;
 }
@@ -398,14 +407,20 @@ int __power_on_core_hawi(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_BEGIN("__power_on_core_v1");
 
-	rc = __enable_gdsc(device, "core_noc");
+	rc = __enable_gdsc(device, "core_noc_cx_pd");
+	if (rc) {
+		dprintk(CVP_ERR, "Failed to enable core noc parent:%d\n", rc);
+		goto fail_enable_core_noc_parent_gdsc;
+	}
+
+	rc = __enable_gdsc(device, "core_noc_mm_pd");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable core noc:%d\n",
 			rc);
 		goto fail_enable_core_noc_gdsc;
 	}
 
-	rc = __enable_gdsc(device, "core");
+	rc = __enable_gdsc(device, "core_pd");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to enable core: %d\n", rc);
 		goto fail_enable_core_gdsc;
@@ -432,10 +447,12 @@ int __power_on_core_hawi(struct iris_hfi_device *device)
 fail_enable_core_clk:
 	msm_cvp_disable_unprepare_clk(device, "eva_cc_mvs0_clk_src");
 fail_enable_clk_src:
-	__disable_gdsc(device, "core");
+	__disable_gdsc(device, "core_pd");
 fail_enable_core_gdsc:
-	__disable_gdsc(device, "core_noc");
+	__disable_gdsc(device, "core_noc_mm_pd");
 fail_enable_core_noc_gdsc:
+	__disable_gdsc(device, "core_noc_cx_pd");
+fail_enable_core_noc_parent_gdsc:
 	return rc;
 }
 
@@ -458,8 +475,9 @@ int __power_off_core_hawi(struct iris_hfi_device *device)
 				value);
 			call_iris_op(device, print_sbm_regs, device);
 		}
-		__disable_gdsc(device, "core");
-		__disable_gdsc(device, "core_noc");
+		__disable_gdsc(device, "core_pd");
+		__disable_gdsc(device, "core_noc_mm_pd");
+		__disable_gdsc(device, "core_noc_cx_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	} else if (!(value & 0x2) && msm_cvp_fw_low_power_mode) {
@@ -467,8 +485,9 @@ int __power_off_core_hawi(struct iris_hfi_device *device)
 		 * HW_CONTROL PC disabled, then core is powered on for
 		 * CVP NoC access
 		 */
-		__disable_gdsc(device, "core");
-		__disable_gdsc(device, "core_noc");
+		__disable_gdsc(device, "core_pd");
+		__disable_gdsc(device, "core_noc_mm_pd");
+		__disable_gdsc(device, "core_noc_cx_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	}
@@ -551,7 +570,7 @@ advance:
 	__write_register(device, CVP_AHB_BRIDGE_SYNC_RESET, 0x0);
 
 	/* HPG 3.4.4 step 8 */
-	__disable_gdsc(device, "core");
+	__disable_gdsc(device, "core_pd");
 	msm_cvp_disable_unprepare_clk(device, "core_clk");
 
 	/* HPG 3.4.4 step 9-10 */
@@ -635,7 +654,7 @@ int __power_off_controller_hawi(struct iris_hfi_device *device)
 	if (rc)
 		dprintk(CVP_ERR, "Failed to disable sleep clk: %d\n", rc);
 
-	__disable_gdsc(device, "controller");
+	__disable_gdsc(device, "controller_pd");
 
 	/* Disables GCC clks in power on sequence */
 	rc = msm_cvp_disable_unprepare_clk(device, "core_axi_clock");
@@ -747,41 +766,92 @@ exit:
 		cpu_cs_x2rpmh);
 }
 
-int __enable_hw_power_collapse_hawi(struct iris_hfi_device *device)
+static int gdsc_set_check(struct iris_hfi_device *device, bool check_reg_status,
+	u32 reg_name, const char *gdsc_name, enum core_gdsc_dest dest)
 {
 	int rc = 0, loop = 10;
 	u32 reg_gdsc;
+
+	rc = switch_core_gdsc_mode(device, dest, gdsc_name);
+	if (rc) {
+		dprintk(CVP_WARN,
+			"HW CTL Vote failed for %s gdsc:%d\n",
+			gdsc_name, rc);
+		return rc;
+	}
+
+	if (check_reg_status)
+		goto reg_status;
+	else
+		return rc;
+
+reg_status:
+	while (loop) {
+		reg_gdsc = __read_register(device, reg_name);
+		if (reg_gdsc & 0x80000000) {
+			usleep_range(100, 200);
+			loop--;
+		} else
+			break;
+	}
+
+	if (!loop) {
+		dprintk(CVP_ERR, "fail to power off CORE/CORE NOC during resume\n");
+		return -EINVAL;
+	}
+
+	return rc;
+}
+
+static int switch_all_core_gdsc(struct iris_hfi_device *device, bool check_reg_status,
+	enum core_gdsc_dest dest)
+{
+	int rc = 0;
+	int i = 0;
+	u32 num_of_gdsc = 3;
+	u32 reg_gdsc[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR, CVP_CC_AXI0_CX_INT_GDSCR };
+	static const char *const gdsc_name[] = { "core_pd", "core_noc_mm_pd", "core_noc_cx_pd" };
+	enum core_gdsc_dest default_gdsc_mode = TO_SW_CTRL;
+
+	if (device->res->gdsc_framework_type) {
+		for (i = 0; i < num_of_gdsc; i++) {
+			rc = gdsc_set_check(device, true, reg_gdsc[i], gdsc_name[i], dest);
+			if (rc)
+				goto revert_switch;
+		}
+	} else {
+		dprintk(CVP_WARN, "Failed to switch GDSC, Framework not available\n");
+		return -EINVAL;
+	}
+
+	return rc;
+
+revert_switch:
+	dprintk(CVP_WARN, "Switching GDSC Failed, Reverting back to default mode\n");
+	while (i > 0) {
+		i--;
+		rc = gdsc_set_check(device, false, reg_gdsc[i], gdsc_name[i],
+			default_gdsc_mode);
+		if (rc)
+			dprintk(CVP_WARN, "Switching GDSC Failed to default mode\n");
+	}
+	return -EINVAL;
+}
+
+int __enable_hw_power_collapse_hawi(struct iris_hfi_device *device)
+{
+	int rc = 0;
 
 	if (!msm_cvp_fw_low_power_mode) {
 		dprintk(CVP_PWR, "Not enabling hardware power collapse\n");
 		return 0;
 	}
 
-	if (device->res->gdsc_framework_type)
-		rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
-	else
-		rc = __hand_off_regulators(device);
+	rc = switch_all_core_gdsc(device, true, TO_HW_CTRL);
 
 	if (rc) {
-		dprintk(CVP_WARN,
-			"%s : Failed to enable HW power collapse %d\n",
-			__func__, rc);
-		return rc;
-	}
-
-	while (loop) {
-		reg_gdsc = __read_register(device, CVP_CC_MVS0_GDSCR);
-		if (reg_gdsc & 0x80000000) {
-			usleep_range(100, 200);
-			loop--;
-		} else {
-			break;
-		}
-	}
-
-	if (!loop) {
-		dprintk(CVP_ERR, "fail to power off CORE during resume\n");
-		return -EINVAL;
+		dprintk(CVP_WARN, "Failed to enable hardware power collapse\n");
+		rc = switch_all_core_gdsc(device, false, TO_SW_CTRL);
 	}
 
 	return rc;
@@ -900,7 +970,7 @@ void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+			rc = switch_all_core_gdsc(device, false, TO_SW_CTRL);
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -989,7 +1059,7 @@ void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+			rc = switch_all_core_gdsc(device, true, TO_HW_CTRL);
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -997,11 +1067,13 @@ void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 				rc = __hand_off_regulator(rinfo);
 			}
 		}
-		if (rc)
+		if (rc) {
 			dprintk(
-			    CVP_WARN,
-			    "%s, Failed to hand off core gdsc control to HW\n",
-			    __func__);
+				CVP_WARN,
+				"%s, Failed to hand off core gdsc control to HW\n",
+				__func__);
+			rc = switch_all_core_gdsc(device, false, TO_SW_CTRL);
+		}
 	}
 	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
 #endif
@@ -1029,7 +1101,9 @@ void __noc_error_info_iris2_hawi(struct iris_hfi_device *device)
 	noc_log->used = 1;
 	rc = 0;
 
-	__disable_hw_power_collapse(device);
+	__disable_hw_power_collapse(device, "core_pd");
+	__disable_hw_power_collapse(device, "core_noc_mm_pd");
+	__disable_hw_power_collapse(device, "core_noc_cx_pd");
 
 	val = call_iris_op(device, check_core_power_on, device);
 	regi =

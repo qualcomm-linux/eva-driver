@@ -39,7 +39,8 @@ void __write_register(struct iris_hfi_device *device,
 int __read_register(struct iris_hfi_device *device, u32 reg);
 int __read_tcsr_register(struct iris_hfi_device *device, u32 reg);
 int __read_gcc_register(struct iris_hfi_device *device, u32 reg);
-int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest);
+int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest,
+	const char *name);
 int __acquire_regulator(struct regulator_info *rinfo,
 	struct iris_hfi_device *device);
 int __hand_off_regulator(struct regulator_info *rinfo);
@@ -52,7 +53,7 @@ int __reset_control_assert_name(struct iris_hfi_device *device, const char *name
 int __reset_control_deassert_name(struct iris_hfi_device *device, const char *name);
 int __reset_control_acquire(struct iris_hfi_device *device, const char *name);
 int __reset_control_release(struct iris_hfi_device *device, const char *name);
-int __disable_hw_power_collapse(struct iris_hfi_device *device);
+int __disable_hw_power_collapse(struct iris_hfi_device *device, const char *name);
 void __print_sfr_msg(struct iris_hfi_device *device);
 
 u32 msm_cvp_set_fw_version(char *image_version);
