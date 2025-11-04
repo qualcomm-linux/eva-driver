@@ -220,6 +220,7 @@ struct msm_cvp_platform_resources {
 	int msm_cvp_dsp_rsp_timeout;
 	int qos_noc_urgency_low_a_bitmask;
 	int qos_noc_urgency_low_b_bitmask;
+	uint32_t rcg_vnoc_clk_en_low;
 	uint32_t msm_cvp_pwr_collapse_delay;
 	bool non_fatal_pagefaults;
 	bool fatal_ssr;
