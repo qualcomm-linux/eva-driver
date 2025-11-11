@@ -253,13 +253,6 @@ struct cvp_hal_ops {
 	int (*enable_hw_power_collapse)(struct iris_hfi_device *device);
 	void (*check_tensilica_in_reset)(struct iris_hfi_device *device);
 	int (*pm_qos_update)(struct iris_hfi_device *device);
-	void (*enter_cpu_noc_lpi)(struct iris_hfi_device *device,
-								enum enter_noc_lpi_caller caller);
-	void (*enter_video_ctl_noc_lpi)(struct iris_hfi_device *device,
-								enum enter_noc_lpi_caller caller);
-	void (*enter_core_noc_lpi)(struct iris_hfi_device *device,
-								enum enter_noc_lpi_caller caller);
-	void (*stop_transactions_interrupt)(struct iris_hfi_device *device);
 };
 
 struct iris_hfi_device {

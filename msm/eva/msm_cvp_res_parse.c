@@ -1217,16 +1217,6 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	core->kmd_trace.kmd_debug_log.smmu_debug.smmu_fault_cnt = core->smmu_fault_count;
 #endif
-
-	mutex_lock(&core->lock);
-	hdev = core->dev_ops->hfi_device_data;
-	if (hdev) {
-		hdev->error = CVP_ERR_NOC_ERROR;
-		if (msm_cvp_smmu_fault_recovery)
-			call_hfi_op(core->dev_ops, debug_hook, hdev);
-	}
-	mutex_unlock(&core->lock);
-
 	if (core->smmu_fault_count > 0) {
 		core->smmu_fault_count++;
 		return -ENOSYS;
