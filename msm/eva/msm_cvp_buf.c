@@ -1260,21 +1260,21 @@ static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 		}
 	}
 	mutex_unlock(&inst->frames.lock);
-
 	return NULL;
 }
 
-static void msm_cvp_free_unused_mapping(struct msm_cvp_inst *inst)
+static int msm_cvp_free_unused_mapping(struct msm_cvp_inst *inst)
 {
 	struct msm_cvp_core *core = cvp_driver->cvp_core;
 	struct rb_node *node;
 	int rc = 0;
+	int num_freed_mappings = 0;
 
 	mutex_lock(&inst->dma_cache.lock);
 	node = rb_first(&inst->dma_cache.rbtree);
 	while (node) {
-		struct msm_cvp_smem *smem = rb_entry(node, struct msm_cvp_smem, node);
 		struct rb_node *next = rb_next(node);
+		struct msm_cvp_smem *smem = rb_entry(node, struct msm_cvp_smem, node);
 
 		if (atomic_read(&smem->refcount) == 0) {
 			print_smem(CVP_MEM, "free", inst, smem);
@@ -1290,10 +1290,12 @@ static void msm_cvp_free_unused_mapping(struct msm_cvp_inst *inst)
 			}
 			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 			inst->dma_cache.nr--;
+			num_freed_mappings++;
 		}
 		node = next;
 	}
 	mutex_unlock(&inst->dma_cache.lock);
+	return num_freed_mappings;
 }
 
 static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
@@ -1303,6 +1305,7 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 	struct msm_cvp_smem *smem2;
 	struct msm_cvp_core *core = cvp_driver->cvp_core;
 
+    mutex_lock(&inst->dma_cache.lock);
 	node = &inst->dma_cache.rbtree.rb_node;
 	while (*node != NULL) {
 		parent = *node;
@@ -1318,6 +1321,7 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 	rb_link_node(&smem->node, parent, node);
 	rb_insert_color(&smem->node, &inst->dma_cache.rbtree);
 	inst->dma_cache.nr++;
+	mutex_unlock(&inst->dma_cache.lock);
 	atomic_add(smem->size, &inst->va_inst_watermark);
 	atomic_add(smem->size, &core->va_watermark);
 }
@@ -1325,70 +1329,81 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				struct msm_cvp_smem *smem)
 {
-	int rc = 0;
-	struct msm_cvp_smem *smem2;
-	struct rb_node *node;
 	struct msm_cvp_core *core;
-	int index = 0;
+	int freed_mappings = 0;
 
 	core = cvp_driver->cvp_core;
-	mutex_lock(&inst->dma_cache.lock);
-	if (inst->dma_cache.nr < MAX_DMABUF_NUMS) {
+	if (inst->dma_cache.nr < inst->dma_cache.max_capacity) {
 		msm_cvp_add_smem_rb_node(inst, smem);
 	} else {
-		node = rb_first(&inst->dma_cache.rbtree);
-		index = 0;
 
-		while (node && index < inst->dma_cache.nr) {
-			smem2 = rb_entry(node, struct msm_cvp_smem, node);
+		freed_mappings = msm_cvp_free_unused_mapping(inst);
 
-			if (smem2 && !atomic_read(&smem2->refcount)) {
-				rb_erase(&smem2->node,
-					&inst->dma_cache.rbtree);
-				inst->dma_cache.nr--;
-				rc = msm_cvp_unmap_smem(inst, smem2, "unmap cpu");
-				if (rc)
-					dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
-						__func__, smem2, rc);
-				else {
-					msm_cvp_smem_put_dma_buf(smem2->dma_buf);
-					atomic_sub(smem2->size, &inst->va_inst_watermark);
-					atomic_sub(smem2->size, &core->va_watermark);
-				}
-				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem2);
-				msm_cvp_add_smem_rb_node(inst, smem);
-				goto exit;
-			}
-			node = rb_next(node);
-			index++;
+		if(inst->dma_cache.max_capacity < 256)
+			inst->dma_cache.max_capacity = 256;
+
+		if(freed_mappings == 0)
+		{
+			atomic_inc(&smem->refcount);
+			dprintk(CVP_MEM,
+				"%s: reached limit, fallback to buf mapping list\n", __func__);
+			dprintk(CVP_MEM,
+				"%s: fd %d, dma_buf %#llx, smem->refcount %d\n",
+				__func__, smem->fd, smem->dma_buf, atomic_read(&smem->refcount));
+			return -ENOMEM;
 		}
-		atomic_inc(&smem->refcount);
-		dprintk(CVP_MEM,
-			"%s: reached limit, fallback to buf mapping list\n", __func__);
-		dprintk(CVP_MEM,
-			"%s: fd %d, dma_buf %#llx, smem->refcount %d\n",
-			__func__, smem->fd, smem->dma_buf, atomic_read(&smem->refcount));
-		mutex_unlock(&inst->dma_cache.lock);
-		return -ENOMEM;
+		else
+			msm_cvp_add_smem_rb_node(inst, smem);
 	}
-exit:
 	atomic_inc(&smem->refcount);
-	mutex_unlock(&inst->dma_cache.lock);
-	dprintk(CVP_MEM, "%s: Added entry %d into cache\n", __func__, index);
+	dprintk(CVP_MEM, "%s: Added entry into cache total %d\n", __func__, inst->dma_cache.nr);
 	dprintk(CVP_MEM, "%s: fd %d, dma_buf %#llx, smem->refcount %d\n",
 		__func__, smem->fd, smem->dma_buf, atomic_read(&smem->refcount));
 
-	if (inst->dma_cache.nr == MAX_DMABUF_NUMS ||
-		atomic_read(&core->va_watermark) > IOVA_THRESHOLD) {
-		dprintk(CVP_MEM,
-			"%s: bufs reached to %d or IOVA threashold %d. cleaning up ...\n",
-			__func__, inst->dma_cache.nr, atomic_read(&core->va_watermark));
-		msm_cvp_free_unused_mapping(inst);
+	if (atomic_read(&core->va_watermark) > IOVA_THRESHOLD) {
+
+           // Only schedule if not already pending
+           if (!work_pending(&core->iova_cleanup_work)) {
+               schedule_work(&core->iova_cleanup_work);
+           }
 	}
+	CVPKERNEL_ATRACE_END("msm_cvp_add_smem_call");
 
 	return 0;
 }
 
+void msm_cvp_iova_cleanup_handler(struct work_struct *work)
+{
+	CVPKERNEL_ATRACE_BEGIN("msm_cvp_cleanup_handler");
+	struct msm_cvp_core *core;
+	struct msm_cvp_inst *inst = NULL, *inst_temp;
+	int freed_mappings = 0;
+
+	if (!work)
+		return;
+
+	core = container_of(work, struct msm_cvp_core, iova_cleanup_work);
+
+	if (!core) {
+		dprintk(CVP_ERR, "%s: Invalid params\n", __func__);
+		return;
+	}
+	dprintk(CVP_MEM,
+		"%s: Cleanup, IOVA threashold %d. cleaning up ...\n",
+		__func__,  atomic_read(&core->va_watermark));
+
+	mutex_lock(&core->lock);
+	list_for_each_entry_safe(inst, inst_temp, &core->instances, list) {
+            freed_mappings += msm_cvp_free_unused_mapping(inst);
+	}
+	mutex_unlock(&core->lock);
+
+	CVPKERNEL_ATRACE_END("msm_cvp_cleanup_handler");
+
+	dprintk(CVP_MEM,
+		"%s: After clean up IOVA threashold %d. cleaning up ...\n",
+		__func__, atomic_read(&core->va_watermark));
+}
 static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 						struct cvp_buf_type *buf,
 						bool is_persist,
@@ -2052,6 +2067,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 
 	if (!offset || !buf_num)
 		return 0;
+
 	if (offset < (sizeof(struct cvp_hfi_cmd_session_hdr)/sizeof(u32))) {
 		dprintk(CVP_ERR, "%s: Incorrect offset in cmd %d\n", __func__, offset);
 		return -EINVAL;
@@ -2067,7 +2083,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	frame = cvp_kmem_cache_zalloc(&cvp_driver->frame_cache, GFP_KERNEL);
 	if (!frame)
 		return -ENOMEM;
-
 	frame->ktid = ktid;
 	frame->nr = 0;
 	frame->pkt_type = cmd_hdr->header.packet_type;
@@ -2120,7 +2135,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	list_add_tail(&frame->list, &inst->frames.list);
 	mutex_unlock(&inst->frames.lock);
 	dprintk(CVP_MEM, "%s: map frame %llu\n", __func__, ktid);
-
 	return 0;
 }
 

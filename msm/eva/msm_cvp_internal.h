@@ -297,6 +297,7 @@ struct msm_cvp_core {
 	struct msm_cvp_capability *capabilities;
 	struct delayed_work fw_unload_work;
 	struct work_struct ssr_work;
+	struct work_struct iova_cleanup_work;
 	enum hal_ssr_trigger_type ssr_type;
 	u32 soc_version;
 	u32 fw_version;
@@ -378,6 +379,7 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core);
 void msm_cvp_comm_handle_thermal_event(void);
 
 void msm_cvp_ssr_handler(struct work_struct *work);
+void msm_cvp_iova_cleanup_handler(struct work_struct *work);
 /*
  * XXX: normally should be in msm_cvp_core.h, but that's meant for public APIs,
  * whereas this is private

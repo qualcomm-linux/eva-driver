@@ -143,6 +143,7 @@ static int msm_cvp_initialize_core(struct platform_device *pdev,
 	}
 
 	INIT_WORK(&core->ssr_work, msm_cvp_ssr_handler);
+	INIT_WORK(&core->iova_cleanup_work, msm_cvp_iova_cleanup_handler);
 	core->ssr_count = 0;
 
 	return rc;
