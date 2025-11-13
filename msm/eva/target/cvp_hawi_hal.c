@@ -793,7 +793,7 @@ int __set_registers_hawi(struct iris_hfi_device *device)
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
 	int i;
-	u32 arcg = 0;
+	u32 arcg = 1;
 
 	if (!device->res) {
 		dprintk(CVP_ERR,
