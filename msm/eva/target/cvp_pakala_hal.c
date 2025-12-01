@@ -661,7 +661,7 @@ int __enable_hw_power_collapse_pakala(struct iris_hfi_device *device)
 	}
 
 	if (device->res->gdsc_framework_type)
-		rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+		rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core_pd");
 	else
 		rc = __hand_off_regulators(device);
 
@@ -792,7 +792,7 @@ void __dump_noc_regs_pakala(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_SW_CTRL);
+			rc = switch_core_gdsc_mode(device, TO_SW_CTRL, "core_pd");
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -881,7 +881,7 @@ void __dump_noc_regs_pakala(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_HW_CTRL);
+			rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core_pd");
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -921,7 +921,7 @@ void __noc_error_info_iris2_pakala(struct iris_hfi_device *device)
 	noc_log->used = 1;
 	rc = 0;
 
-	__disable_hw_power_collapse(device);
+	__disable_hw_power_collapse(device, "core_pd");
 
 	val = call_iris_op(device, check_core_power_on, device);
 	regi =
