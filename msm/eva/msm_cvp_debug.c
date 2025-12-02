@@ -30,7 +30,7 @@ int msm_cvp_hw_hang_recovery = !1;
 int msm_cvp_hw_wd_recovery = !1;
 #else
 int msm_cvp_fw_low_power_mode = 1;
-bool msm_cvp_syscache_disable = true;
+bool msm_cvp_syscache_disable = !true;
 int msm_cvp_session_error_recovery = !1;
 int msm_cvp_hw_hang_recovery = !1;
 int msm_cvp_hw_wd_recovery = !1;
