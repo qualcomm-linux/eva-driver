@@ -1762,6 +1762,11 @@ static int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 				msm_cvp_get_hw_aggregate_cycles(HFI_HW_LSR);
 			break;
 		}
+		case EVA_KMD_PROP_SOC_HW_VERSION:
+		{
+			props->prop_data[i].data = inst->core->soc_hw_version;
+			break;
+		}
 		default:
 			dprintk(CVP_ERR, "unrecognized sys property %d\n",
 				props->prop_data[i].prop_type);

@@ -4847,12 +4847,21 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	__write_register(device, CVP_NOC_SBM_FAULTINEN0_LOW, 0x1);
 	__write_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS, 0x3);
 
-	/* Send TCSR SOC VERSION to FW */
+	/* Send TCSR SOC VERSION to FW: TCSR_SOC_HW_VERSION */
+	/*
+	 * 31:28	FAMILY_NUMBER
+	 * 27:16	DEVICE_NUMBER
+	 * 15:8		MAJOR_VERSION
+	 * 7:0		MINOR_VERSION
+	 */
 	reg = __read_tcsr_register(device, TCSR_SOW_HW_VERSION);
 	__write_register(device, CVP_CPU_CS_SCIBCMDARG3, reg);
+	core = cvp_driver->cvp_core;
+	core->soc_hw_version = reg;
+	dprintk(CVP_CORE, "SOC ver 0x%x, family 0x%x, device 0x%x, major 0x%x, minor 0x%x",
+		reg, (reg >> 28) & 0xF, (reg >> 16) & 0xFFF, (reg >> 8) & 0xFF, reg & 0xFF);
 
 	/* Remove below 2 register writes after HW_VERSION has valid version */
-	core = cvp_driver->cvp_core;
 	if (core) {
 		__write_register(device, CVP_WRAPPER_SPARE_0, core->soc_version);
 

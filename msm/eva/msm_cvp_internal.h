@@ -319,6 +319,7 @@ struct msm_cvp_core {
 
 	struct idr sess_idr;
 	struct mutex idr_lock;
+	u32 soc_hw_version;
 };
 
 struct msm_cvp_inst {
