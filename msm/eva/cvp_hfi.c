@@ -723,7 +723,7 @@ static int __smem_alloc(struct iris_hfi_device *dev, struct cvp_mem_addr *mem,
 
 	dprintk(CVP_INFO, "start to alloc size: %d, flags: %d\n", size, flags);
 	alloc->flags = flags;
-	rc = msm_cvp_smem_alloc(size, align, 1, (void *)dev->res, alloc, user_access);
+	rc = msm_cvp_smem_alloc(size, align, 1, (void *)dev->res, alloc, user_access, NULL);
 	if (rc) {
 		dprintk(CVP_ERR, "Alloc failed\n");
 		rc = -ENOMEM;

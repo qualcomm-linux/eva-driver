@@ -69,6 +69,8 @@ struct fastrpc_driver {
 
 /* Maxmimum number of buffers to be registered in a batch */
 #define MAX_BUFFER_NUM_REG          (8)
+#define BUFFER_NAME_MAX_LEN         (32)
+
 
 int cvp_dsp_device_init(void);
 void cvp_dsp_device_exit(void);

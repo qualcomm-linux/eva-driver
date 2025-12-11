@@ -391,7 +391,7 @@ int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
 
 static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	struct msm_cvp_platform_resources *res, struct msm_cvp_smem *mem,
-	int user_access)
+	int user_access, const char *buf_name)
 {
 	dma_addr_t iova = 0;
 	int rc = 0;
@@ -435,6 +435,14 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		rc = -ENOMEM;
 		goto fail_shared_mem_alloc;
 	}
+
+#if (KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE)
+	if (buf_name && buf_name[0] != '\0') {
+		rc = dma_buf_set_name(dbuf, buf_name);
+		if (rc)
+			dprintk(CVP_ERR, "Failed to set buf name %s, rc = %d\n", buf_name, rc);
+	}
+#endif
 
 	perms[0] = PERM_READ | PERM_WRITE;
 	arg.nr_acl_entries = 1;
@@ -536,7 +544,7 @@ static int free_dma_mem(struct msm_cvp_smem *mem)
 }
 
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
-		void *res, struct msm_cvp_smem *smem, int user_access)
+		void *res, struct msm_cvp_smem *smem, int user_access, const char *buf_name)
 {
 	int rc = 0;
 
@@ -547,7 +555,7 @@ int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
 	}
 
 	rc = alloc_dma_mem(size, align, map_kernel,
-		(struct msm_cvp_platform_resources *)res, smem, user_access);
+		(struct msm_cvp_platform_resources *)res, smem, user_access, buf_name);
 
 	return rc;
 }

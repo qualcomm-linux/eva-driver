@@ -67,8 +67,8 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 				str, smem->dma_buf, smem->size, smem->device_addr);
 
 			dprintk(tag,
-				"pkt_type %s buf_idx %#x fd %d cached %d\n",
-				 name, smem->buf_idx, smem->fd, smem->cached);
+				"pkt_type %s buf_idx %#x fd %d cached %d buf_name %s\n",
+				 name, smem->buf_idx, smem->fd, smem->cached, smem->dma_buf->name);
 		} else {
 			dprintk(tag,
 				"%s: %x : 0x%llx size %d flags %#x iova %#x\n",
@@ -76,9 +76,9 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 				smem->size, smem->flags, smem->device_addr);
 
 			dprintk(tag,
-				"ref %d pkt_type %s buf_idx %#x fd %d cached %d\n",
+				"ref %d pkt_type %s buf_idx %#x fd %d cached %d buf_name %s\n",
 				atomic_read(&smem->refcount), name, smem->buf_idx,
-				smem->fd, smem->cached);
+				smem->fd, smem->cached, smem->dma_buf->name);
 		}
 	}
 	return 0;
@@ -133,7 +133,6 @@ int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session *dsp_t
 	int i;
 	char name[PKT_NAME_LEN] = "Unknown";
 
-
 	if (!(tag & msm_cvp_debug))
 		return 0;
 
@@ -150,14 +149,16 @@ int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session *dsp_t
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
-				" UNUSED mapping %s: 0x%llx session id %#x size %d iova %#x cached %d pkt_type %s buf_idx %#x fd %d\n",
+				"UNUSED mapping %s: 0x%llx sessionid %#x size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 				str, smem->dma_buf, dsp_trace_sess->session_id, smem->size,
-				smem->device_addr, smem->cached, name, smem->buf_idx, smem->fd);
+				smem->device_addr, name, smem->buf_idx, smem->fd,
+				smem->dma_buf->name);
 		else
 			dprintk(tag,
-				"%s: session id %x: 0x%llx size %d flags %#x iova %#x cached %d ref %d pkt_type %s buf_idx %#x fd %d\n",
+				"%s:sessionid %x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 				str, dsp_trace_sess->session_id, smem->dma_buf, smem->size, smem->flags, smem->device_addr,
-				smem->cached, atomic_read(&smem->refcount), name, smem->buf_idx, smem->fd);
+				atomic_read(&smem->refcount), name, smem->buf_idx,
+				smem->fd, smem->dma_buf->name);
 	}
 	return 0;
 }
@@ -2279,17 +2280,17 @@ void msm_cvp_print_dsp_buf_info(struct cvp_internal_buf *buf,
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
-				" UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x cached %d pkt_type %s buf_idx %#x fd %d\n",
+				"UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 				"PD mapping", frpc_node->handle, smem->dma_buf,
-				smem->size, smem->device_addr, smem->cached,
-				name, smem->buf_idx, smem->fd);
+				smem->size, smem->device_addr,
+				name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 		else
 			dprintk(tag,
-				"%s: PD  %#x: 0x%llx size %d flags %#x iova %#x cached %d ref %d pkt_type %s buf_idx %#x fd %d\n",
+				"%s: PD  %#x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 				"PD mapping", frpc_node->handle, smem->dma_buf,
 				smem->size, smem->flags, smem->device_addr,
-				smem->cached, atomic_read(&smem->refcount),
-				name, smem->buf_idx, smem->fd);
+				atomic_read(&smem->refcount),
+				name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 	}
 
 	if (!raw) {
@@ -2430,17 +2431,17 @@ void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32
 
 				if (!atomic_read(&smem->refcount))
 					dprintk(tag,
-						" UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x cached %d pkt_type %s buf_idx %#x fd %d\n",
+						"UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 						"PD mapping", smem->dma_buf, frpc_node->handle,
-						smem->size, smem->device_addr, smem->cached,
-						name, smem->buf_idx, smem->fd);
+						smem->size, smem->device_addr,
+						name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 				else
 					dprintk(tag,
-						"%s: PD %#x: 0x%llx size %d flags %#x iova %#x cached %d ref %d pkt_type %s buf_idx %#x fd %d\n",
+						"%s: PD %#x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 						"PD mapping", smem->dma_buf, frpc_node->handle,
 						smem->size, smem->flags, smem->device_addr,
-						smem->cached, atomic_read(&smem->refcount),
-						name, smem->buf_idx, smem->fd);
+						atomic_read(&smem->refcount),
+						name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 			}
 		}
 	}
@@ -2488,7 +2489,7 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 
 	buf->smem->flags = smem_flags;
 	rc = msm_cvp_smem_alloc(buffer_size, 1, 0, /* 0: no mapping in kernel space */
-		&(inst->core->resources), buf->smem, 0);
+		&(inst->core->resources), buf->smem, 0, "ARP");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to allocate ARP memory\n");
 		goto err_no_mem;
@@ -2616,7 +2617,8 @@ int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 
 int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 			u32 buffer_size,
-			u32 secure_type)
+			u32 secure_type,
+			const char *buf_name)
 {
 	u32 smem_flags = SMEM_UNCACHED;
 	int rc = 0;
@@ -2651,11 +2653,12 @@ int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 
 	buf->smem->flags = smem_flags;
 	rc = msm_cvp_smem_alloc(buffer_size, 1, 0,
-			&(cvp_driver->cvp_core->resources), buf->smem, 0);
+			&(cvp_driver->cvp_core->resources), buf->smem, 0, buf_name);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to allocate DSP buf\n");
 		goto err_no_mem;
 	}
+
 	buf->smem->pkt_type = buf->smem->buf_idx = 0;
 	atomic_inc(&buf->smem->refcount);
 
