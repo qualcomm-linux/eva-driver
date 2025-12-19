@@ -834,6 +834,11 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 			inst->event_handler.event = EVA_EVENT;
 			spin_unlock_irqrestore(
 				&inst->event_handler.lock, flags);
+			dprintk(CVP_WARN,
+				"%s: for sess_id 0x%x, persist_usage %d, frame_usage %d\n",
+				__func__, inst->sess_id,
+				atomic_read(&inst->persist_usage),
+				atomic_read(&inst->frame_usage));
 			wake_up_all(&inst->event_handler.wq);
 		}
 
@@ -844,8 +849,11 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 
 	list_for_each_entry(frpc_node, &me->fastrpc_driver_list.list, list) {
 		if (!core->trigger_ssr)
-			if (hfi_device->error != CVP_ERR_NOC_ERROR)
+			if (hfi_device->error != CVP_ERR_NOC_ERROR) {
 				msm_cvp_print_frpc_bufs(frpc_node, CVP_ERR, false);
+				dprintk(CVP_WARN, "%s: dsp_usage %d\n",
+					__func__, atomic_read(&frpc_node->dsp_usage));
+			}
 	}
 
 	/* handle the hw error before core released to get full debug info */
