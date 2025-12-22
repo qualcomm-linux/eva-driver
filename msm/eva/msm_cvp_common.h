@@ -42,5 +42,5 @@ int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst);
 unsigned long long get_aon_time(void);
 void handle_session_error(enum hal_command_response cmd, void *data);
 void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required);
-void msm_cvp_bug_on(bool flag);
+void msm_cvp_bug_on(bool flag, bool isdelay);
 #endif

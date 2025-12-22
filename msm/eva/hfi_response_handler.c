@@ -615,9 +615,10 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 
 	memcpy(&sess_msg->pkt, pkt, get_msg_size(pkt));
 	dprintk(CVP_HFI,
-		"%s: Received msg %x cmd_done.status=%d sessionid=%x\n",
+		"%s: Received msg %x cmd_done.status=%d sessionid=%x sq %pK, sq->wq %pK\n",
 		__func__, pkt->header.packet_type,
-		hfi_map_err_status(get_msg_errorcode(pkt)), session_id);
+		hfi_map_err_status(get_msg_errorcode(pkt)), session_id,
+		sq, &sq->wq);
 
 	msm_cvp_msg_tracing_from_sw(pkt, "EVA_KMD_REV_BEGIN");
 
@@ -633,7 +634,7 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	if (get_msg_errorcode(pkt) == HFI_ERR_SESSION_HW_HANG_DETECTED) {
 		dprintk(CVP_ERR, "%s Hardware Hang Observed:\n", __func__);
 		cvp_clock_reg_print(dev);
-		msm_cvp_bug_on(!msm_cvp_hw_hang_recovery);
+		msm_cvp_bug_on(!msm_cvp_hw_hang_recovery, false);
 	}
 
 	wake_up_all(&sq->wq);
