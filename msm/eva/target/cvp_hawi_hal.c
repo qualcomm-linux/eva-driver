@@ -862,7 +862,7 @@ int __set_registers_hawi(struct iris_hfi_device *device)
 	struct msm_cvp_core *core;
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
-	int i;
+	int i, val;
 	u32 arcg = 1;
 
 	if (!device->res) {
@@ -936,6 +936,13 @@ int __set_registers_hawi(struct iris_hfi_device *device)
 			 pdata->noc_qos->dangerlut_low);
 	__write_register(device, CVP_NOC_C_SAFELUT_LOW,
 			 pdata->noc_qos->safelut_low);
+
+	val = __read_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
 
 	/* Below registers write moved from FW to SW to enable UBWC */
 	__write_register(device, CVP_NOC_A_NIU_DECCTL_LOW, 0x1);

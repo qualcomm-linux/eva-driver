@@ -2740,16 +2740,28 @@ static int iris_hfi_session_clean(void *session)
 static int iris_debug_hook(void *device)
 {
 	struct iris_hfi_device *dev = device;
-	u32 val;
+	u32 val, mask_val = 0;
 
 	if (!device) {
 		dprintk(CVP_ERR, "%s Invalid device\n", __func__);
 		return -ENODEV;
 	}
-	//__write_register(dev, CVP_WRAPPER_CORE_CLOCK_CONFIG, 0x11);
-	//__write_register(dev, CVP_WRAPPER_TZ_CPU_CLOCK_CONFIG, 0x1);
-	val = __read_register(dev, CVP_WRAPPER_CORE_CLOCK_CONFIG);
-	dprintk(CVP_ERR, "Halt Tensilica and core and axi\n");
+	// dprintk(CVP_WARN, "Stop NOC transactions from EVA Core\n");
+	val = __read_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
+	__write_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val | BIT(2));
+	val = __read_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
+	__write_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val | BIT(2));
+	val = __read_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
+	__write_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val | BIT(2));
+
+	val = __read_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW);
+	__write_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW, val | BIT(0));
+
+	/* Masking Core and CPU NOC interrupts */
+	mask_val = __read_register(dev, CVP_WRAPPER_INTR_MASK);
+	mask_val |= (CVP_FATAL_INTR_BMSK);
+	dprintk(CVP_WARN, "Masking Core and CPU NOC interrupts\n");
+	__write_register(dev, CVP_WRAPPER_INTR_MASK, mask_val);
 	return 0;
 }
 

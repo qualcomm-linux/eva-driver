@@ -695,7 +695,7 @@ int __set_registers_pakala(struct iris_hfi_device *device)
 	struct msm_cvp_core *core;
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
-	int i;
+	int i, val;
 
 	if (!device->res) {
 		dprintk(CVP_ERR,
@@ -767,6 +767,13 @@ int __set_registers_pakala(struct iris_hfi_device *device)
 	__write_register(device, CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS, 0x3);
 	__write_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW,
 			 0x1);
+
+	val = __read_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
+	val = __read_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
+	__write_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
 
 	return 0;
 }
