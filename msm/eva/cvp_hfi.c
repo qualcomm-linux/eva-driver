@@ -1160,15 +1160,6 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	u32 ctrl_init_val = 0, ctrl_status = 0, count = 0, max_tries = 5000;
 	CVPKERNEL_ATRACE_BEGIN("__boot_firmware");
 
-	/*
-	 * Hand off control of regulators to h/w _after_ enabling clocks.
-	 * Note that the GDSC will turn off when switching from normal
-	 * (s/w triggered) to fast (HW triggered) unless the h/w vote is
-	 * present. Since Iris isn't up yet, the GDSC will be off briefly.
-	 */
-	if (call_iris_op(device, enable_hw_power_collapse, device))
-		dprintk(CVP_ERR, "Failed to enabled inter-frame PC\n");
-
 	ctrl_init_val = BIT(0);
 #ifdef USE_PRESIL
 	/*Disable HW Synx if RUMI Support for Synx unavailable*/
@@ -1205,6 +1196,14 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 		rc = -ENODEV;
 	}
 
+	/*
+	 * Hand off control of regulators to h/w _after_ enabling clocks.
+	 * Note that the GDSC will turn off when switching from normal
+	 * (s/w triggered) to fast (HW triggered) unless the h/w vote is
+	 * present. Since Iris isn't up yet, the GDSC will be off briefly.
+	 */
+	if (call_iris_op(device, enable_hw_power_collapse, device))
+		dprintk(CVP_ERR, "Failed to enabled inter-frame PC\n");
 	/* Enable interrupt before sending commands to tensilica */
 	__write_register(device, CVP_CPU_CS_H2XSOFTINTEN, 0x1);
 	__write_register(device, CVP_CPU_CS_X2RPMh, 0x0);
