@@ -377,7 +377,7 @@ exit:
 static struct cvp_dsp_fastrpc_driver_entry *pop_frpc_node_with_handle(uint32_t handle)
 {
 	struct cvp_dsp_apps *me = &gfa_cv;
-	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
+	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL, *tmp_node = NULL;
 	struct list_head *ptr = NULL, *next = NULL;
 	u32 refcount, max_count = 10;
 
@@ -394,11 +394,11 @@ search_again:
 			frpc_node = NULL;
 			break;
 		}
-		frpc_node = list_entry(ptr,
+		tmp_node = list_entry(ptr,
 			struct cvp_dsp_fastrpc_driver_entry, list);
 
-		if (frpc_node && frpc_node->handle == handle) {
-			refcount = atomic_read(&frpc_node->refcount);
+		if (tmp_node && tmp_node->handle == handle) {
+			refcount = atomic_read(&tmp_node->refcount);
 			if (refcount > 0) {
 				mutex_unlock(&me->fastrpc_driver_list.lock);
 				usleep_range(5000, 10000);
@@ -410,6 +410,7 @@ search_again:
 				}
 				goto search_again;
 			}
+			frpc_node = tmp_node;
 			list_del(&frpc_node->list);
 			break;
 		}
@@ -1375,6 +1376,7 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		eva_fastrpc_driver_release_name(frpc_node);
 		mutex_unlock(&me->driver_name_lock);
 		kfree(frpc_node);
+		frpc_node = NULL;
 	} else {
 		dprintk(CVP_WARN, "%s Fastrpc driver hdl %#x hdl %#x, f %d, session count is %d, abort unregistration\n",
 						__func__, handle, dsp2cpu_cmd->pid, (uint32_t)force_exit, frpc_node->session_cnt);
