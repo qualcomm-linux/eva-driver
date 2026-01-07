@@ -342,6 +342,7 @@ struct msm_cvp_inst {
 	struct msm_cvp_list persistbufs;
 	struct msm_cvp_list persist_list;
 	atomic_t persist_usage;
+	atomic_t frame_usage;
 	struct cvp_dmamap_cache dma_cache;
 	struct msm_cvp_list cvpwnccbufs;
 	struct msm_cvp_list frames;

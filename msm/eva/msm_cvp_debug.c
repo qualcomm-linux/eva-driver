@@ -307,8 +307,8 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "priority: %u\n", inst->prop.priority);
 		cur += write_str(cur, end - cur, "qos latency: %u\n", inst->pm_qos_latency);
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
-		cur += write_str(cur, end - cur, "total internal memory size: %d bytes\n",
-					inst->persist_usage);
+		cur += write_str(cur, end - cur, "total persist_usage %d bytes, frame_usage %d\n",
+					inst->persist_usage, inst->frame_usage);
 		list_for_each_entry(list_node, &inst->persist_list.list, list) {
 			cur += write_str(cur, end - cur, "%s size: %d bytes\n",
 				list_node->info.feature, list_node->info.persist_size);

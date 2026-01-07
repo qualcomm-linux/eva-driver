@@ -386,6 +386,13 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		cvp_dsp_del_sess(inst->dsp_handle, inst);
 		inst->task = NULL;
 	}
+	if (atomic_read(&inst->persist_usage) > 0 || atomic_read(&inst->frame_usage) > 0) {
+		dprintk(CVP_WARN,
+			"%s: Memleak detected for sess_id 0x%x persist_usage %d, frame_usage %d\n",
+			__func__, inst->sess_id,
+			atomic_read(&inst->persist_usage), atomic_read(&inst->frame_usage));
+
+	}
 
 	/* Ensure no path has core->clk_lock and core->lock sequence */
 	mutex_lock(&core->lock);
