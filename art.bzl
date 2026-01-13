@@ -12,7 +12,7 @@ def define_art():
             #"CONFIG_TARGET_SYNX_ENABLE",
             "TARGET_SYNX_ENABLE",
             "TARGET_DSP_ENABLE",
-            #"TARGET_MMRM_ENABLE",
+            "TARGET_MMRM_ENABLE",
             "CONFIG_EVA_ART",
             #"TARGET_PRESIL_ENABLE",
             #"CONFIG_MSM_MMRM"
