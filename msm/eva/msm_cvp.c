@@ -165,8 +165,9 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 
 	if (wait_event_timeout(sq->wq,
 		cvp_msg_pending(sq, &msg, ktid), timeout) == 0) {
-		dprintk(CVP_WARN, "session queue wait timeout and session_id = %#x\n",
-					inst->sess_id);
+		dprintk(CVP_WARN,
+			"session queue wait timeout and session_id = %#x sq %pK, sq->wq %pK\n",
+			inst->sess_id, sq, &sq->wq);
 		if (inst && inst->core && inst->core->dev_ops &&
 				inst->state != MSM_CVP_CORE_INVALID)
 			print_hfi_queue_info(inst->core->dev_ops);
@@ -2277,7 +2278,8 @@ int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
 		dprintk(CVP_ERR, "%s: invalid args\n", __func__);
 		return -EINVAL;
 	}
-	dprintk(CVP_HFI, "%s: arg->type = %x", __func__, arg->type);
+	dprintk(CVP_HFI, "%s: arg->type = %x, for session_id 0x%x",
+			__func__, arg->type, inst->sess_id);
 
 	if (arg->type != EVA_KMD_SESSION_CONTROL &&
 		arg->type != EVA_KMD_SET_SYS_PROPERTY &&
