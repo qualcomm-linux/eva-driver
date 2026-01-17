@@ -207,7 +207,8 @@ int print_smem_no_instance(u32 tag, const char *str,
 		struct msm_cvp_smem *smem);
 /*Kernel DMA buffer and IOMMU mapping functions*/
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
-			void  *res, struct msm_cvp_smem *smem, int user_access);
+			void  *res, struct msm_cvp_smem *smem, int user_access,
+			const char *buf_name);
 int msm_cvp_smem_free(struct msm_cvp_smem *smem);
 struct context_bank_info *msm_cvp_smem_get_context_bank(
 				struct msm_cvp_platform_resources *res,
@@ -277,7 +278,8 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
 void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32 tag, bool raw);
 int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 			u32 buffer_size,
-			u32 secure_type);
+			u32 secure_type,
+			const char *buf_name);
 int cvp_release_dsp_buffers(struct cvp_internal_buf *buf);
 void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);

@@ -2109,6 +2109,7 @@ void __dsp_cvp_mem_alloc(struct cvp_dsp_cmd_msg *cmd)
 	struct cvp_internal_buf *buf = NULL;
 	struct cvp_dsp2cpu_cmd *dsp2cpu_cmd = &me->pending_dsp2cpu_cmd;
 	uint64_t v_dsp_addr = 0;
+	char buf_name[BUFFER_NAME_MAX_LEN];
 
 	struct fastrpc_device *frpc_device = NULL;
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
@@ -2131,9 +2132,11 @@ void __dsp_cvp_mem_alloc(struct cvp_dsp_cmd_msg *cmd)
 	if (!buf)
 		goto fail_kzalloc_buf;
 
+	memcpy(buf_name, dsp2cpu_cmd->session_name, BUFFER_NAME_MAX_LEN);
 	rc = cvp_allocate_dsp_bufs(buf,
 			dsp2cpu_cmd->sbuf.size,
-			dsp2cpu_cmd->sbuf.type);
+			dsp2cpu_cmd->sbuf.type,
+			buf_name);
 	if (rc)
 		goto fail_allocate_dsp_buf;
 
