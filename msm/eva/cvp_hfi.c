@@ -4641,13 +4641,11 @@ static int __set_subcaches(struct iris_hfi_device *device)
 				dprintk(CVP_CORE, "Subcache slice id: %d size: %d\n",
 					sinfo->subcache->slice_id, sinfo->subcache->slice_size);
 				c++;
-
-				/* Will enable MPU once DV team confirms that
-				 * same slice id can be shared
-				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
-				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
-				 * c++;
-				 */
+#ifdef CONFIG_EVA_ART
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+#endif
 			} else if (!strcmp("cvpfw", sinfo->name)) {
 				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
 				sc_res[c].sc_id = sinfo->subcache->slice_id;
@@ -4721,13 +4719,11 @@ static int __release_subcaches(struct iris_hfi_device *device)
 				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_FDU;
 				sc_res[c].sc_id = sinfo->subcache->slice_id;
 				c++;
-
-				/* Will enable MPU once DV team confirms that
-				 * same slice id can be shared
-				 * sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
-				 * sc_res[c].sc_id = sinfo->subcache->slice_id;
-				 * c++;
-				 */
+#ifdef CONFIG_EVA_ART
+				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_MPU;
+				sc_res[c].sc_id = sinfo->subcache->slice_id;
+				c++;
+#endif
 			} else if (!strcmp("cvpfw", sinfo->name)) {
 				sc_res[c].target_hw = HFI_SYSCACHE_TARGET_EVA_CPU;
 				sc_res[c].sc_id = sinfo->subcache->slice_id;
