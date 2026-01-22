@@ -1356,7 +1356,7 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 					msm_cvp_smem_put_dma_buf(smem->dma_buf);
 			} else if (cbuf->ownership == DSP) {
 				int rc = cvp_release_dsp_buffers(cbuf);
-				atomic_sub(smem->size, &frpc_node->dsp_usage);
+				atomic_sub(cbuf->size, &frpc_node->dsp_usage);
 
 				if (rc)
 					dprintk(CVP_ERR,
