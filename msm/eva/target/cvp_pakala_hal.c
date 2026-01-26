@@ -202,6 +202,12 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
 	}
 }
 
+void __noc_lpi_pakala(struct iris_hfi_device *device,
+					enum enter_noc_lpi_caller caller)
+{
+}
+
+
 void setup_dsp_uc_memmap_vpu5_pakala(struct iris_hfi_device *device)
 {
 	/* initialize DSP QTBL & UCREGION with CPU queues */
@@ -1058,5 +1064,6 @@ int set_pakala_hal_functions(void)
 	hal_ops.dump_noc_regs = __dump_noc_regs_pakala;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_pakala;
 	hal_ops.pm_qos_update = iris_pm_qos_update_pakala;
+	hal_ops.noc_lpi = __noc_lpi_pakala;
 	return 0;
 }
