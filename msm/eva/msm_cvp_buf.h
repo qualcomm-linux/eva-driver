@@ -16,7 +16,6 @@
 #include "cvp_comm_def.h"
 
 #define MAX_FRAME_BUFFER_NUMS 40
-#define MAX_DMABUF_NUMS 64
 #define IOVA_THRESHOLD 2147483648
 #define IS_CVP_BUF_VALID(buf, smem) \
 	((buf->size <= smem->size) && \
@@ -123,6 +122,7 @@ struct cvp_dmamap_cache {
 	struct mutex lock;
 	struct rb_root rbtree;
 	unsigned int nr;
+	unsigned int max_capacity;
 };
 
 static inline void INIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
@@ -130,6 +130,7 @@ static inline void INIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
 	mutex_init(&cache->lock);
 	cache->rbtree = RB_ROOT;
 	cache->nr = 0;
+	cache->max_capacity = 128;
 }
 
 static inline void DEINIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
@@ -137,6 +138,7 @@ static inline void DEINIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
 	mutex_destroy(&cache->lock);
 	cache->rbtree = RB_ROOT;
 	cache->nr = 0;
+	cache->max_capacity = 128;
 }
 
 #define INPUT_FENCE_BITMASK 0x1
