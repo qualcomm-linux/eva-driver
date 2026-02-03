@@ -38,7 +38,8 @@ load(":canoe.bzl", "define_canoe")
 define_canoe()
 
 load(":art.bzl", "define_art")
-define_art()
+define_art("art")
+define_art("art16k")
 
 load(":alor.bzl", "define_alor")
 define_alor()
