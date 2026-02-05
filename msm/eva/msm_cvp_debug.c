@@ -276,7 +276,6 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 {
 	struct msm_cvp_core *core = file->private_data;
 	struct msm_cvp_inst *inst = NULL;
-	struct msm_cvp_persist_list *list_node;
 
 	char *dbuf, *cur, *end;
 	ssize_t len = 0;
@@ -309,10 +308,6 @@ static ssize_t session_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "state: %d\n", inst->state);
 		cur += write_str(cur, end - cur, "total persist_usage %d bytes, frame_usage %d\n",
 					inst->persist_usage, inst->frame_usage);
-		list_for_each_entry(list_node, &inst->persist_list.list, list) {
-			cur += write_str(cur, end - cur, "%s size: %d bytes\n",
-				list_node->info.feature, list_node->info.persist_size);
-		}
 		cur += write_str(cur, end - cur, "Power info:\n");
 		for (int j = 0; j < HFI_MAX_HW_THREADS; j++)
 			if (inst->prop.cycles[j])

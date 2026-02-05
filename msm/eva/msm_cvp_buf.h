@@ -55,17 +55,6 @@ struct msm_cvp_list {
 	struct mutex lock;
 };
 
-struct persist_info {
-	char feature[20];
-	uint32_t persist_size;
-};
-
-struct msm_cvp_persist_list {
-	struct list_head list;
-	struct mutex lock;
-	struct persist_info info;
-};
-
 static inline void INIT_MSM_CVP_LIST(struct msm_cvp_list *mlist)
 {
 	mutex_init(&mlist->lock);
