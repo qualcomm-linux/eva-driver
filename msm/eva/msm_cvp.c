@@ -1540,11 +1540,11 @@ stop_thread:
 	call_iris_op(device, pm_qos_update, device);
 
 exit:
-	cvp_put_inst(s);
-	CVPKERNEL_ATRACE_END("msm_cvp_session_stop");
 	pr_info_ratelimited(CVP_PID_TAG "Stop session done for session_id = %#x\n",
 			current->pid, current->tgid, "sess",
 			inst->sess_id);
+	cvp_put_inst(s);
+	CVPKERNEL_ATRACE_END("msm_cvp_session_stop");
 	return rc;
 }
 
