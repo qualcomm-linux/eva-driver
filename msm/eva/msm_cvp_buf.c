@@ -2448,7 +2448,7 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 		return NULL;
 
 #ifdef USE_PRESIL42
-	presil42_set_smem_flags(smem_flags);
+	presil42_set_smem_flags(&smem_flags);
 #endif
 	/* If PERSIST buffer requires secure mapping, uncomment
 	 * below flags setting

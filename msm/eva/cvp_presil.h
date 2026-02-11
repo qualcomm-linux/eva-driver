@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __H_CVP_PRESIL_H__
@@ -18,7 +18,7 @@
 #define MAP_ADDR_OFFSET 0x0 /* 0xD0000000 */
 
 /* This base just for between EVA ko and Presil impl in camera ko to extract reg offset value */
-#define CVP_REG_BASE_ADDR (0x06C00000 +  0x1100000) /* for Rumi with both EVA and Camera */
+#define CVP_REG_BASE_ADDR (0x06C00000 +  0x1000000) /* for Rumi with both EVA and Camera */
 
 #define CVP_PRESIL_HFI_REG_CMD_Q_IOVA 0x0000901
 #define CVP_PRESIL_HFI_REG_MSG_Q_IOVA 0x0000902
@@ -44,7 +44,7 @@ void presil42_unmap_frame_buf(struct msm_cvp_smem *smem, struct cvp_internal_buf
 void presil42_set_buf_fd(struct cvp_buf_type *buf, u32 iova, char *name);
 void presil42_set_buf_iova(struct cvp_hfi_cmd_session_set_buffers_packet *pkt, u32 iova);
 int  presil42_set_irq_settings(struct cvp_hal_data *hal, struct iris_hfi_device *device, int rc);
-void presil42_set_smem_flags(u32 smem_flags);
+void presil42_set_smem_flags(u32 *smem_flags);
 void presil42_retrieve_sfr_buffer(struct iris_hfi_device *device);
 #endif
 #endif

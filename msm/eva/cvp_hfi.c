@@ -4816,8 +4816,9 @@ static int __iris_power_on(struct iris_hfi_device *device)
 {
 	struct msm_cvp_core *core;
 	int rc = 0;
+#ifndef USE_PRESIL42
 	u32 reg;
-
+#endif
 	CVPKERNEL_ATRACE_BEGIN("iris_power_on");
 
 	if (device->power_enabled)
@@ -4850,7 +4851,8 @@ static int __iris_power_on(struct iris_hfi_device *device)
 
 	/*Do not access registers before this point!*/
 	device->power_enabled = true;
-
+	core = cvp_driver->cvp_core;
+#ifndef USE_PRESIL42
 	/* Thomas input to debug CPU NoC hang */
 	__write_register(device, CVP_NOC_SBM_FAULTINEN0_LOW, 0x1);
 	__write_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS, 0x3);
@@ -4864,11 +4866,12 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	 */
 	reg = __read_tcsr_register(device, TCSR_SOW_HW_VERSION);
 	__write_register(device, CVP_CPU_CS_SCIBCMDARG3, reg);
-	core = cvp_driver->cvp_core;
+
 	core->soc_hw_version = reg;
 	dprintk(CVP_CORE, "SOC ver 0x%x, family 0x%x, device 0x%x, major 0x%x, minor 0x%x",
 		reg, (reg >> 28) & 0xF, (reg >> 16) & 0xFFF, (reg >> 8) & 0xFF, reg & 0xFF);
 
+#endif
 	/* Remove below 2 register writes after HW_VERSION has valid version */
 	if (core) {
 		__write_register(device, CVP_WRAPPER_SPARE_0, core->soc_version);
@@ -4883,12 +4886,13 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	 * regulator_disable() and _enable()
 	 * calling below function requires CORE powered on
 	 */
+#ifndef USE_PRESIL42
 	rc = call_iris_op(device, set_registers, device);
 	if (rc)
 		goto fail_enable_core;
 
 	dprintk(CVP_CORE, "Done with register set\n");
-#ifndef USE_PRESIL42
+
 	rc = call_iris_op(device, check_core_power_on, device);
 	if (rc) {
 		dprintk(CVP_ERR, "CORE power on failed %d\n", rc);
@@ -4906,7 +4910,9 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	call_iris_op(device, interrupt_init, device);
 	dprintk(CVP_CORE, "Done with interrupt enabling\n");
 	device->intr_status = 0;
+#ifndef USE_PRESIL42
 	enable_irq(device->cvp_hal_data->irq);
+#endif
 	__write_register(device,
 		CVP_WRAPPER_DEBUG_BRIDGE_LPI_CONTROL, 0x7);
 	pr_info_ratelimited(CVP_PID_TAG "cvp (eva) powered on\n",

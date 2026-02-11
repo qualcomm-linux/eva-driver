@@ -318,7 +318,7 @@ static struct msm_cvp_common_data sm8750_common_data[] = {
 	{
 		.key = "qcom,hw-resp-timeout",
 #ifdef USE_PRESIL
-		.value = 15000000,
+		.value = 180000,
 #else
 		.value = 2000,
 #endif
@@ -373,7 +373,7 @@ static struct msm_cvp_common_data sm8735_common_data[] = {
 	{
 		.key = "qcom,hw-resp-timeout",
 #ifdef USE_PRESIL
-		.value = 15000000,
+		.value = 180000,
 #else
 		.value = 2000,
 #endif
@@ -442,7 +442,7 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 	{
 		.key = "qcom,hw-resp-timeout",
 #ifdef USE_PRESIL
-		.value = 15000000,
+		.value = 180000,
 #else
 		.value = 2000,
 #endif
@@ -497,7 +497,7 @@ static struct msm_cvp_common_data sm8845_common_data[] = {
 	{
 		.key = "qcom,hw-resp-timeout",
 #ifdef USE_PRESIL
-		.value = 15000000,
+		.value = 180000,
 #else
 		.value = 2000,
 #endif

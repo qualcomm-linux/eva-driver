@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "cvp_comm_def.h"
@@ -331,8 +331,7 @@ void presil42_cvp_iris_hfi_delete_device(struct iris_hfi_device *dev)
 
 void presil42_send_wncc_buffer(struct msm_cvp_smem *smem, struct cvp_internal_buf *cbuf)
 {
-	dprintk(CVP_DBG, "%s: %x for cam_presil_send_buffer with MAP_ADDR_OFFSET %x,
-		 smem->kvaddr 0x%p",
+	dprintk(CVP_DBG, "%s: %x for  with MAP_ADDR_OFFSET %x, smem->kvaddr 0x%p",
 		__func__, (u64)(smem->device_addr) - MAP_ADDR_OFFSET,
 		MAP_ADDR_OFFSET, smem->kvaddr);
 
@@ -347,9 +346,8 @@ void presil42_send_map_user_persist_buffer(struct msm_cvp_smem *smem,  u32 *iova
 {
 	*iova = smem->device_addr;
 
-	dprintk(CVP_DBG, "%s: %x : with MAP_ADDR_OFFSET %x, buf offset is %x ,
-		smem->kvaddr 0x%p \n",
-		__func__, (u64)(*iova)-MAP_ADDR_OFFSET, MAP_ADDR_OFFSET,
+	dprintk(CVP_DBG, "%s: %x : buf offset is %x , smem->kvaddr 0x%p\n",
+		__func__, (u64)(*iova)-MAP_ADDR_OFFSET,
 		(u32)pbuf->offset, smem->kvaddr);
 
 	cam_presil_send_buffer((u64)smem->dma_buf, 0,
@@ -377,10 +375,9 @@ void presil42_send_map_frame_buffer(struct msm_cvp_smem *smem,  u32 iova, struct
 	iova = smem->device_addr;
 
 	dprintk(CVP_DBG,
-		"%s:presil_send_buffer  %x : offset %d size %d iova %x MAP_ADDR_OFFSET %d
-		, smem->kvaddr 0x%p",
+		"%s:presil_send_buffer  %x : offset %d size %d iova %x smem->kvaddr 0x%p",
 		__func__, (u64)smem->dma_buf, (u32)buf->offset, (u32)buf->size,
-		(u64)iova - MAP_ADDR_OFFSET, MAP_ADDR_OFFSET, smem->kvaddr);
+		(u64)iova - MAP_ADDR_OFFSET, smem->kvaddr);
 
 	cam_presil_send_buffer((u64)smem->dma_buf, 0, 0,
 		(u32)smem->dma_buf->size,
@@ -391,12 +388,11 @@ void presil42_send_map_frame_buffer(struct msm_cvp_smem *smem,  u32 iova, struct
 void presil42_unmap_frame_buf(struct msm_cvp_smem *smem, struct cvp_internal_buf *buf)
 {
 	dprintk(CVP_DBG,
-		"%s: cam_presil_retrieve_buffer %x : offset %d size %d iova %x
-		MAP_ADDR_OFFSET %d, smem->kvaddr 0x%p",
+		"%s: %x : offset %d size %d iova %x smem->kvaddr 0x%p",
 		__func__, (u64)smem->dma_buf,
 		(u32)buf->offset, (u32)buf->size,
 		(u64)smem->device_addr + buf->offset - MAP_ADDR_OFFSET,
-		MAP_ADDR_OFFSET, smem->kvaddr);
+		smem->kvaddr);
 
 	cam_presil_retrieve_buffer(
 		(u64)smem->dma_buf, 0,
@@ -422,9 +418,9 @@ void presil42_set_buf_iova(struct cvp_hfi_cmd_session_set_buffers_packet *pkt, u
 	pkt->buf_type.iova =
 		iova - MAP_ADDR_OFFSET;
 }
-void presil42_set_smem_flags(u32 smem_flags)
+void presil42_set_smem_flags(u32 *smem_flags)
 {
-	smem_flags |= SMEM_UNCACHED; /*SMEM_NON_PIXEL*/;
+	*smem_flags |= SMEM_UNCACHED; /*SMEM_NON_PIXEL*/;
 }
 
 int presil42_set_irq_settings(struct cvp_hal_data *hal, struct iris_hfi_device *device, int rc)

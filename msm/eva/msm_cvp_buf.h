@@ -16,7 +16,11 @@
 #include "cvp_comm_def.h"
 
 #define MAX_FRAME_BUFFER_NUMS 40
+#ifdef USE_PRESIL42
+#define IOVA_THRESHOLD 0x30000000
+#else
 #define IOVA_THRESHOLD 2147483648
+#endif
 #define IS_CVP_BUF_VALID(buf, smem) \
 	((buf->size <= smem->size) && \
 	(buf->size <= smem->size - buf->offset))
