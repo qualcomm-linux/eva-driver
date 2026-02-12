@@ -90,6 +90,7 @@ struct msm_cvp_smem {
 	atomic_t refcount;
 	struct dma_buf *dma_buf;
 	void *kvaddr;
+	struct cvp_dma_buf_vmap vmap;
 	u32 device_addr;
 	dma_addr_t dma_handle;
 	u32 size;

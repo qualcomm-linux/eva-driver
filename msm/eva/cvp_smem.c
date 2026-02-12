@@ -400,7 +400,6 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	struct mem_buf_lend_kernel_arg arg;
 	int vmids[1];
 	int perms[1];
-	struct cvp_dma_buf_vmap vmap = {0};
 
 	if (!res) {
 		dprintk(CVP_ERR, "%s: NULL res\n", __func__);
@@ -491,8 +490,9 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 
 	if (map_kernel) {
 		dma_buf_begin_cpu_access(dbuf, DMA_BIDIRECTIONAL);
-		msm_cvp_dma_buf_vmap(dbuf, &vmap);
-		mem->kvaddr = vmap.vaddr;
+		msm_cvp_dma_buf_vmap(dbuf, &mem->vmap);
+
+		mem->kvaddr = mem->vmap.vaddr;
 		if (!mem->kvaddr) {
 			dprintk(CVP_ERR,
 				"Failed to map shared mem in kernel\n");
@@ -518,7 +518,6 @@ fail_shared_mem_alloc:
 
 static int free_dma_mem(struct msm_cvp_smem *mem)
 {
-	struct cvp_dma_buf_vmap vmap = {0};
 	dprintk(CVP_MEM,
 		"%s: dma_buf = %pK, device_addr = %x, size = %d, kvaddr = %pK\n",
 		__func__, mem->dma_buf, mem->device_addr, mem->size, mem->kvaddr);
@@ -529,8 +528,7 @@ static int free_dma_mem(struct msm_cvp_smem *mem)
 	}
 
 	if (mem->kvaddr) {
-		vmap.vaddr = mem->kvaddr;
-		msm_cvp_dma_buf_vunmap(mem->dma_buf, &vmap);
+		msm_cvp_dma_buf_vunmap(mem->dma_buf, &mem->vmap);
 		mem->kvaddr = NULL;
 		dma_buf_end_cpu_access(mem->dma_buf, DMA_BIDIRECTIONAL);
 	}

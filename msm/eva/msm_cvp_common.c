@@ -28,10 +28,70 @@ bool trigger_smmu_fault;
 
 void msm_cvp_bug_on(bool flag, bool isdelay)
 {
+	struct msm_cvp_core *core = NULL;
+	struct msm_cvp_inst *inst = NULL;
+	struct cvp_internal_buf *buf = NULL;
+	struct dma_buf *dmabuf = NULL;
+	struct msm_cvp_smem *smem = NULL;
+	int rc = 0;
+
+	core = cvp_driver->cvp_core;
+	if (!core) {
+		dprintk(CVP_ERR, "Unable to identify core\n");
+		return;
+	}
 #ifdef USE_PRESIL
 	while (flag)
 		usleep_range(1000, 2000);
 #else
+	/*
+	 * ARP buf map is enbaled only for target testing
+	 * not during PRESIL.
+	 */
+	if (flag) {
+		list_for_each_entry(inst, &core->instances, list) {
+			mutex_lock(&inst->persistbufs.lock);
+			list_for_each_entry(buf, &inst->persistbufs.list, list) {
+				if (!buf->smem) {
+					dprintk(CVP_ERR, "Invalid buffer entry for sess_id:%d\n",
+						inst->sess_id);
+					continue;
+				}
+
+				smem = buf->smem;
+				dmabuf = buf->smem->dma_buf;
+				if (!dmabuf) {
+					dprintk(CVP_ERR, "Invalid dma_buf for sess_id:%d\n",
+						inst->sess_id);
+					continue;
+				}
+
+				if (buf->ownership == DRIVER && dmabuf->name
+					&& !memcmp(dmabuf->name, "ARP", 4)) {
+					rc = dma_buf_begin_cpu_access(dmabuf, DMA_BIDIRECTIONAL);
+					if (rc) {
+						dprintk(CVP_ERR, "Failed to begin CPU access: %d\n",
+							rc);
+						continue;
+					}
+					msm_cvp_dma_buf_vmap(dmabuf, &smem->vmap);
+
+					if (rc || !smem->vmap.vaddr) {
+						dprintk(CVP_ERR, "Failed to map buffer: %d\n", rc);
+						dma_buf_end_cpu_access(dmabuf, DMA_BIDIRECTIONAL);
+						continue;
+					}
+
+					smem->kvaddr = smem->vmap.vaddr;
+					inst->arp_kvaddr = smem->vmap.vaddr;
+					dprintk(CVP_ERR, "ARP kvaddr:%pK for sess_id:0x%x\n",
+						inst->arp_kvaddr, inst->sess_id);
+				}
+			}
+			mutex_unlock(&inst->persistbufs.lock);
+		}
+	}
+
 	if (flag && isdelay) {
 		dprintk(CVP_ERR,
 			"%s: Sleeping for 50ms to get dump from UMD as recovery is disabled\n",
@@ -1814,7 +1874,8 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 		dprintk(CVP_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
-
+	/* by default, ARP KVADDR initializing with NULL */
+	inst->arp_kvaddr = NULL;
 	if (hfi_ver == 1)
 		buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
 	else {
