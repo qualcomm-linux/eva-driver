@@ -1570,7 +1570,7 @@ int msm_cvp_noc_error_info(struct msm_cvp_core *core)
 			core->resources.max_ssr_allowed,
 			core->smmu_fault_count);
 	ops_tbl = core->dev_ops;
-	call_hfi_op(ops_tbl, noc_error_info, ops_tbl->hfi_device_data);
+	/*call_hfi_op(ops_tbl, noc_error_info, ops_tbl->hfi_device_data);*/
 
 	if (core->smmu_fault_count >= core->resources.max_ssr_allowed) {
 		dprintk(CVP_INFO, "msm_cvp_smmu_fault_recovery %d\n",
@@ -1716,6 +1716,42 @@ send_again:
 			__func__, core);
 	}
 	mutex_unlock(&core->lock);
+}
+
+void msm_cvp_noc_handler(struct msm_cvp_core *core)
+{
+	CVPKERNEL_ATRACE_BEGIN("msm_cvp_noc_handler");
+	struct iris_hfi_device *hdev;
+	struct msm_cvp_inst *inst;
+
+	if (!core) {
+		dprintk(CVP_ERR, "%s: Invalid params\n", __func__);
+		return;
+	}
+
+	mutex_lock(&core->lock);
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	core->kmd_trace.kmd_debug_log.smmu_debug.smmu_fault_cnt = core->smmu_fault_count;
+#endif
+	hdev = core->dev_ops->hfi_device_data;
+	if (hdev) {
+		hdev->error = CVP_ERR_NOC_ERROR;
+		call_hfi_op(core->dev_ops, debug_hook, hdev);
+	}
+	mutex_unlock(&core->lock);
+
+	if (core->smmu_fault_count > 0) {
+		core->smmu_fault_count++;
+		return;
+	}
+	mutex_lock(&core->lock);
+	core->smmu_fault_count++;
+	list_for_each_entry(inst, &core->instances, list) {
+		cvp_print_inst(CVP_ERR, inst);
+		msm_cvp_print_inst_bufs(inst, true);
+	}
+	mutex_unlock(&core->lock);
+	CVPKERNEL_ATRACE_END("msm_cvp_noc_handler");
 }
 
 void msm_cvp_comm_generate_sys_error(struct msm_cvp_inst *inst)

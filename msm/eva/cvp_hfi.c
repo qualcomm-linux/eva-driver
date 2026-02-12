@@ -3670,6 +3670,7 @@ int __response_handler(struct iris_hfi_device *device)
 					= SMMU_CORE_NOC_ERROR;
 #endif
 		}
+		msm_cvp_noc_handler(core);
 	}
 
 	/* Bleed the msg queue dry of packets */
