@@ -12,6 +12,7 @@
 #include "cvp_hfi_io.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp_debug.h"
+#include "cvp_presil.h"
 #include <linux/delay.h>
 
 static const char *const mid_names_pakala[25] = {
