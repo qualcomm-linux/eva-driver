@@ -41,6 +41,9 @@ load(":art.bzl", "define_art")
 define_art("art")
 define_art("art16k")
 
+load(":pebble.bzl", "define_pebble")
+define_pebble()
+
 load(":alor.bzl", "define_alor")
 define_alor()
 
