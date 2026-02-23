@@ -1837,7 +1837,8 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 			return -EINVAL;
 		}
 
-		buf = cvp_allocate_arp_bufs(inst, ALIGN(ARP_CHUNK_SIZE, SZ_4K) * pkt_concurrency);
+		buf = cvp_allocate_arp_bufs(inst,
+				ALIGN(ARP_CHUNK_SIZE, PAGE_SIZE) * pkt_concurrency);
 	}
 
 	if (!buf) {
