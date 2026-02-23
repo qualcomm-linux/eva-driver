@@ -164,6 +164,7 @@ struct msm_cvp_frame {
 	u32 nr;
 	u64 ktid;
 	u32 pkt_type;
+	u32 stream_idx;
 };
 
 struct cvp_frame_bufs {

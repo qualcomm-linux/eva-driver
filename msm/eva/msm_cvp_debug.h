@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __MSM_CVP_DEBUG__
@@ -82,6 +82,7 @@ extern int msm_cvp_hw_hang_recovery;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 extern int msm_cvp_sw_dbg_buf_dump;
 #endif
+extern int msm_cvp_max_frames_dump;
 
 #define dprintk(__level, __fmt, arg...)	\
 	do { \

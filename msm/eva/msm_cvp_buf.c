@@ -2234,6 +2234,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	frame->ktid = ktid;
 	frame->nr = 0;
 	frame->pkt_type = cmd_hdr->header.packet_type;
+	frame->stream_idx = cmd_hdr->header.stream_idx;
 
 	for (i = 0; i < buf_num; i++) {
 		buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];

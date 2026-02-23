@@ -166,7 +166,7 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 	if (wait_event_timeout(sq->wq,
 		cvp_msg_pending(sq, &msg, ktid), timeout) == 0) {
 		dprintk(CVP_WARN,
-			"session queue wait timeout and session_id = %#x sq %pK, sq->wq %pK\n",
+			"Frames: session queue wait timeout and session_id = %#x sq %pK, sq->wq %pK\n",
 			inst->sess_id, sq, &sq->wq);
 		if (inst && inst->core && inst->core->dev_ops &&
 				inst->state != MSM_CVP_CORE_INVALID)

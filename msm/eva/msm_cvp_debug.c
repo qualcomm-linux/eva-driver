@@ -62,6 +62,7 @@ int msm_cvp_smmu_fault_recovery = !1;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 int msm_cvp_sw_dbg_buf_dump = 1;
 #endif
+int msm_cvp_max_frames_dump = 3;
 
 #define MAX_DBG_BUF_SIZE 4096
 
@@ -574,6 +575,8 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 			&msm_cvp_session_error_recovery);
 	debugfs_create_u32("hw_hang_recovery", 0644, dir,
 			&msm_cvp_hw_hang_recovery);
+	debugfs_create_u32("max_frames_dump", 0644, dir,
+		&msm_cvp_max_frames_dump);
 
 	if (!debugfs_create_file("session_info", 0444, dir, core, &session_info_fops)) {
 		dprintk(CVP_ERR, "debugfs_create_file: fail\n");

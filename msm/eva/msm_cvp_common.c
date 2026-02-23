@@ -26,6 +26,102 @@
 atomic_t cvp_error_count;
 bool trigger_smmu_fault;
 
+#define STRINGIFY(VAL) #VAL
+
+inline const char *StringifyHalCommand(enum hal_command_response cmd)
+{
+	switch (cmd) {
+	case HAL_NO_RESP:
+		return STRINGIFY(HAL_NO_RESP);
+	case HAL_SYS_INIT_DONE:
+		return STRINGIFY(HAL_SYS_INIT_DONE);
+	case HAL_SYS_RELEASE_RESOURCE_DONE:
+		return STRINGIFY(HAL_SYS_RELEASE_RESOURCE_DONE);
+	case HAL_SYS_PING_ACK_DONE:
+		return STRINGIFY(HAL_SYS_PING_ACK_DONE);
+	case HAL_SYS_PC_PREP_DONE:
+		return STRINGIFY(HAL_SYS_PC_PREP_DONE);
+	case HAL_SYS_IDLE:
+		return STRINGIFY(HAL_SYS_IDLE);
+	case HAL_SYS_DEBUG:
+		return STRINGIFY(HAL_SYS_DEBUG);
+	case HAL_SYS_WATCHDOG_TIMEOUT:
+		return STRINGIFY(HAL_SYS_WATCHDOG_TIMEOUT);
+	case HAL_SYS_ERROR:
+		return STRINGIFY(HAL_SYS_ERROR);
+	case HAL_SESSION_EVENT_CHANGE:
+		return STRINGIFY(HAL_SESSION_EVENT_CHANGE);
+	case HAL_SESSION_INIT_DONE:
+		return STRINGIFY(HAL_SESSION_INIT_DONE);
+	case HAL_SESSION_END_DONE:
+		return STRINGIFY(HAL_SESSION_END_DONE);
+	case HAL_SESSION_SET_BUFFER_DONE:
+		return STRINGIFY(HAL_SESSION_SET_BUFFER_DONE);
+	case HAL_SESSION_ABORT_DONE:
+		return STRINGIFY(HAL_SESSION_ABORT_DONE);
+	case HAL_SESSION_START_DONE:
+		return STRINGIFY(HAL_SESSION_START_DONE);
+	case HAL_SESSION_STOP_DONE:
+		return STRINGIFY(HAL_SESSION_STOP_DONE);
+	case HAL_SESSION_CVP_OPERATION_CONFIG:
+		return STRINGIFY(HAL_SESSION_CVP_OPERATION_CONFIG);
+	case HAL_SESSION_FLUSH_DONE:
+		return STRINGIFY(HAL_SESSION_FLUSH_DONE);
+	case HAL_SESSION_SUSPEND_DONE:
+		return STRINGIFY(HAL_SESSION_SUSPEND_DONE);
+	case HAL_SESSION_RESUME_DONE:
+		return STRINGIFY(HAL_SESSION_RESUME_DONE);
+	case HAL_SESSION_SET_PROP_DONE:
+		return STRINGIFY(HAL_SESSION_SET_PROP_DONE);
+	case HAL_SESSION_GET_PROP_DONE:
+		return STRINGIFY(HAL_SESSION_GET_PROP_DONE);
+	case HAL_SESSION_RELEASE_BUFFER_DONE:
+		return STRINGIFY(HAL_SESSION_RELEASE_BUFFER_DONE);
+	case HAL_SESSION_REGISTER_BUFFER_DONE:
+		return STRINGIFY(HAL_SESSION_REGISTER_BUFFER_DONE);
+	case HAL_SESSION_UNREGISTER_BUFFER_DONE:
+		return STRINGIFY(HAL_SESSION_UNREGISTER_BUFFER_DONE);
+	case HAL_SESSION_RELEASE_RESOURCE_DONE:
+		return STRINGIFY(HAL_SESSION_RELEASE_RESOURCE_DONE);
+	case HAL_SESSION_PROPERTY_INFO:
+		return STRINGIFY(HAL_SESSION_PROPERTY_INFO);
+	case HAL_SESSION_DUMP_NOTIFY:
+		return STRINGIFY(HAL_SESSION_DUMP_NOTIFY);
+	case HAL_SESSION_ERROR:
+		return STRINGIFY(HAL_SESSION_ERROR);
+	case HAL_RESPONSE_UNUSED:
+		return STRINGIFY(HAL_RESPONSE_UNUSED);
+	default:
+		return STRINGIFY(Unknown HAL cmd);
+	}
+}
+
+static void print_pending_packets(struct msm_cvp_inst *inst)
+{
+	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef, *dummy1;
+	uint32_t printed = 0;
+
+	/* Printing pending frame packets */
+	mutex_lock(&inst->frames.lock);
+	if (!list_empty(&inst->frames.list)) {
+		dprintk(CVP_WARN, "%s: Frames: max %u oldest pending packets for sess_id: %08x",
+			__func__, msm_cvp_max_frames_dump, inst->sess_id);
+		list_for_each_entry_safe(frame, dummy1, &inst->frames.list, list) {
+			if (printed >= msm_cvp_max_frames_dump)
+				break;
+			dprintk(CVP_WARN,
+				"%s: Frames: [%u] pkt_type %08x, ktid %llu, stream_idx %u sess_id %08x\n",
+				__func__, printed, frame->pkt_type, frame->ktid, frame->stream_idx,
+				inst->sess_id);
+			printed++;
+		}
+	} else {
+		dprintk(CVP_INFO, "%s: Frames: No pending packets for sess_id: %08x\n",
+			__func__, inst->sess_id);
+	}
+	mutex_unlock(&inst->frames.lock);
+}
+
 void msm_cvp_bug_on(bool flag, bool isdelay)
 {
 	struct msm_cvp_core *core = NULL;
@@ -456,8 +552,9 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 		msecs_to_jiffies(
 			inst->core->resources.msm_cvp_hw_rsp_timeout));
 	if (!rc) {
-		dprintk(CVP_WARN, "Wait interrupted or timed out: %d session_id = %#x\n",
-				SESSION_MSG_INDEX(cmd), inst->sess_id);
+		dprintk(CVP_WARN,
+			"Session Ctrl: Wait interrupted or timed out: %d session_id = %#x\n",
+			SESSION_MSG_INDEX(cmd), inst->sess_id);
 		if (inst->state != MSM_CVP_CORE_INVALID) {
 			print_hfi_queue_info(ops_tbl);
 			__print_sfr_msg(hfi_device);
@@ -468,8 +565,12 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 			cmd != HAL_SESSION_INIT_DONE &&
 			cmd != HAL_SESSION_START_DONE)
 			handle_session_timeout(inst, true);
-		else
+		else {
+			dprintk(CVP_WARN,
+				"%s: Session Ctrl: Pending control cmd response %d (%s) sess_id %08x\n",
+				__func__, cmd, StringifyHalCommand(cmd), inst->sess_id);
 			handle_session_timeout(inst, false);
+		}
 		rc = -ETIMEDOUT;
 	} else if (inst->state == MSM_CVP_CORE_INVALID) {
 		rc = -ECONNRESET;
@@ -746,6 +847,8 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 		}
 	}
 	fw_resp_ts = (u64)ktime_to_ms(curr_time) - (u64)ktime_to_ms(core->last_msg_ts);
+
+	print_pending_packets(inst);
 
 	if (fw_resp_ts > 500 || (fw_cmd_fetch_ts > 500
 				&& core->cur_cmd_q_read_offset == core->prev_cmd_q_read_offset)) {
@@ -1111,7 +1214,7 @@ int msm_cvp_comm_check_core_init(struct msm_cvp_core *core)
 		&core->completions[SYS_MSG_INDEX(HAL_SYS_INIT_DONE)],
 		msecs_to_jiffies(core->resources.msm_cvp_hw_rsp_timeout));
 	if (!rc) {
-		dprintk(CVP_ERR, "%s: Wait interrupted or timed out: %d\n",
+		dprintk(CVP_ERR, "%s: Session Ctrl: Wait interrupted or timed out: %d\n",
 				__func__, SYS_MSG_INDEX(HAL_SYS_INIT_DONE));
 		ops_tbl = core->dev_ops;
 		print_hfi_queue_info(ops_tbl);
