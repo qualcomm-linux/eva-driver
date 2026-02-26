@@ -3889,6 +3889,8 @@ static void iris_hfi_wd_work_handler(struct work_struct *work)
 				msm_cvp_hw_wd_recovery);
 		call_iris_op(device, print_sbm_regs, device);
 		response.device_id = 0;
+		dprintk(CVP_WARN, "Halt Tensilica\n");
+		__write_register(device, CVP_WRAPPER_TZ_CPU_CLOCK_CONFIG, 0x1);
 		handle_sys_error(cmd, (void *) &response);
 		enable_irq(device->cvp_hal_data->irq_wd);
 	}
@@ -4880,6 +4882,8 @@ static int __iris_power_on(struct iris_hfi_device *device)
 			/* Enable HW ECO, specifically for Pakala EVA */
 			__write_register(device, CVP_CC_SPARE1, 1);
 	}
+
+	call_iris_op(device, noc_lpi, device, IRIS_POWER_ON);
 
 	/*
 	 * Re-program all of the registers that get reset as a result of
