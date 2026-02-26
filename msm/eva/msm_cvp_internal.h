@@ -381,6 +381,7 @@ void msm_cvp_comm_handle_thermal_event(void);
 
 void msm_cvp_ssr_handler(struct work_struct *work);
 void msm_cvp_iova_cleanup_handler(struct work_struct *work);
+void msm_cvp_noc_handler(struct msm_cvp_core *core);
 /*
  * XXX: normally should be in msm_cvp_core.h, but that's meant for public APIs,
  * whereas this is private

@@ -1202,8 +1202,6 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 		struct device *dev, unsigned long iova, int flags, void *token)
 {
 	struct msm_cvp_core *core = token;
-	struct iris_hfi_device *hdev;
-	struct msm_cvp_inst *inst;
 
 	if (!domain || !core) {
 		dprintk(CVP_ERR, "%s - invalid param %pK %pK\n",
@@ -1214,33 +1212,14 @@ int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
 	pr_err_ratelimited(CVP_PID_TAG "%s - faulting address: %lx fault cnt %d\n",
 			current->pid, current->tgid, "err",
 			__func__, iova, core->smmu_fault_count);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	core->kmd_trace.kmd_debug_log.smmu_debug.smmu_fault_cnt = core->smmu_fault_count;
-#endif
-	mutex_lock(&core->lock);
-	hdev = core->dev_ops->hfi_device_data;
-	if (hdev) {
-		hdev->error = CVP_ERR_NOC_ERROR;
-		call_hfi_op(core->dev_ops, debug_hook, hdev);
-	}
-	mutex_unlock(&core->lock);
+	msm_cvp_noc_handler(core);
 
-	if (core->smmu_fault_count > 0) {
-		core->smmu_fault_count++;
-		return -ENOSYS;
-	}
 	mutex_lock(&core->lock);
-	core->smmu_fault_count++;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	core->kmd_trace.kmd_debug_log.smmu_debug.fauting_addr = iova;
 #endif
 	if (!core->last_fault_addr)
 		core->last_fault_addr = iova;
-
-	list_for_each_entry(inst, &core->instances, list) {
-		cvp_print_inst(CVP_ERR, inst);
-		msm_cvp_print_inst_bufs(inst, true);
-	}
 	mutex_unlock(&core->lock);
 	/*
 	 * Return -EINVAL to elicit the default behaviour of smmu driver.
