@@ -241,10 +241,6 @@ int msm_cvp_map_buf_dsp_new(struct msm_cvp_inst *inst,
 			uint32_t *iova);
 int msm_cvp_unmap_buf_dsp_new(struct msm_cvp_inst *inst,
 			struct eva_kmd_buffer *buf);
-int msm_cvp_map_buf_wncc(struct msm_cvp_inst* inst,
-			struct eva_kmd_buffer* buf);
-int msm_cvp_unmap_buf_wncc(struct msm_cvp_inst* inst,
-			struct eva_kmd_buffer* buf);
 int msm_cvp_proc_oob(struct msm_cvp_inst* inst,
 			struct eva_kmd_hfi_packet* in_pkt);
 void msm_cvp_cache_operations(struct msm_cvp_smem *smem,

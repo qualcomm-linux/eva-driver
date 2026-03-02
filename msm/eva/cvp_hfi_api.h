@@ -318,6 +318,7 @@ int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr);
 int get_pkt_index_from_type(u32 pkt_type);
 const char *get_pkt_name_from_type(u32 pkt_type);
 const char *get_feature_name_from_type(u32 pkt_type);
+bool is_config_pkt(struct cvp_hal_session_cmd_pkt *hdr);
 int get_hfi_version(void);
 unsigned int get_msg_size(struct cvp_hfi_msg_session_hdr *hdr);
 unsigned int get_msg_session_id(void *msg);

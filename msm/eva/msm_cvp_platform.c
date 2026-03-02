@@ -2441,6 +2441,19 @@ int get_pkt_index_from_type(u32 pkt_type)
 	return -EINVAL;
 }
 
+bool is_config_pkt(struct cvp_hal_session_cmd_pkt *hdr)
+{
+	int pkt_idx;
+
+	pkt_idx = get_pkt_index(hdr);
+	if (pkt_idx < 0) {
+		dprintk(CVP_ERR, "%s incorrect packet type %x\n", __func__,
+				hdr->packet_type);
+		return false;
+	}
+	return cvp_hfi_defs[pkt_idx].is_config_pkt;
+}
+
 const char *get_pkt_name_from_type(u32 pkt_type)
 {
 	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
