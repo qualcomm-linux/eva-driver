@@ -314,7 +314,7 @@ static int __dsp_shutdown(struct iris_hfi_device *device)
 	return rc;
 }
 
-int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
+static int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
 {
 #if (KERNEL_VERSION(6, 12, 0) <= LINUX_VERSION_CODE)
 	return dev_pm_genpd_set_hwmode(dev, enable);
@@ -5242,7 +5242,7 @@ static int __initialize_packetization(struct iris_hfi_device *device)
 	return rc;
 }
 
-void __init_cvp_ops(struct iris_hfi_device *device)
+static void __init_cvp_ops(struct iris_hfi_device *device)
 {
 	device->hal_ops = &hal_ops;
 }
