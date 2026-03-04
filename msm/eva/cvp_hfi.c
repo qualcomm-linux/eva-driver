@@ -1629,7 +1629,7 @@ static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
 	int count = 0;
 	const int max_retries = 10;
 
-	q_size = ALIGN(QUEUE_SIZE, SZ_1M);
+	q_size = ALIGN(DSP_QUEUE_SIZE, SZ_1M);
 	mem_data = &dev->dsp_iface_q_table.mem_data;
 
 	if (mem_data->kvaddr) {
@@ -1691,7 +1691,12 @@ static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
 		iface_q = &dev->dsp_iface_queues[i];
 		iface_q->q_array.align_device_addr = iova + offset - fw_bias;
 		iface_q->q_array.align_virtual_addr = kvaddr + offset;
-		iface_q->q_array.mem_size = CVP_IFACEQ_QUEUE_SIZE;
+		if (i == CVP_IFACEQ_CMDQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_CMD_QUEUE_SIZE;
+		else if (i == CVP_IFACEQ_MSGQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_MSG_QUEUE_SIZE;
+		else if (i == CVP_IFACEQ_DBGQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_DBG_QUEUE_SIZE;
 		offset += iface_q->q_array.mem_size;
 		spin_lock_init(&iface_q->hfi_lock);
 	}

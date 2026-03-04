@@ -788,11 +788,16 @@ static struct rpmsg_driver cvp_dsp_rpmsg_client = {
 	},
 };
 
-static void cvp_dsp_set_queue_hdr_defaults(struct cvp_hfi_queue_header *q_hdr)
+static void cvp_dsp_set_queue_hdr_defaults(struct cvp_hfi_queue_header *q_hdr, int i)
 {
 	q_hdr->qhdr_status = 0x1;
 	q_hdr->qhdr_type = CVP_IFACEQ_DFLT_QHDR;
-	q_hdr->qhdr_q_size = CVP_IFACEQ_QUEUE_SIZE / 4;
+	if (i == CVP_IFACEQ_CMDQ_IDX)
+		q_hdr->qhdr_q_size = CVP_DSP_IFACEQ_CMD_QUEUE_SIZE / 4;
+	else if (i == CVP_IFACEQ_MSGQ_IDX)
+		q_hdr->qhdr_q_size = CVP_DSP_IFACEQ_MSG_QUEUE_SIZE / 4;
+	else if (i == CVP_IFACEQ_DBGQ_IDX)
+		q_hdr->qhdr_q_size = CVP_DSP_IFACEQ_DBG_QUEUE_SIZE / 4;
 	q_hdr->qhdr_pkt_size = 0;
 	q_hdr->qhdr_rx_wm = 0x1;
 	q_hdr->qhdr_tx_wm = 0x1;
@@ -815,7 +820,13 @@ void cvp_dsp_init_hfi_queue_hdr(struct iris_hfi_device *device)
 		iface_q = &device->dsp_iface_queues[i];
 		iface_q->q_hdr = CVP_IFACEQ_GET_QHDR_START_ADDR(
 			device->dsp_iface_q_table.align_virtual_addr, i);
-		cvp_dsp_set_queue_hdr_defaults(iface_q->q_hdr);
+		cvp_dsp_set_queue_hdr_defaults(iface_q->q_hdr, i);
+		if (i == CVP_IFACEQ_CMDQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_CMD_QUEUE_SIZE;
+		else if (i == CVP_IFACEQ_MSGQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_MSG_QUEUE_SIZE;
+		else if (i == CVP_IFACEQ_DBGQ_IDX)
+			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_DBG_QUEUE_SIZE;
 	}
 	q_tbl_hdr = (struct cvp_hfi_queue_table_header *)
 			device->dsp_iface_q_table.align_virtual_addr;
