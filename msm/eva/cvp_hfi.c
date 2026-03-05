@@ -1713,6 +1713,14 @@ fail_dma_alloc:
 
 static void __interface_queues_release(struct iris_hfi_device *device)
 {
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct msm_cvp_core *core = cvp_driver->cvp_core;
+
+	if (!core)
+		dprintk(CVP_ERR, "%s: Core is null\n", __func__);
+	else
+		mutex_destroy(&core->kmd_dbg.dbg_lock);
+#endif
 #ifdef CONFIG_EVA_TVM
 	int i;
 	struct cvp_hfi_mem_map_table *qdss;
@@ -1720,9 +1728,6 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 	int num_entries = device->res->qdss_addr_set.count;
 	unsigned long mem_map_table_base_addr;
 	struct context_bank_info *cb;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	struct msm_cvp_core *core = NULL;
-#endif
 
 	if (device->qdss.align_virtual_addr) {
 		qdss = (struct cvp_hfi_mem_map_table *)
@@ -1754,9 +1759,7 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 
 	__smem_free(device, &device->iface_q_table.mem_data);
 	__smem_free(device, &device->sfr.mem_data);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	__smem_free(device, &device->sw_dbg_buf.mem_data);
-#endif
+
 	for (i = 0; i < CVP_IFACEQ_NUMQ; i++) {
 		device->iface_queues[i].q_hdr = NULL;
 		device->iface_queues[i].q_array.align_virtual_addr = NULL;
@@ -1771,15 +1774,6 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 
 	device->sfr.align_virtual_addr = NULL;
 	device->sfr.align_device_addr = 0;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	device->sw_dbg_buf.align_virtual_addr = NULL;
-	device->sw_dbg_buf.align_device_addr = 0;
-	core = cvp_driver->cvp_core;
-	if (!core)
-		dprintk(CVP_ERR, "%s: Core is null\n", __func__);
-	else
-		mutex_destroy(&core->kmd_dbg.dbg_lock);
-#endif
 	device->mem_addr.align_virtual_addr = NULL;
 	device->mem_addr.align_device_addr = 0;
 #endif
@@ -2008,48 +2002,16 @@ sfr_init:
 	__sfr_init(dev);
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	core = cvp_driver->cvp_core;
-	if (dev->sw_dbg_buf.align_virtual_addr) {
-		memset((void *)dev->sw_dbg_buf.align_virtual_addr,
-				0, ALIGNED_SW_DBG_BUF_SIZE);
-		if (core) {
-			core->kmd_dbg.kmd_sess_cnt = 0;
-			core->kmd_dbg.kmd_queue_dump_cnt = 0;
-			memset(&(core->kmd_trace.kmd_buf), 0,
-				(sizeof(struct eva_kmd_buf) * DBG_BUF_CNT));
-			memset(&(core->kmd_trace.kmd_session), 0,
-				(sizeof(struct eva_kmd_session) * TRACE_SESS_SIZE));
-			memset(core->kmd_trace.kmd_debug_log.log, 0,
-				sizeof(struct cvp_debug_log));
-			memset(&(core->kmd_trace.kmd_debug_log.smmu_debug), 0,
-				sizeof(struct eva_smmu_debug));
-		}
-	} else {
-		rc = __smem_alloc(dev, mem_addr, ALIGNED_SW_DBG_BUF_SIZE, 1,
-				SMEM_UNCACHED, O_RDWR | O_CLOEXEC);
-		if (rc) {
-			dprintk(CVP_WARN, "sfr_alloc_fail: sw_dbg_buf not will work\n");
-			dev->sw_dbg_buf.align_device_addr = 0;
-		} else {
-			dev->sw_dbg_buf.align_device_addr = mem_addr->align_device_addr;
-			dev->sw_dbg_buf.align_virtual_addr = mem_addr->align_virtual_addr;
-			dev->sw_dbg_buf.mem_size = ALIGNED_SW_DBG_BUF_SIZE;
-			dev->sw_dbg_buf.mem_data = mem_addr->mem_data;
-			if (core) {
-				mutex_init(&core->kmd_dbg.dbg_lock);
-				core->kmd_dbg.kmd_buf_offset = 0;
-				core->kmd_dbg.kmd_buf_cnt = 0;
-				core->kmd_dbg.kmd_sess_cnt = 0;
-				core->kmd_dbg.kmd_queue_dump_cnt = 0;
-				memset(&(core->kmd_trace.kmd_buf), 0,
-					(sizeof(struct eva_kmd_buf) * DBG_BUF_CNT));
-				memset(&(core->kmd_trace.kmd_session), 0,
-					(sizeof(struct eva_kmd_session) * TRACE_SESS_SIZE));
-				memset(core->kmd_trace.kmd_debug_log.log, 0,
-					sizeof(struct cvp_debug_log));
-				memset(&(core->kmd_trace.kmd_debug_log.smmu_debug), 0,
-					sizeof(struct eva_smmu_debug));
-			}
-		}
+	if (core) {
+		mutex_init(&core->kmd_dbg.dbg_lock);
+		core->kmd_dbg.kmd_sess_cnt = 0;
+		core->kmd_dbg.kmd_queue_dump_cnt = 0;
+		memset(&(core->kmd_trace.kmd_session), 0,
+			(sizeof(struct eva_kmd_session) * TRACE_SESS_SIZE));
+		memset(core->kmd_trace.kmd_debug_log.log, 0,
+			sizeof(struct cvp_debug_log));
+		memset(&(core->kmd_trace.kmd_debug_log.smmu_debug), 0,
+			sizeof(struct eva_smmu_debug));
 	}
 #endif
 

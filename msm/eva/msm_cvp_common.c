@@ -633,9 +633,6 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	unsigned long flags = 0;
 	enum cvp_session_state s_state;
 	enum cvp_session_errorcode s_ecode;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	struct msm_cvp_core *core = NULL;
-#endif
 
 	if (!response) {
 		dprintk(CVP_ERR,
@@ -671,14 +668,6 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 #ifdef CVP_SW_DBG_BUF_ENABLED
 		if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
 			eva_kmd_session_dump(inst);
-			eva_kmd_debug_log_dump();
-			core = cvp_driver->cvp_core;
-			if (core) {
-				if (core->kmd_dbg.kmd_queue_dump_cnt == 0) {
-					eva_cmd_msg_queue_dump();
-					core->kmd_dbg.kmd_queue_dump_cnt++;
-				}
-			}
 		}
 #endif
 
@@ -782,11 +771,6 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
 		eva_kmd_session_dump(inst);
-		eva_kmd_debug_log_dump();
-		if (core->kmd_dbg.kmd_queue_dump_cnt == 0) {
-			eva_cmd_msg_queue_dump();
-			core->kmd_dbg.kmd_queue_dump_cnt++;
-		}
 	}
 #endif
 	spin_lock_irqsave(&inst->event_handler.lock, flags);
@@ -868,11 +852,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 		list_for_each_entry(inst, &core->instances, list) {
 			msm_cvp_print_inst_bufs(inst, true);
 		}
-	}
-
-	if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-		eva_kmd_debug_log_dump();
-		eva_cmd_msg_queue_dump();
 	}
 #endif
 	list_for_each_entry(inst, &core->instances, list) {

@@ -321,9 +321,6 @@ struct iris_hfi_device {
 	unsigned int skip_pc_count;
 	struct msm_cvp_capability *sys_init_capabilities;
 	struct cvp_hal_ops *hal_ops;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	struct cvp_mem_addr sw_dbg_buf;
-#endif
 	u32 global_pm_qos_latency_us;
 };
 

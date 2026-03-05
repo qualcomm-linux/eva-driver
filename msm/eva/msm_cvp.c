@@ -1674,21 +1674,6 @@ static int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 			break;
 		}
 #ifdef CVP_SW_DBG_BUF_ENABLED
-		case EVA_KMD_PROP_SW_DBG_BUF:
-		{
-			get_dma_buf(hfi->sw_dbg_buf.mem_data.dma_buf);
-			rc = dma_buf_fd(hfi->sw_dbg_buf.mem_data.dma_buf, O_RDWR | O_CLOEXEC);
-			if (rc < 0) {
-				dprintk(CVP_WARN, "Failed get sw_dbg_buf dma_buf fd %d\n", rc);
-				dma_buf_put(hfi->sw_dbg_buf.mem_data.dma_buf);
-				break;
-			}
-
-			props->prop_data[i].data = rc;
-
-			rc = 0;
-			break;
-		}
 		case EVA_KMD_PROP_SW_DBG_BUF_IDX:
 		{
 			list_for_each_entry(curr_inst, &inst->core->instances, list) {
@@ -1800,6 +1785,10 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array, int i)
 {
 	struct cvp_session_prop *session_prop;
+#ifdef CVP_SW_DBG_BUF_ENABLED
+	struct dma_buf *dma_buf;
+	struct cvp_dma_buf_vmap vmap = {0};
+#endif
 	int rc = 0;
 
 	session_prop = &inst->prop;
@@ -1842,6 +1831,36 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 								(u32 *)&(prop_array->data));
 			break;
 		}
+#ifdef CVP_SW_DBG_BUF_ENABLED
+		case EVA_KMD_PROP_SW_DBG_BUF:
+		{
+			dma_buf = msm_cvp_smem_get_dma_buf(prop_array->data);
+			if (!dma_buf) {
+				dprintk(CVP_ERR, "%s: msm_cvp_smem_get_dma_buf failed\n", __func__);
+				rc = -EINVAL;
+			} else {
+				rc = dma_buf_begin_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
+				if (rc) {
+					dprintk(CVP_ERR, "Failed to begin CPU access: %d\n", rc);
+				} else {
+					rc = msm_cvp_dma_buf_vmap(dma_buf, &vmap);
+					if (rc || !vmap.vaddr) {
+						dprintk(CVP_ERR, "Failed to map buffer: %d\n", rc);
+						dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
+					} else {
+						eva_cmd_msg_queue_dump(vmap.vaddr);
+						eva_kmd_debug_log_dump(vmap.vaddr);
+						eva_kmd_session_dump_to_buf(vmap.vaddr);
+
+						msm_cvp_dma_buf_vunmap(dma_buf, &vmap);
+						dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
+					}
+				}
+				dma_buf_put(dma_buf);
+			}
+			break;
+		}
+#endif
 		default:
 			rc = -EFAULT;
 	}

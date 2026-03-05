@@ -9,7 +9,6 @@
 #include "msm_cvp_internal.h"
 #include "msm_cvp_buf.h"
 
-#define DBG_BUF_CNT 256
 #define TRACE_SESS_SIZE 16
 
 #define SMMU_XTENSA_NOC_ERROR 1
@@ -99,31 +98,20 @@ struct eva_kmd_debug_log {
 	struct eva_smmu_debug smmu_debug;
 };
 
-struct eva_kmd_buf {
-	u32 session_id;
-	u32 map_type; //0: map , 1: unmap
-	u32 iova;
-	u32 size;
-};
-
 struct eva_kmd_trace {
-	struct eva_kmd_buf kmd_buf[DBG_BUF_CNT];
 	struct eva_kmd_session kmd_session[TRACE_SESS_SIZE];
 	struct eva_kmd_debug_log kmd_debug_log;
 };
 
 struct eva_kmd_debug {
-	u32 kmd_buf_offset;
 	struct mutex dbg_lock;
-	u32 kmd_buf_cnt;
 	u32 kmd_sess_cnt;
 	u32 kmd_queue_dump_cnt;
 };
 
-void eva_kmd_buf_dump(struct msm_cvp_inst *inst,
-		struct msm_cvp_smem *smem, int buf_map_type);
 void eva_kmd_session_dump(struct msm_cvp_inst *inst);
-void eva_kmd_debug_log_dump(void);
-void eva_cmd_msg_queue_dump(void);
+void eva_cmd_msg_queue_dump(void *vaddr);
+void eva_kmd_debug_log_dump(void *vaddr);
+void eva_kmd_session_dump_to_buf(void *vaddr);
 
 #endif
