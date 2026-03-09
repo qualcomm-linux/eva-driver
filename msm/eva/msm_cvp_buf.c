@@ -63,7 +63,7 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 
 		if (!atomic_read(&smem->refcount)) {
 			dprintk(tag,
-				"UNUSED mapping %s: 0x%llx size %d iova %#x\n",
+				"UNUSED mapping %s: 0x%llx size %x iova %#x\n",
 				str, smem->dma_buf, smem->size, smem->device_addr);
 
 			dprintk(tag,
@@ -71,7 +71,7 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 				 name, smem->buf_idx, smem->fd, smem->cached, smem->dma_buf->name);
 		} else {
 			dprintk(tag,
-				"%s: %x : 0x%llx size %d flags %#x iova %#x\n",
+				"%s: %x : 0x%llx size %x flags %#x iova %#x\n",
 				str, inst->sess_id, smem->dma_buf,
 				smem->size, smem->flags, smem->device_addr);
 
@@ -106,7 +106,7 @@ int print_smem_no_instance(u32 tag, const char *str,
 
 		if (!atomic_read(&smem->refcount)) {
 			dprintk(tag,
-				"UNUSED mapping %s: 0x%llx size %d iova %#x\n",
+				"UNUSED mapping %s: 0x%llx size %x iova %#x\n",
 				str, smem->dma_buf, smem->size, smem->device_addr);
 
 			dprintk(tag,
@@ -114,7 +114,7 @@ int print_smem_no_instance(u32 tag, const char *str,
 				 name, smem->buf_idx, smem->fd, smem->cached);
 		} else {
 			dprintk(tag,
-				"%s: 0x%llx size %d flags %#x iova %#x\n",
+				"%s: 0x%llx size %x flags %#x iova %#x\n",
 				str, smem->dma_buf, smem->size,
 				smem->flags, smem->device_addr);
 
@@ -149,13 +149,13 @@ static int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
-				"UNUSED mapping %s: 0x%llx sessionid %#x size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
+				"UNUSED mapping %s: 0x%llx sessionid %#x size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 				str, smem->dma_buf, dsp_trace_sess->session_id, smem->size,
 				smem->device_addr, name, smem->buf_idx, smem->fd,
 				smem->dma_buf->name);
 		else
 			dprintk(tag,
-				"%s:sessionid %x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
+				"%s:sessionid %x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 				str, dsp_trace_sess->session_id, smem->dma_buf, smem->size, smem->flags, smem->device_addr,
 				atomic_read(&smem->refcount), name, smem->buf_idx,
 				smem->fd, smem->dma_buf->name);
@@ -1467,12 +1467,11 @@ static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 		__func__, smem->fd, smem->dma_buf, atomic_read(&smem->refcount));
 
 	if (atomic_read(&core->va_watermark) > IOVA_THRESHOLD) {
-
-           // Only schedule if not already pending
-           if (!work_pending(&core->iova_cleanup_work)) {
-               schedule_work(&core->iova_cleanup_work);
-           }
+		/* Only schedule if not already pending */
+		if (!work_pending(&core->iova_cleanup_work))
+			schedule_work(&core->iova_cleanup_work);
 	}
+
 	CVPKERNEL_ATRACE_END("msm_cvp_add_smem_call");
 
 	return 0;
@@ -1494,8 +1493,7 @@ void msm_cvp_iova_cleanup_handler(struct work_struct *work)
 		dprintk(CVP_ERR, "%s: Invalid params\n", __func__);
 		return;
 	}
-	dprintk(CVP_MEM,
-		"%s: Cleanup, IOVA threashold %d. cleaning up ...\n",
+	dprintk(CVP_WARN, "%s: reached IOVA threashold %x. cleaning up ...\n",
 		__func__,  atomic_read(&core->va_watermark));
 
 	mutex_lock(&core->lock);
@@ -1506,9 +1504,8 @@ void msm_cvp_iova_cleanup_handler(struct work_struct *work)
 
 	CVPKERNEL_ATRACE_END("msm_cvp_cleanup_handler");
 
-	dprintk(CVP_MEM,
-		"%s: After clean up IOVA threashold %d. cleaning up ...\n",
-		__func__, atomic_read(&core->va_watermark));
+	dprintk(CVP_WARN,
+		"%s: post clean up IOVA 0x%x\n", __func__, atomic_read(&core->va_watermark));
 }
 static struct msm_cvp_smem *msm_cvp_session_get_smem(struct msm_cvp_inst *inst,
 						struct cvp_buf_type *buf,
@@ -2441,13 +2438,13 @@ static void msm_cvp_print_dsp_buf_info(struct cvp_internal_buf *buf,
 
 		if (!atomic_read(&smem->refcount))
 			dprintk(tag,
-				"UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
+				"UNUSED mapping %s of PD %#x: 0x%llx size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 				"PD mapping", frpc_node->handle, smem->dma_buf,
 				smem->size, smem->device_addr,
 				name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 		else
 			dprintk(tag,
-				"%s: PD  %#x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
+				"%s: PD  %#x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 				"PD mapping", frpc_node->handle, smem->dma_buf,
 				smem->size, smem->flags, smem->device_addr,
 				atomic_read(&smem->refcount),
@@ -2511,7 +2508,10 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 			"---Buffer details for inst: %pK %s of type: %d---\n",
 			inst, inst->proc_name, inst->session_type);
 
-	dprintk(CVP_ERR, "dma_cache entries for logging %d\n", inst->dma_cache.nr);
+	dprintk(CVP_ERR, "dma_cache entries %d frame_usage 0x%x, watermark 0x%x smem_count %x\n",
+			inst->dma_cache.nr, atomic_read(&inst->frame_usage),
+			atomic_read(&inst->va_inst_watermark),
+			atomic_read(&inst->smem_count));
 
 	mutex_lock(&inst->dma_cache.lock);
 
@@ -2592,13 +2592,13 @@ void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32
 
 				if (!atomic_read(&smem->refcount))
 					dprintk(tag,
-						"UNUSED mapping %s of PD %#x: 0x%llx size %d iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
+						"UNUSED mapping %s of PD %#x: 0x%llx size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
 						"PD mapping", smem->dma_buf, frpc_node->handle,
 						smem->size, smem->device_addr,
 						name, smem->buf_idx, smem->fd, smem->dma_buf->name);
 				else
 					dprintk(tag,
-						"%s: PD %#x: 0x%llx size %d flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
+						"%s: PD %#x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
 						"PD mapping", smem->dma_buf, frpc_node->handle,
 						smem->size, smem->flags, smem->device_addr,
 						atomic_read(&smem->refcount),

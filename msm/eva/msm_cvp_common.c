@@ -2008,6 +2008,21 @@ int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst)
 	return 0;
 }
 
+int cvp_print_iova(struct msm_cvp_core *core)
+{
+	struct msm_cvp_inst *inst = NULL;
+
+	mutex_lock(&core->lock);
+	list_for_each_entry(inst, &core->instances, list) {
+		cvp_print_inst(CVP_ERR, inst);
+		msm_cvp_print_inst_bufs(inst, false);
+	}
+
+	dprintk(CVP_ERR, "core watermark 0x%x\n", core->va_watermark);
+	mutex_unlock(&core->lock);
+	return 0;
+}
+
 int cvp_print_frpc_node(u32 tag, struct cvp_dsp_fastrpc_driver_entry *frpc_node)
 {
 	if (!frpc_node) {

@@ -21,6 +21,7 @@
 #include "cvp_core_hfi.h"
 #include "msm_cvp_dsp.h"
 #include "msm_cvp_buf.h"
+#include "msm_cvp_common.h"
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
 #define DMA_ATTR_IOMMU_USE_UPSTREAM_HINT 1;
@@ -285,6 +286,9 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 			const char *str)
 {
 	int rc = 0;
+	struct msm_cvp_core *core = NULL;
+
+	core = cvp_driver->cvp_core;
 
 	if (!inst || !smem) {
 		dprintk(CVP_ERR, "%s: Invalid params: %pK %pK\n",
@@ -297,6 +301,9 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 	if (!rc) {
 		print_smem(CVP_MEM, str, inst, smem);
 		atomic_inc(&inst->smem_count);
+	} else {
+		cvp_print_iova(core);
+		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
 	}
 #ifdef CVP_SW_DBG_BUF_ENABLED
 	if (msm_cvp_sw_dbg_buf_dump & BIT(1))

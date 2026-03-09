@@ -45,7 +45,6 @@ int msm_cvp_fw_debug = 0x10018;
 int msm_cvp_fw_debug_mode = 1;
 bool msm_cvp_fw_coverage = !true;
 bool msm_cvp_cacheop_enabled = true;
-bool msm_cvp_thermal_mitigation_disabled = !true;
 bool msm_cvp_cacheop_disabled = true;
 bool msm_cvp_probe_allowed = true;
 int msm_cvp_clock_voting = !1;
@@ -59,6 +58,7 @@ bool msm_cvp_dcvs_disable = !true;
 int msm_cvp_minidump_enable = !1;
 int cvp_kernel_fence_enabled = 2;
 int msm_cvp_smmu_fault_recovery = !1;
+int msm_cvp_iova_leak_recovery = 1;
 #ifdef CVP_SW_DBG_BUF_ENABLED
 int msm_cvp_sw_dbg_buf_dump = 1;
 #endif
@@ -366,8 +366,6 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 	debugfs_create_bool("fw_coverage", 0644, dir, &msm_cvp_fw_coverage);
 	debugfs_create_bool("auto_pil", 0644, dir, &msm_cvp_auto_pil);
 	debugfs_create_u32("kernel_fence", 0644, dir, &cvp_kernel_fence_enabled);
-	debugfs_create_bool("disable_thermal_mitigation", 0644, dir,
-			&msm_cvp_thermal_mitigation_disabled);
 	debugfs_create_bool("enable_cacheop", 0644, dir,
 			&msm_cvp_cacheop_enabled);
 	debugfs_create_bool("disable_cvp_syscache", 0644, dir,
@@ -562,6 +560,8 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 	}
 	debugfs_create_u32("hw_wd_recovery", 0644, dir,
 		&msm_cvp_hw_wd_recovery);
+	debugfs_create_u32("iova_leak_recovery", 0644, dir,
+		&msm_cvp_iova_leak_recovery);
 	debugfs_create_u32("smmu_fault_recovery", 0644, dir,
 		&msm_cvp_smmu_fault_recovery);
 
