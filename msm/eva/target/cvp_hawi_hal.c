@@ -488,9 +488,10 @@ static int __power_off_core_hawi(struct iris_hfi_device *device)
 				value);
 			call_iris_op(device, print_sbm_regs, device);
 		}
-		__disable_gdsc(device, "core_pd");
-		__disable_gdsc(device, "core_noc_mm_pd");
+
 		__disable_gdsc(device, "core_noc_cx_pd");
+		__disable_gdsc(device, "core_noc_mm_pd");
+		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	} else if (!(value & 0x2) && msm_cvp_fw_low_power_mode) {
@@ -498,9 +499,9 @@ static int __power_off_core_hawi(struct iris_hfi_device *device)
 		 * HW_CONTROL PC disabled, then core is powered on for
 		 * CVP NoC access
 		 */
-		__disable_gdsc(device, "core_pd");
-		__disable_gdsc(device, "core_noc_mm_pd");
 		__disable_gdsc(device, "core_noc_cx_pd");
+		__disable_gdsc(device, "core_noc_mm_pd");
+		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
 		return 0;
 	}
@@ -784,12 +785,17 @@ static int gdsc_set_check(struct iris_hfi_device *device, bool check_reg_status,
 {
 	int rc = 0, loop = 10;
 	u32 reg_gdsc;
+	char *power_status;
+	u32 power_mask;
+
+	power_status = dest ? "power on" : "power off";
+	power_mask = dest ? 0x1 : 0x0;
 
 	rc = switch_core_gdsc_mode(device, dest, gdsc_name);
 	if (rc) {
 		dprintk(CVP_WARN,
-			"HW CTL Vote failed for %s gdsc:%d\n",
-			gdsc_name, rc);
+			"%s Vote failed for %s gdsc:%d\n",
+			dest, gdsc_name, rc);
 		return rc;
 	}
 
@@ -801,7 +807,7 @@ static int gdsc_set_check(struct iris_hfi_device *device, bool check_reg_status,
 reg_status:
 	while (loop) {
 		reg_gdsc = __read_register(device, reg_name);
-		if (reg_gdsc & 0x80000000) {
+		if ((reg_gdsc >> 31) == power_mask) {
 			usleep_range(100, 200);
 			loop--;
 		} else
@@ -809,7 +815,7 @@ reg_status:
 	}
 
 	if (!loop) {
-		dprintk(CVP_ERR, "fail to power off CORE/CORE NOC during resume\n");
+		dprintk(CVP_ERR, "fail to %s CORE/CORE NOC during resume\n", power_status);
 		return -EINVAL;
 	}
 
@@ -822,13 +828,24 @@ static int switch_all_core_gdsc(struct iris_hfi_device *device, bool check_reg_s
 	int rc = 0;
 	int i = 0;
 	u32 num_of_gdsc = 3;
-	u32 reg_gdsc[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR, CVP_CC_AXI0_CX_INT_GDSCR };
-	static const char *const gdsc_name[] = { "core_pd", "core_noc_mm_pd", "core_noc_cx_pd" };
+	u32 reg_gdsc_hw_ctl[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR,
+		CVP_CC_AXI0_CX_INT_GDSCR };
+	static const char *const gdsc_name_hw_ctl[] = { "core_pd", "core_noc_mm_pd",
+		"core_noc_cx_pd" };
+	u32 reg_gdsc_sw_ctl[] = { CVP_CC_AXI0_CX_INT_GDSCR, CVP_CC_MM_INT_GDSCR,
+		CVP_CC_MVS0_GDSCR };
+	static const char *const gdsc_name_sw_ctl[] = { "core_noc_cx_pd", "core_noc_mm_pd",
+		"core_pd"};
 	enum core_gdsc_dest default_gdsc_mode = TO_SW_CTRL;
 
 	if (device->res->gdsc_framework_type) {
 		for (i = 0; i < num_of_gdsc; i++) {
-			rc = gdsc_set_check(device, true, reg_gdsc[i], gdsc_name[i], dest);
+			if (dest == TO_HW_CTRL)
+				rc = gdsc_set_check(device, check_reg_status,
+					reg_gdsc_hw_ctl[i], gdsc_name_hw_ctl[i], dest);
+			else
+				rc = gdsc_set_check(device, check_reg_status,
+					reg_gdsc_sw_ctl[i], gdsc_name_sw_ctl[i], dest);
 			if (rc)
 				goto revert_switch;
 		}
@@ -843,7 +860,7 @@ revert_switch:
 	dprintk(CVP_WARN, "Switching GDSC Failed, Reverting back to default mode\n");
 	while (i > 0) {
 		i--;
-		rc = gdsc_set_check(device, false, reg_gdsc[i], gdsc_name[i],
+		rc = gdsc_set_check(device, false, reg_gdsc_hw_ctl[i], gdsc_name_hw_ctl[i],
 			default_gdsc_mode);
 		if (rc)
 			dprintk(CVP_WARN, "Switching GDSC Failed to default mode\n");
@@ -981,6 +998,43 @@ static void __print_reg_details_errlog3_low_hawi(u32 val)
 		sid);
 }
 
+static void __clear_pd_noc_req(struct iris_hfi_device *device)
+{
+	u32 val = 0, count = 0, max_count = 10;
+	u32 lpi_status;
+
+	val = __read_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL);
+	val = val & (~0x01);
+	__write_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL, val);
+
+	while (count < max_count) {
+		lpi_status = __read_register(device,
+			CVP_WRAPPER_CVP_NOC_CX_LPI_STATUS);
+		if ((lpi_status & 0x1) == 0x0)
+			break;
+		count++;
+	}
+
+	dprintk(CVP_ERR, "%s, CVP_NOC_CX Noc: lpi_status %x (count %d)\n",
+		__func__, lpi_status, count);
+
+	val = __read_register(device, CVP_WRAPPER_CVP_NOC_LPI_CONTROL);
+	val = val & (~0x01);
+	__write_register(device, CVP_WRAPPER_CVP_NOC_LPI_CONTROL, val);
+
+	count = 0;
+
+	while (count < max_count) {
+		lpi_status = __read_register(device, CVP_WRAPPER_CVP_NOC_LPI_STATUS);
+		if ((lpi_status & 0x1) == 0x0)
+			break;
+		count++;
+	}
+
+	dprintk(CVP_ERR, "%s, CVP_NOC_MM Noc: lpi_status %x (count %d)\n",
+		__func__, lpi_status, count);
+}
+
 static void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 {
 	#ifndef USE_PRESIL42
@@ -990,7 +1044,7 @@ static void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 
 	if (msm_cvp_fw_low_power_mode) {
 		if (device->res->gdsc_framework_type) {
-			rc = switch_all_core_gdsc(device, false, TO_SW_CTRL);
+			rc = switch_all_core_gdsc(device, true, TO_SW_CTRL);
 		} else {
 			iris_hfi_for_each_regulator(device, rinfo) {
 				if (strcmp(rinfo->name, "cvp-core"))
@@ -1004,8 +1058,29 @@ static void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 			    "%s, Failed to acquire core gdsc control to SW\n",
 			    __func__);
 	}
+
+	__clear_pd_noc_req(device);
+
 	val = __read_register(device, CVP_CC_MVS0_GDSCR);
 	dprintk(CVP_ERR, "%s, CVP_CC_MVS0_GDSCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_MM_INT_GDSCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_MM_INT_GDSCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_AXI0_CX_INT_GDSCR: 0x%x", __func__, val);
+
+	val = __read_register(device, CVP_CC_XO_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_XO_CBCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_SLEEP_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_SLEEP_CBCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_AHB_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_AHB_CBCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_DBGCH_XO_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_DBGCH_XO_CBCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_CC_MVS0C_CTL_FREERUN_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_CC_MVS0C_CTL_FREERUN_CBCR: 0x%x", __func__, val);
+	val = __read_register(device, CVP_CC_MVS0C_FREERUN_CBCR);
+	dprintk(CVP_ERR, "%s, CVP_CC_MVS0C_FREERUN_CBCR: 0x%x", __func__, val);
+
 	config = __read_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG);
 	dprintk(CVP_ERR, "%s, CVP_WRAPPER_CORE_CLOCK_CONFIG: 0x%x", __func__,
 		config);
@@ -1046,6 +1121,28 @@ static void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW);
 	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW: 0x%x",
 		val);
+
+	dprintk(CVP_ERR, "Dumping CPU NoC registers\n");
+	val = __read_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_MAINCTL_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRVLD_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRVLD_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG0_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_HIGH_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG0_HIGH_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG1_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_HIGH_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG1_HIGH_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG2_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_HIGH_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG2_HIGH_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_LOW_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG3_LOW_OFFS: 0x%x", val);
+	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_HIGH_OFFS);
+	dprintk(CVP_ERR, "CVP_NOC_ERR_ERRLOG3_HIGH_OFFS: 0x%x", val);
 
 	dprintk(CVP_ERR, "Dumping Core NoC registers\n");
 	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_LOW_OFFS);
@@ -1121,9 +1218,10 @@ static void __noc_error_info_iris2_hawi(struct iris_hfi_device *device)
 	noc_log->used = 1;
 	rc = 0;
 
-	__disable_hw_power_collapse(device, "core_pd");
-	__disable_hw_power_collapse(device, "core_noc_mm_pd");
 	__disable_hw_power_collapse(device, "core_noc_cx_pd");
+	__disable_hw_power_collapse(device, "core_noc_mm_pd");
+	__disable_hw_power_collapse(device, "core_pd");
+
 
 	val = call_iris_op(device, check_core_power_on, device);
 	regi =
