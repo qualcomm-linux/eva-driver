@@ -576,6 +576,14 @@ static struct msm_cvp_common_data sm8975_common_data[] = {
 	{
 		.key = "qcom,dsp-enabled",
 		.value = 1,
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_a_bitmask",
+		.value = 0x30,
+	},
+	{
+		.key = "qcom,qos_noc_urgency_low_b_bitmask",
+		.value = 0x3,
 	}
 };
 
