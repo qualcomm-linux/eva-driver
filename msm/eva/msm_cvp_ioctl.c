@@ -380,6 +380,8 @@ static int convert_from_user(struct eva_kmd_arg *kp,
 		}
 
 		rc = _copy_pkt_from_user(kp, up, 0, (pkt_hdr.size >> 2));
+		if (rc == 0)
+			kp->data.hfi_pkt.pkt_data[0] = pkt_hdr.size;
 		break;
 	}
 	case EVA_KMD_SEND_FENCE_CMD_PKT:
