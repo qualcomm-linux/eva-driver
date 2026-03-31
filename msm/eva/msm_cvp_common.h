@@ -39,6 +39,7 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst);
 int cvp_comm_release_persist_buffers(struct msm_cvp_inst *inst);
 int msm_cvp_noc_error_info(struct msm_cvp_core *core);
 int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst);
+int cvp_print_iova(struct msm_cvp_core *core);
 unsigned long long get_aon_time(void);
 void handle_session_error(enum hal_command_response cmd, void *data);
 void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required);

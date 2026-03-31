@@ -1305,6 +1305,7 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 	struct cvp_internal_buf *cbuf, *dummy;
 	struct msm_cvp_inst *inst = NULL;
 	struct list_head *s = NULL, *next_s = NULL;
+	struct msm_cvp_core *core;
 
 	dprintk(CVP_DSP, "%s Unregister fastrpc driver hdl %#x hdl %#x, f %d\n",
 		__func__, handle, dsp2cpu_cmd->pid, (uint32_t)force_exit);
@@ -1387,6 +1388,15 @@ static void eva_fastrpc_driver_unregister(uint32_t handle, bool force_exit)
 		mutex_lock(&me->driver_name_lock);
 		eva_fastrpc_driver_release_name(frpc_node);
 		mutex_unlock(&me->driver_name_lock);
+		if (atomic_read(&frpc_node->smem_count) > 0) {
+			dprintk(CVP_WARN, "DSP PD closed with %d unmapped smems\n",
+					atomic_read(&frpc_node->smem_count));
+			core = cvp_driver->cvp_core;
+			core->smem_leak_count += atomic_read(&frpc_node->smem_count);
+
+			cvp_print_iova(core);
+			msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
+		}
 		kfree(frpc_node);
 		frpc_node = NULL;
 	} else {

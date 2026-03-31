@@ -428,6 +428,9 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		dprintk(CVP_WARN, "Session closed with %d unmapped smems\n",
 			atomic_read(&inst->smem_count));
 		core->smem_leak_count += atomic_read(&inst->smem_count);
+
+		cvp_print_iova(core);
+		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
 	}
 	kfree(inst);
 	inst = NULL;
