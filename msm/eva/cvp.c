@@ -33,6 +33,7 @@
 #include "target/cvp_kaanapali_hal.h"
 #include "target/cvp_pakala_hal.h"
 #include "target/cvp_hawi_hal.h"
+#include "cvp_comm_def.h"
 
 #define CLASS_NAME              "cvp"
 #define DRIVER_NAME             "cvp"
@@ -242,6 +243,7 @@ static ssize_t boot_store(struct device *dev,
 			return rc;
 		}
 	} else if (val == 2) {
+#ifdef USE_PRESIL
 		struct msm_cvp_inst *inst;
 
 		inst = msm_cvp_open(MSM_CVP_USER, current);
@@ -260,6 +262,7 @@ static ssize_t boot_store(struct device *dev,
 			"Failed to close eva instance\n");
 			return rc;
 		}
+#endif
 	}
 	booted = 1;
 	return count;

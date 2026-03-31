@@ -252,7 +252,9 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	return inst;
 fail_init:
+	msm_cvp_comm_session_clean(inst);
 	kref_put(&inst->kref, close_helper);
+	inst = NULL;
 err_invalid_core:
 	return inst;
 }
