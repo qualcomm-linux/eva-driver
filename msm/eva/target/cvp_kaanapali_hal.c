@@ -243,7 +243,7 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device,
 			__func__, lpi_status, count);
 }
 
-void __noc_lpi_kaanapali(struct iris_hfi_device *device,
+static void __noc_lpi_kaanapali(struct iris_hfi_device *device,
 					enum enter_noc_lpi_caller caller)
 {
 	__enter_cpu_noc_lpi(device, caller);
