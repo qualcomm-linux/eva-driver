@@ -392,6 +392,15 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 			atomic_read(&inst->persist_usage), atomic_read(&inst->frame_usage));
 
 	}
+	if (atomic_read(&inst->smem_count) > 0) {
+		dprintk(CVP_WARN, "Session closed with %d unmapped smems\n",
+			atomic_read(&inst->smem_count));
+		core->smem_leak_count += atomic_read(&inst->smem_count);
+
+		cvp_print_inst(CVP_ERR, inst);
+		msm_cvp_print_inst_bufs(inst, false);
+		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
+	}
 
 	/* Ensure no path has core->clk_lock and core->lock sequence */
 	mutex_lock(&core->lock);
@@ -424,14 +433,7 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		current->pid, current->tgid, inst->proc_name, inst, inst->sess_id,
 		inst->session_type, core->smem_leak_count);
 	inst->session = (void *)0xdeadbeef;
-	if (atomic_read(&inst->smem_count) > 0) {
-		dprintk(CVP_WARN, "Session closed with %d unmapped smems\n",
-			atomic_read(&inst->smem_count));
-		core->smem_leak_count += atomic_read(&inst->smem_count);
 
-		cvp_print_iova(core);
-		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
-	}
 	kfree(inst);
 	inst = NULL;
 	dprintk(CVP_SESS,
