@@ -386,6 +386,7 @@ static int msm_cvp_unmap_feature_persist(struct msm_cvp_inst *inst,
 					buf->size, inst, NULL);
 			list_del(&pbuf->list);
 			atomic_dec(&smem->refcount);
+			atomic_dec(&inst->smem_count);
 			msm_cvp_smem_free(smem);
 			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 			pbuf->smem = NULL;
