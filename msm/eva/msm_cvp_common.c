@@ -1484,6 +1484,10 @@ static int msm_cvp_state_result_check(struct msm_cvp_inst *inst, int input, int 
 	/*Send invalid error code to user mode*/
 	if (input && inst->prev_hfi_error_code) {
 		dprintk(CVP_ERR,
+				"Cannot move from state: %s to %s\n",
+				state_names[inst->state],
+				state_names[state]);
+		dprintk(CVP_ERR,
 			"Instance has invalid msg error code from FW");
 		return -EINVAL;
 	}
@@ -1681,8 +1685,7 @@ int msm_cvp_comm_try_state(struct msm_cvp_inst *inst, int state)
 	inst, hash32_ptr(inst->session), state_names[inst->state],
 	state_names[state], state_names[flipped_state]);
 
-	if (cvp_state_handler[flipped_state](inst, state, flipped_state) < 0)
-		dprintk(CVP_ERR, "State not recognized\n");
+	rc = cvp_state_handler[flipped_state](inst, state, flipped_state);
 
 	mutex_unlock(&inst->sync_lock);
 
