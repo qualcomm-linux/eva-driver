@@ -110,7 +110,7 @@ static void print_pending_packets(struct msm_cvp_inst *inst)
 			if (printed >= msm_cvp_max_frames_dump)
 				break;
 			dprintk(CVP_WARN,
-				"%s: Frames: [%u] pkt_type %08x, ktid %llu, stream_idx %u sess_id %08x\n",
+				"%s: Frames: [%u] pkt_type %08x, ktid %llx, stream_idx %u sess_id %08x\n",
 				__func__, printed, frame->pkt_type, frame->ktid, frame->stream_idx,
 				inst->sess_id);
 			printed++;
@@ -180,7 +180,7 @@ void msm_cvp_bug_on(bool flag, bool isdelay)
 
 					smem->kvaddr = smem->vmap.vaddr;
 					inst->arp_kvaddr = smem->vmap.vaddr;
-					dprintk(CVP_ERR, "ARP kvaddr:%pK for sess_id:0x%x\n",
+					dprintk(CVP_ERR, "ARP kvaddr:%llx for sess_id:0x%x\n",
 						inst->arp_kvaddr, inst->sess_id);
 				}
 			}

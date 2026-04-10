@@ -345,7 +345,7 @@ wait_frame:
 			inst);
 		mutex_lock(&inst->frames.lock);
 		list_for_each_entry(frame, &inst->frames.list, list)
-			dprintk(CVP_WARN, "Unprocessed frame %08x ktid %llu\n",
+			dprintk(CVP_WARN, "Unprocessed frame %08x ktid %llx\n",
 				frame->pkt_type, frame->ktid);
 		mutex_unlock(&inst->frames.lock);
 		inst->core->synx_ftbl->cvp_dump_fence_queue(inst);

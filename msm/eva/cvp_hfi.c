@@ -464,6 +464,7 @@ static int __write_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 {
 	struct cvp_hfi_queue_header *queue;
 	struct cvp_hfi_cmd_session_hdr *cmd_pkt;
+	struct cvp_hfi_cmd_sys_session_end_packet *sess_pkt;
 	u32 packet_size_in_words, new_write_idx;
 	u32 empty_space, read_idx, write_idx;
 	u32 *write_ptr;
@@ -483,14 +484,6 @@ static int __write_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 		return -ENOENT;
 	}
 
-	cmd_pkt = (struct cvp_hfi_cmd_session_hdr *)packet;
-
-	if (cmd_pkt->header.size >= sizeof(struct cvp_hfi_cmd_session_hdr))
-		dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
-			__func__, cmd_pkt->header.packet_type,
-			cmd_pkt->header.session_id,
-			cmd_pkt->header.client_data.transaction_id,
-			cmd_pkt->header.client_data.kdata & (FENCE_BIT - 1));
 
 	if (msm_cvp_debug & CVP_PKT) {
 		dprintk(CVP_PKT, "%s: %pK\n", __func__, qinfo);
@@ -557,6 +550,25 @@ static int __write_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 	 */
 	mb();
 	spin_unlock(&qinfo->hfi_lock);
+
+	cmd_pkt = (struct cvp_hfi_cmd_session_hdr *)packet;
+
+	if (cmd_pkt->header.size >= sizeof(struct cvp_hfi_cmd_session_hdr)) {
+		dprintk(CVP_CMD,
+			"%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx widx/nwidx %x/%x\n",
+			__func__, cmd_pkt->header.packet_type,
+			cmd_pkt->header.session_id,
+			cmd_pkt->header.client_data.transaction_id,
+			cmd_pkt->header.client_data.kdata & (FENCE_BIT - 1),
+			write_idx, new_write_idx);
+	} else {
+		sess_pkt = (struct cvp_hfi_cmd_sys_session_end_packet *)packet;
+		dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x widx/nwidx %x/%x\n",
+			__func__, sess_pkt->packet_type, sess_pkt->session_id,
+			write_idx, new_write_idx);
+	}
+
+
 	CVPKERNEL_ATRACE_END("__write_queue");
 	return 0;
 }
@@ -693,8 +705,7 @@ static int __read_queue(struct cvp_iface_q_info *qinfo, u8 *packet,
 
 	if (!(queue->qhdr_type & HFI_Q_ID_CTRL_TO_HOST_DEBUG_Q)) {
 		msg_pkt = (struct cvp_hfi_msg_session_hdr *)packet;
-		dprintk(CVP_CMD, "%s:  "
-			"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
+		dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx\n",
 			__func__, msg_pkt->header.packet_type,
 			msg_pkt->header.session_id,
 			msg_pkt->header.client_data.transaction_id,
@@ -1477,7 +1488,7 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 		command_name = get_pkt_name_from_type(pkt_id);
 		aontimer = get_aon_time();
 		dprintk(CVP_PERF,
-			"%s: msg packet %s sent to FW at aontimer %llu session_id 0x%x stream_idx 0x%x transaction_id 0x%x\n",
+			"%s: msg packet %s sent to FW at aontimer %llx session_id 0x%x stream_idx 0x%x transaction_id 0x%x\n",
 			__func__, command_name, aontimer, session_id,
 			stream_idx, transaction_id);
 	}
@@ -3663,7 +3674,7 @@ int __response_handler(struct iris_hfi_device *device)
 			command_name = get_pkt_name_from_type(pkt_id);
 			aontimer = get_aon_time();
 			dprintk(CVP_PERF,
-				"%s: msg packet %s received from fw at aontimer %llu session_id 0x%x, stream_idx 0x%x transaction_id 0x%x\n",
+				"%s: msg packet %s received from fw at aontimer %llx session_id 0x%x, stream_idx 0x%x transaction_id 0x%x\n",
 				__func__, command_name, aontimer, session_id,
 				stream_idx, transaction_id);
 		}
