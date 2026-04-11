@@ -230,6 +230,7 @@ struct msm_cvp_platform_resources {
 	struct msm_cvp_ubwc_config_data *ubwc_config;
 	uint32_t gdsc_framework_type;
 	struct power_domain_set pd_set;
+	bool core_noc_cx_pd_disable;
 };
 
 static inline bool is_iommu_present(struct msm_cvp_platform_resources *res)

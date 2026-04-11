@@ -998,6 +998,8 @@ int cvp_read_platform_resources_from_drv_data(
 			"qcom,qos_noc_urgency_low_b_bitmask");
 	res->rcg_vnoc_clk_en_low = find_key_value(platform_data,
 			"qcom,rcg_vnoc_clk_en_low");
+	res->core_noc_cx_pd_disable = find_key_value(platform_data,
+			"qcom,core_noc_cx_pd_disable");
 
 	res->vpu_ver = platform_data->vpu_ver;
 	res->ubwc_config = platform_data->ubwc_config;

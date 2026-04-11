@@ -896,8 +896,10 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	struct iris_hfi_device *hfi_device;
 	struct msm_cvp_inst *inst = NULL;
 	struct cvp_session_queue *sq;
+#ifdef CVP_DSP_ENABLED
 	struct cvp_dsp_apps *me = &gfa_cv;
 	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
+#endif
 	int i, rc = 0;
 	unsigned long flags = 0;
 	enum cvp_core_state cur_state;
@@ -993,7 +995,7 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 			if (hfi_device->error != CVP_ERR_NOC_ERROR)
 				msm_cvp_print_inst_bufs(inst, false);
 	}
-
+#ifdef CVP_DSP_ENABLED
 	list_for_each_entry(frpc_node, &me->fastrpc_driver_list.list, list) {
 		if (!core->trigger_ssr)
 			if (hfi_device->error != CVP_ERR_NOC_ERROR) {
@@ -1002,7 +1004,7 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 					__func__, atomic_read(&frpc_node->dsp_usage));
 			}
 	}
-
+#endif
 	/* handle the hw error before core released to get full debug info */
 	msm_cvp_handle_hw_error(core);
 

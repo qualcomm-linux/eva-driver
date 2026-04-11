@@ -139,7 +139,8 @@ static void __power_off_core_noc_hawi(struct iris_hfi_device *device)
 {
 	/* HPG section 3.4.4.2 Steps 1-9 */
 	__disable_gdsc(device, "core_noc_mm_pd");
-	__disable_gdsc(device, "core_noc_cx_pd");
+	if (!device->res->core_noc_cx_pd_disable)
+		__disable_gdsc(device, "core_noc_cx_pd");
 }
 
 static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device,
@@ -210,6 +211,7 @@ static void __noc_lpi_hawi(struct iris_hfi_device *device,
 
 static void setup_dsp_uc_memmap_vpu5_hawi(struct iris_hfi_device *device)
 {
+#ifdef CVP_DSP_ENABLED
 	/* initialize DSP QTBL & UCREGION with CPU queues */
 #ifdef USE_PRESIL42
 	presil42_setup_dsp_uc_memmap_vpu5(device);
@@ -221,6 +223,7 @@ static void setup_dsp_uc_memmap_vpu5_hawi(struct iris_hfi_device *device)
 			 (u32)device->dsp_iface_q_table.align_device_addr);
 	__write_register(device, HFI_DSP_UC_REGION_SIZE,
 			 device->dsp_iface_q_table.mem_data.size);
+#endif
 }
 
 static void interrupt_init_iris2_hawi(struct iris_hfi_device *device)
@@ -275,9 +278,11 @@ static int __check_core_power_on_hawi(struct iris_hfi_device *device)
 	if (reg & 0x80000000)
 		return -2;
 
-	reg = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
-	if (!(reg & 0x80000000))
-		return -3;
+	if (!device->res->core_noc_cx_pd_disable) {
+		reg = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
+		if (!(reg & 0x80000000))
+			return -3;
+	}
 
 	reg = __read_register(device, CVP_CC_MM_INT_GDSCR);
 	if (!(reg & 0x80000000))
@@ -420,10 +425,12 @@ static int __power_on_core_hawi(struct iris_hfi_device *device)
 
 	CVPKERNEL_ATRACE_BEGIN("__power_on_core_v1");
 
-	rc = __enable_gdsc(device, "core_noc_cx_pd");
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to enable core noc parent:%d\n", rc);
-		goto fail_enable_core_noc_parent_gdsc;
+	if (!device->res->core_noc_cx_pd_disable) {
+		rc = __enable_gdsc(device, "core_noc_cx_pd");
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to enable core noc parent:%d\n", rc);
+			goto fail_enable_core_noc_parent_gdsc;
+		}
 	}
 
 	rc = __enable_gdsc(device, "core_noc_mm_pd");
@@ -452,11 +459,20 @@ static int __power_on_core_hawi(struct iris_hfi_device *device)
 		goto fail_enable_core_clk;
 	}
 
+	if (device->res->core_noc_cx_pd_disable) {
+		rc = msm_cvp_prepare_enable_clk(device, "core_freerun_clk");
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to enable core_freerun_clk: %d\n", rc);
+			goto fail_enable_freerun;
+		}
+	}
+
 	dprintk(CVP_PWR, "EVA core powered on\n");
 	CVPKERNEL_ATRACE_END("__power_on_core_v1");
 
 	return 0;
-
+fail_enable_freerun:
+	msm_cvp_disable_unprepare_clk(device, "core_clk");
 fail_enable_core_clk:
 	msm_cvp_disable_unprepare_clk(device, "eva_cc_mvs0_clk_src");
 fail_enable_clk_src:
@@ -464,7 +480,8 @@ fail_enable_clk_src:
 fail_enable_core_gdsc:
 	__disable_gdsc(device, "core_noc_mm_pd");
 fail_enable_core_noc_gdsc:
-	__disable_gdsc(device, "core_noc_cx_pd");
+	if (!device->res->core_noc_cx_pd_disable)
+		__disable_gdsc(device, "core_noc_cx_pd");
 fail_enable_core_noc_parent_gdsc:
 	return rc;
 }
@@ -489,7 +506,8 @@ static int __power_off_core_hawi(struct iris_hfi_device *device)
 			call_iris_op(device, print_sbm_regs, device);
 		}
 
-		__disable_gdsc(device, "core_noc_cx_pd");
+		if (!device->res->core_noc_cx_pd_disable)
+			__disable_gdsc(device, "core_noc_cx_pd");
 		__disable_gdsc(device, "core_noc_mm_pd");
 		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
@@ -499,7 +517,8 @@ static int __power_off_core_hawi(struct iris_hfi_device *device)
 		 * HW_CONTROL PC disabled, then core is powered on for
 		 * CVP NoC access
 		 */
-		__disable_gdsc(device, "core_noc_cx_pd");
+		if (!device->res->core_noc_cx_pd_disable)
+			__disable_gdsc(device, "core_noc_cx_pd");
 		__disable_gdsc(device, "core_noc_mm_pd");
 		__disable_gdsc(device, "core_pd");
 		msm_cvp_disable_unprepare_clk(device, "core_clk");
@@ -647,6 +666,13 @@ static int __power_off_controller_hawi(struct iris_hfi_device *device)
 			 lpi_control);
 
 	/* HPG Section 3.7 Steps 16-17 */
+
+	if (device->res->core_noc_cx_pd_disable) {
+		rc = msm_cvp_disable_unprepare_clk(device, "core_freerun_clk");
+		if (rc)
+			dprintk(CVP_ERR, "Failed to disable core_freerun_clk: %d\n", rc);
+	}
+
 	rc = msm_cvp_disable_unprepare_clk(device, "cvp_debug_clk");
 	if (rc)
 		dprintk(CVP_ERR, "Failed to disable cvp_debug_clk: %d\n",
@@ -827,16 +853,35 @@ static int switch_all_core_gdsc(struct iris_hfi_device *device, bool check_reg_s
 {
 	int rc = 0;
 	int i = 0;
-	u32 num_of_gdsc = 3;
-	u32 reg_gdsc_hw_ctl[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR,
+	u32 num_of_gdsc = device->res->core_noc_cx_pd_disable ? 2 : 3;
+
+	u32 reg_gdsc_hw_ctl_2[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR };
+	u32 reg_gdsc_hw_ctl_3[] = { CVP_CC_MVS0_GDSCR, CVP_CC_MM_INT_GDSCR,
 		CVP_CC_AXI0_CX_INT_GDSCR };
-	static const char *const gdsc_name_hw_ctl[] = { "core_pd", "core_noc_mm_pd",
+	static const char *const gdsc_name_hw_ctl_2[] = { "core_pd", "core_noc_mm_pd" };
+	static const char *const gdsc_name_hw_ctl_3[] = { "core_pd", "core_noc_mm_pd",
 		"core_noc_cx_pd" };
-	u32 reg_gdsc_sw_ctl[] = { CVP_CC_AXI0_CX_INT_GDSCR, CVP_CC_MM_INT_GDSCR,
+	const u32 *reg_gdsc_hw_ctl = device->res->core_noc_cx_pd_disable ?
+		reg_gdsc_hw_ctl_2 : reg_gdsc_hw_ctl_3;
+	static const char *const *gdsc_name_hw_ctl;
+
+	u32 reg_gdsc_sw_ctl_2[] = { CVP_CC_MM_INT_GDSCR, CVP_CC_MVS0_GDSCR };
+	u32 reg_gdsc_sw_ctl_3[] = { CVP_CC_AXI0_CX_INT_GDSCR, CVP_CC_MM_INT_GDSCR,
 		CVP_CC_MVS0_GDSCR };
-	static const char *const gdsc_name_sw_ctl[] = { "core_noc_cx_pd", "core_noc_mm_pd",
+	static const char *const gdsc_name_sw_ctl_2[] = { "core_noc_mm_pd",
 		"core_pd"};
+	static const char *const gdsc_name_sw_ctl_3[] = { "core_noc_cx_pd", "core_noc_mm_pd",
+		"core_pd"};
+	const u32 *reg_gdsc_sw_ctl = device->res->core_noc_cx_pd_disable ?
+		reg_gdsc_sw_ctl_2 : reg_gdsc_sw_ctl_3;
+	static const char *const *gdsc_name_sw_ctl;
+
 	enum core_gdsc_dest default_gdsc_mode = TO_SW_CTRL;
+
+	gdsc_name_hw_ctl = device->res->core_noc_cx_pd_disable ?
+		gdsc_name_hw_ctl_2 : gdsc_name_hw_ctl_3;
+	gdsc_name_sw_ctl = device->res->core_noc_cx_pd_disable ?
+		gdsc_name_sw_ctl_2 : gdsc_name_sw_ctl_3;
 
 	if (device->res->gdsc_framework_type) {
 		for (i = 0; i < num_of_gdsc; i++) {
@@ -969,8 +1014,11 @@ static int __set_registers_hawi(struct iris_hfi_device *device)
 
 	/* Below registers write moved from FW to SW to enable UBWC */
 	__write_register(device, CVP_NOC_A_NIU_DECCTL_LOW, 0x1);
-	__write_register(device, CVP_NOC_A_NIU_ENCCTL_LOW, 0x1);
-	__write_register(device, CVP_NOC_B_NIU_DECCTL_LOW, 0x1);
+	/* ToDo: After cofirming for HAWI, remove these 2 registers completely */
+	if (!device->res->core_noc_cx_pd_disable) {
+		__write_register(device, CVP_NOC_A_NIU_ENCCTL_LOW, 0x1);
+		__write_register(device, CVP_NOC_B_NIU_DECCTL_LOW, 0x1);
+	}
 	__write_register(device, CVP_NOC_B_NIU_ENCCTL_LOW, 0x1);
 	__write_register(device, CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS, 0x3);
 	__write_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW,
@@ -996,20 +1044,22 @@ static void __clear_pd_noc_req(struct iris_hfi_device *device)
 	u32 val = 0, count = 0, max_count = 10;
 	u32 lpi_status;
 
-	val = __read_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL);
-	val = val & (~0x01);
-	__write_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL, val);
+	if (!device->res->core_noc_cx_pd_disable) {
+		val = __read_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL);
+		val = val & (~0x01);
+		__write_register(device, CVP_WRAPPER_CVP_NOC_CX_LPI_CONTROL, val);
 
-	while (count < max_count) {
-		lpi_status = __read_register(device,
-			CVP_WRAPPER_CVP_NOC_CX_LPI_STATUS);
-		if ((lpi_status & 0x1) == 0x0)
-			break;
-		count++;
+		while (count < max_count) {
+			lpi_status = __read_register(device,
+				CVP_WRAPPER_CVP_NOC_CX_LPI_STATUS);
+			if ((lpi_status & 0x1) == 0x0)
+				break;
+			count++;
+		}
+
+		dprintk(CVP_ERR, "%s, CVP_NOC_CX Noc: lpi_status %x (count %d)\n",
+			__func__, lpi_status, count);
 	}
-
-	dprintk(CVP_ERR, "%s, CVP_NOC_CX Noc: lpi_status %x (count %d)\n",
-		__func__, lpi_status, count);
 
 	val = __read_register(device, CVP_WRAPPER_CVP_NOC_LPI_CONTROL);
 	val = val & (~0x01);
@@ -1058,8 +1108,10 @@ static void __dump_noc_regs_hawi(struct iris_hfi_device *device)
 	dprintk(CVP_ERR, "%s, CVP_CC_MVS0_GDSCR: 0x%x", __func__, val);
 	val = __read_register(device, CVP_CC_MM_INT_GDSCR);
 	dprintk(CVP_ERR, "%s, CVP_CC_MM_INT_GDSCR: 0x%x", __func__, val);
-	val = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
-	dprintk(CVP_ERR, "%s, CVP_CC_AXI0_CX_INT_GDSCR: 0x%x", __func__, val);
+	if (!device->res->core_noc_cx_pd_disable) {
+		val = __read_register(device, CVP_CC_AXI0_CX_INT_GDSCR);
+		dprintk(CVP_ERR, "%s, CVP_CC_AXI0_CX_INT_GDSCR: 0x%x", __func__, val);
+	}
 
 	val = __read_register(device, CVP_CC_XO_CBCR);
 	dprintk(CVP_ERR, "%s, CVP_CC_XO_CBCR: 0x%x", __func__, val);
@@ -1211,7 +1263,8 @@ static void __noc_error_info_iris2_hawi(struct iris_hfi_device *device)
 	noc_log->used = 1;
 	rc = 0;
 
-	__disable_hw_power_collapse(device, "core_noc_cx_pd");
+	if (!device->res->core_noc_cx_pd_disable)
+		__disable_hw_power_collapse(device, "core_noc_cx_pd");
 	__disable_hw_power_collapse(device, "core_noc_mm_pd");
 	__disable_hw_power_collapse(device, "core_pd");
 

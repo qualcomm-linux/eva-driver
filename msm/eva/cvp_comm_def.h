@@ -49,12 +49,14 @@ enum queue_state {
 
 #ifdef CONFIG_EVA_SUN
 #define CVP_SYNX_ENABLED 1
+#define CVP_DSP_ENABLED 1
 #define CVP_FASTRPC_ENABLED 1
 #define CVP_MMRM_ENABLED 1
 #endif /* End of CONFIG_EVA_SUN*/
 
 #ifdef CONFIG_EVA_CANOE
 #define CVP_FASTRPC_ENABLED 1
+#define CVP_DSP_ENABLED 1
 #define CVP_SYNX_ENABLED 1
 #define CVP_MMRM_ENABLED 1
 #define CVP_SW_DBG_BUF_ENABLED 1
@@ -64,6 +66,7 @@ enum queue_state {
 #ifdef CONFIG_EVA_ART
 #define CVP_SYNX_ENABLED 1
 #define CVP_FASTRPC_ENABLED 1
+#define CVP_DSP_ENABLED 1
 #define CVP_MMRM_ENABLED 1
 #define CVP_SW_DBG_BUF_ENABLED 1
 #endif /* End of CONFIG_EVA_ART*/

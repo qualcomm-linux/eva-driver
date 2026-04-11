@@ -1172,6 +1172,12 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	CVPKERNEL_ATRACE_BEGIN("__boot_firmware");
 
 	ctrl_init_val = BIT(0);
+#ifndef CVP_DSP_ENABLED
+	ctrl_init_val |= BIT(1);
+#endif
+#ifndef CVP_SYNX_ENABLED
+	ctrl_init_val |= BIT(3);
+#endif
 #ifdef USE_PRESIL
 	/*Disable HW Synx if RUMI Support for Synx unavailable*/
 	ctrl_init_val |= BIT(3);
@@ -1626,6 +1632,7 @@ static void __interface_dsp_queues_release(struct iris_hfi_device *device)
 
 static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
 {
+#ifdef CVP_DSP_ENABLED
 	int rc = 0;
 	u32 i;
 	struct cvp_iface_q_info *iface_q;
@@ -1720,6 +1727,9 @@ fail_dma_map:
 	dma_free_coherent(dev->res->mem_cdsp.dev, q_size, kvaddr, dma_handle);
 fail_dma_alloc:
 	return -ENOMEM;
+#else
+	return 0; // DSP is not enabled
+#endif
 }
 
 static void __interface_queues_release(struct iris_hfi_device *device)
