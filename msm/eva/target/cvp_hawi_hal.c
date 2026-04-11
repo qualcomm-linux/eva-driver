@@ -892,7 +892,7 @@ static int __set_registers_hawi(struct iris_hfi_device *device)
 	struct msm_cvp_core *core;
 	struct msm_cvp_platform_data *pdata;
 	struct reg_set *reg_set;
-	int i, val;
+	int i;
 	u32 arcg = 1;
 
 	if (!device->res) {
@@ -911,13 +911,6 @@ static int __set_registers_hawi(struct iris_hfi_device *device)
 		dprintk(CVP_REG, "write_reg offset=%x, val=%x\n",
 			reg_set->reg_tbl[i].reg, reg_set->reg_tbl[i].value);
 	}
-
-	val = __read_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
-	__write_register(device, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
-	val = __read_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
-	__write_register(device, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
-	val = __read_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
-	__write_register(device, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val & ~BIT(2));
 
 	if (arcg) {
 		__write_register(device, CVP_NOC_RCGCONTROLLER_HYSTERESIS_LOW, 0xff);

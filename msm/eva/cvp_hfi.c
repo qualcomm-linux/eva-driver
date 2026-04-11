@@ -774,7 +774,7 @@ void __write_register(struct iris_hfi_device *device,
 
 	if (!device->power_enabled) {
 		dprintk(CVP_WARN,
-			"HFI Write register failed : Power is OFF\n");
+			"HFI Write register failed : Power is OFF for %#x\n", reg);
 		msm_cvp_res_handle_fatal_hw_error(device->res, true);
 		return;
 	}
@@ -884,7 +884,7 @@ int __read_register(struct iris_hfi_device *device, u32 reg)
 
 	if (!device->power_enabled) {
 		dprintk(CVP_WARN,
-			"HFI Read register failed : Power is OFF\n");
+			"HFI Read register failed : Power is OFF for %#x\n", reg);
 		msm_cvp_res_handle_fatal_hw_error(device->res, true);
 		return -EINVAL;
 	}
