@@ -2060,7 +2060,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 	}
 
 	ktid &= (FENCE_BIT - 1);
-	dprintk(CVP_MEM, "%s: (%#x) unmap frame %llu\n",
+	dprintk(CVP_MEM, "%s: (%#x) unmap frame %llx\n",
 			__func__, inst->sess_id, ktid);
 
 	found = false;
@@ -2069,8 +2069,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 		if (frame->ktid == ktid) {
 			found = true;
 			list_del(&frame->list);
-			dprintk(CVP_CMD, "%s: "
-				"pkt_type %08x sess_id %08x trans_id <> ktid %llu\n",
+			dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id <> ktid %llx\n",
 				__func__, frame->pkt_type,
 				inst->sess_id,
 				frame->ktid);
@@ -2083,7 +2082,7 @@ void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid)
 	mutex_unlock(&inst->frames.lock);
 
 	if (!found)
-		dprintk(CVP_CMD, "%s frame %llu not found!\n", __func__, ktid);
+		dprintk(CVP_CMD, "%s frame %llx not found!\n", __func__, ktid);
 }
 
 /*
@@ -2219,8 +2218,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		return -EINVAL;
 	}
 
-	dprintk(CVP_CMD, "%s:   "
-		"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
+	dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx\n",
 		__func__, cmd_hdr->header.packet_type,
 		cmd_hdr->header.session_id,
 		cmd_hdr->header.client_data.transaction_id,
@@ -2288,7 +2286,7 @@ exit:
 	mutex_lock(&inst->frames.lock);
 	list_add_tail(&frame->list, &inst->frames.list);
 	mutex_unlock(&inst->frames.lock);
-	dprintk(CVP_MEM, "%s: map frame %llu\n", __func__, ktid);
+	dprintk(CVP_MEM, "%s: map frame %llx\n", __func__, ktid);
 	return 0;
 }
 

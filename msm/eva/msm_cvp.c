@@ -326,8 +326,7 @@ static int msm_cvp_session_process_hfi(
 	spin_unlock(&sq->lock);
 
 	pkt_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-	dprintk(CVP_CMD, "%s: "
-		"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
+	dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx\n",
 		__func__, pkt_hdr->header.packet_type,
 		pkt_hdr->header.session_id,
 		pkt_hdr->header.client_data.transaction_id,
@@ -388,8 +387,8 @@ static int msm_cvp_session_process_hfi(
 
 	rc = cvp_enqueue_pkt(inst, in_pkt, offset, buf_num);
 	if (rc) {
-		dprintk(CVP_ERR, "Failed to enqueue pkt, inst %pK "
-			"pkt_type %08x ktid %llu transaction_id %u\n",
+		dprintk(CVP_ERR,
+			"Failed to enqueue pkt, inst %pK pkt_type %08x ktid %llx trans_id %u\n",
 			inst, pkt_hdr->header.packet_type,
 			pkt_hdr->header.client_data.kdata,
 			pkt_hdr->header.client_data.transaction_id);
@@ -499,7 +498,7 @@ receive_msg:
 			pkt->header.session_id,
 			pkt->header.client_data.data1);
 
-		dprintk(CVP_ERR, "pkt_type: 0x%x, frame_id: %llu, ktid: %llu\n",
+		dprintk(CVP_ERR, "pkt_type: 0x%x, frame_id: %llu, ktid: %llx\n",
 			pkt->header.packet_type, pkt->header.client_data.transaction_id,
 			ktid);
 
@@ -606,7 +605,7 @@ wait:
 	if (num_fences)
 		ktid = pkt->header.client_data.kdata & (FENCE_BIT - 1);
 
-	dprintk(CVP_SYNX, "%s pkt type %d on ktid %llu frameID %llu\n",
+	dprintk(CVP_SYNX, "%s pkt type %d on ktid %llx frameID %llu\n",
 		current->comm, pkt->header.packet_type, ktid, f->frame_id);
 
 	rc = cvp_fence_proc(inst, f, pkt);
@@ -617,7 +616,7 @@ wait:
 	state = q->state;
 	mutex_unlock(&q->lock);
 
-	dprintk(CVP_SYNX, "%s done with %d ktid %llu frameID %llu rc %d\n",
+	dprintk(CVP_SYNX, "%s done with %d ktid %llx frameID %llu rc %d\n",
 		current->comm, pkt->header.packet_type, ktid, f->frame_id, rc);
 
 	cvp_free_fence_data(f);
@@ -862,8 +861,7 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	/* The kdata will be overriden by transaction ID if the cmd has buf */
 	cmd_hdr->header.client_data.kdata = 0;
-	dprintk(CVP_CMD, "%s: "
-		"pkt_type %08x sess_id %08x trans_id %u ktid %llu\n",
+	dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx\n",
 		__func__, cmd_hdr->header.packet_type,
 		cmd_hdr->header.session_id,
 		cmd_hdr->header.client_data.transaction_id,
@@ -2073,7 +2071,7 @@ static int cvp_drain_fence_sched_list(struct msm_cvp_inst *inst)
 	mutex_lock(&q->lock);
 	list_for_each_entry(f, &q->sched_list, list) {
 		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
-		dprintk(CVP_SYNX, "%s: frame %llu %llu is in sched_list\n",
+		dprintk(CVP_SYNX, "%s: frame %llx %llu is in sched_list\n",
 			__func__, ktid, f->frame_id);
 		++count;
 	}
@@ -2141,7 +2139,7 @@ static int cvp_clean_fence_queue(struct msm_cvp_inst *inst, int synx_state)
 	list_for_each_entry_safe(f, d, &q->wait_list, list) {
 		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
 
-		dprintk(CVP_SYNX, "%s: (%#x) flush frame %llu %llu wait_list\n",
+		dprintk(CVP_SYNX, "%s: (%#x) flush frame %llx %llu wait_list\n",
 			__func__, inst->sess_id, ktid, f->frame_id);
 
 		if (f->signature != 0xB0BABABE) {
@@ -2164,7 +2162,7 @@ check_sched:
 	list_for_each_entry(f, &q->sched_list, list) {
 		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
 
-		dprintk(CVP_SYNX, "%s: (%#x)flush frame %llu %llu sched_list\n",
+		dprintk(CVP_SYNX, "%s: (%#x)flush frame %llx %llu sched_list\n",
 			__func__, inst->sess_id, ktid, f->frame_id);
 
 		if (f->signature != 0xB0BABABE)
