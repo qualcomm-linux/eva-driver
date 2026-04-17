@@ -159,7 +159,7 @@ def define_target_variant_modules(target, variant, registry, modules, config_opt
     )
 
     pkg_install(
-        name = "{}_modules_dist".format(kernel_build),
+        name = "{}_eva_modules_dist".format(kernel_build),
         srcs = [":{}_dist_files".format(kernel_build)],
         destdir = "out/target/product/{}/dlkm/lib/modules/".format(kernel_build),
     )

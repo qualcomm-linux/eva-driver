@@ -43,19 +43,23 @@ LOCAL_ADDITIONAL_DEPENDENCY      := synx-driver.ko
 CONFIG_SYNX := y
 #ifdef CONFIG_SYNX
 ifeq ($(CONFIG_SYNX), y)
+ifneq ($(TARGET_BOARD_PLATFORM),art)
 $(warning Compiling SynX)
 LOCAL_REQUIRED_MODULES    += synx-driver-symvers
 LOCAL_ADDITIONAL_DEPENDENCIES += $(call intermediates-dir-for,DLKM,synx-driver-symvers)/synx-driver-symvers
 KBUILD_REQUIRED_KOS += synx-driver.ko
 endif
+endif
 
 # Setup fastRPC dependency
 CONFIG_FASTRPC := y
 ifeq ($(CONFIG_FASTRPC), y)
+ifneq ($(TARGET_BOARD_PLATFORM),art)
 $(warning Compiling FastRPC)
 LOCAL_REQUIRED_MODULES    += dsp-module-symvers
 LOCAL_ADDITIONAL_DEPENDENCIES += $(call intermediates-dir-for,DLKM,dsp-module-symvers)/Module.symvers
 KBUILD_REQUIRED_KOS += frpc-adsprpc.ko
+endif
 endif
 
 # print out variables
