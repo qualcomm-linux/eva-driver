@@ -1827,8 +1827,12 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 		return;
 	}
 	if (core->ssr_type == SSR_CORE_SMMU_FAULT) {
-		trigger_smmu_fault = true;
+		trigger_smmu_fault = false;
 		dprintk(CVP_ERR, "smmu fault triggered\n");
+		return;
+	}
+	if (core->ssr_type == SSR_FW_SMMU_FAULT) {
+		dprintk(CVP_ERR, "rejecting fw smmu fault ssr\n");
 		return;
 	}
 
