@@ -958,7 +958,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_CVP_WARP_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_CVP_DMM_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = HFI_DMM_CONFIG_CMD_SIZE,
@@ -980,7 +980,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_CVP_DMM_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS - HFI_CMD_SESSION_CVP_START] = {
 			.size = HFI_PERSIST_CMD_SIZE,
@@ -1141,7 +1141,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_CVP_PYS_HCD_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_CVP_SET_MODEL_BUFFERS - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
@@ -1227,7 +1227,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_CVP_RGE_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_CVP_RGE_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
@@ -1242,7 +1242,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_EVA_ITOF_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_EVA_ITOF_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
@@ -1330,7 +1330,7 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX] = {
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_EVA_DME_ONLY_FRAME",
-			.force_kernel_fence = false,
+			.force_kernel_fence = true,
 		},
 	[HFI_CMD_SESSION_CVP_GME_CONFIG - HFI_CMD_SESSION_CVP_START] = {
 			.size = 0xFFFFFFFF,
@@ -1567,7 +1567,7 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX] = {
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_EVA_DME_ONLY",
-		.force_kernel_fence = false,
+		.force_kernel_fence = true,
 	},
 	[HFI_MSG_SESSION_CVP_OPERATION_CONFIG  - HFI_MSG_SESSION_CVP_START] = {
 		.size = 0xFFFFFFFF,
@@ -1639,7 +1639,7 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX] = {
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_CVP_DMM",
-		.force_kernel_fence = false,
+		.force_kernel_fence = true,
 	},
 	[HFI_MSG_SESSION_CVP_SGM_DFS  - HFI_MSG_SESSION_CVP_START] = {
 		.size = 0xFFFFFFFF,
@@ -1655,7 +1655,7 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX] = {
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_CVP_WARP",
-		.force_kernel_fence = false,
+		.force_kernel_fence = true,
 	},
 	[HFI_MSG_SESSION_CVP_DMM_PARAMS  - HFI_MSG_SESSION_CVP_START] = {
 		.size = 0xFFFFFFFF,
@@ -1743,7 +1743,7 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX] = {
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_CVP_PYS_HCD",
-		.force_kernel_fence = false,
+		.force_kernel_fence = true,
 	},
 	[HFI_MSG_SESSION_EVA_DESCRIPTOR  - HFI_MSG_SESSION_CVP_START] = {
 		.size = 0xFFFFFFFF,
