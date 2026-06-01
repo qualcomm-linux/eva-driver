@@ -15,6 +15,7 @@
 #include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/pm_qos.h>
+#include "cvp_comm_def.h"
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>

@@ -16,11 +16,15 @@
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/io.h>
-#include <soc/qcom/of_common.h>
+#include <linux/of.h>
+// #include <soc/qcom/of_common.h>
+#include <linux/of_fdt.h>
 #include "msm_cvp_internal.h"
 #include "msm_cvp_debug.h"
 #include "cvp_hfi_api.h"
 #include "cvp_hfi.h"
+
+extern int of_fdt_get_ddrtype(void);
 
 #define UBWC_CONFIG(mco, mlo, hbo, bslo, bso, rs, mc, ml, hbb, bsl, bsp) \
 {	\
@@ -457,7 +461,7 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 	},
 	{
 		.key = "qcom,dsp-enabled",
-		.value = 1,
+		.value = 0,
 	}
 };
 
@@ -864,6 +868,10 @@ static const struct of_device_id msm_cvp_dt_match[] = {
 	},
 	{
 		.compatible = "qcom,canoe-cvp",
+		.data = &sm8850_data,
+	},
+	{
+		.compatible = "qcom,kaanapali-cvp",
 		.data = &sm8850_data,
 	},
 	{
@@ -2651,11 +2659,12 @@ MODULE_DEVICE_TABLE(of, msm_cvp_dt_match);
 
 int cvp_of_fdt_get_ddrtype(void)
 {
-#ifdef FIXED_DDR_TYPE
+#if defined(FIXED_DDR_TYPE) || defined(CVP_FIX_DDR_TYPE)
 	/* of_fdt_get_ddrtype() is usually unavailable during pre-sil */
 	return DDR_TYPE_LPDDR5;
 #else
-	return of_fdt_get_ddrtype();
+	// return of_fdt_get_ddrtype();
+	return DDR_TYPE_LPDDR5;
 #endif
 }
 

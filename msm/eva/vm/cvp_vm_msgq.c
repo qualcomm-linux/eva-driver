@@ -8,6 +8,18 @@
 #include "cvp_vm_msgq.h"
 #include "msm_cvp_debug.h"
 
+int gh_msgq_recv(void *handle, void *msg, size_t msg_size, size_t *recv_size, u32 flags);
+int gh_msgq_send(void *handle, void *msg, size_t msg_size, u32 flags);
+void *gh_msgq_register(u32 label);
+int gh_rm_register_notifier(struct notifier_block *nb);
+int ghd_rm_get_vmid(uint32_t id, gh_vmid_t *vmid);
+
+struct gh_rm_notif_vm_status_payload {
+    uint32_t vmid;
+    uint32_t vm_status;
+};
+
+
 /**
  * cvp_msgq_receiver - thread function that receive msg from gunyah msgq
  * data: cvp_msgq_drv pointer

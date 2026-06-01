@@ -434,7 +434,6 @@ static bool cvp_fence_wait(struct cvp_fence_queue *q,
 
 	return true;
 }
-
 static int cvp_fence_proc(struct msm_cvp_inst *inst,
 			struct cvp_fence_command *fc,
 			struct cvp_hfi_cmd_session_hdr *pkt)
@@ -1267,7 +1266,6 @@ static int cvp_fence_thread_stop(struct msm_cvp_inst *inst)
 
 	wake_up_all(&q->wq);
 	wake_up_all(&sq->wq);
-
 	return 0;
 }
 
@@ -2276,7 +2274,6 @@ exit:
 	msm_cvp_set_clocks(inst->core);
 	if (!rc)
 		rc = cvp_drain_fence_sched_list(inst);
-
 	mutex_lock(&q->lock);
 	q->mode = OP_NORMAL;
 	mutex_unlock(&q->lock);

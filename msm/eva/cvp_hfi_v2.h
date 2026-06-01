@@ -8,6 +8,7 @@
 #define __H_CVP_HFI_V2_H__
 
 #include "cvp_comm_def.h"
+#include <linux/bitops.h>
 
 #define HFI_CMD_CLIENT_DATA_RESERVE_2_OFFSET_IN_UWORD32       (0xC)
 

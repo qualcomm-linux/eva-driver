@@ -52,6 +52,9 @@ struct power_domain_info {
 struct power_domain_set {
 	struct power_domain_info *pd_tbl;
 	u32 count;
+#ifdef CVP_GENPD_ENABLED
+	struct dev_pm_domain_list *pm_domain_list;
+#endif
 };
 
 struct regulator_info {

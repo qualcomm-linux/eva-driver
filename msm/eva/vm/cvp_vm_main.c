@@ -12,7 +12,10 @@
 #include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/pm_qos.h>
-#include <linux/regulator/consumer.h>
+#include "cvp_comm_def.h"
+#ifndef CVP_GENPD_ENABLED
+	#include <linux/regulator/consumer.h>
+#endif
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>

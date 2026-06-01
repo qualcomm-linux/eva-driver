@@ -9,13 +9,17 @@
 #include <linux/slab.h>
 #include <linux/sort.h>
 #include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/of_address.h>
 #include "msm_cvp_debug.h"
 #include "msm_cvp_resources.h"
 #include "msm_cvp_res_parse.h"
 #include "cvp_core_hfi.h"
+#ifdef CVP_SECURE_BUF_ENABLED
 #include "soc/qcom/secure_buffer.h"
+#endif
 
 enum clock_properties {
 	CLOCK_PROP_HAS_SCALING = 1 << 0,
@@ -136,6 +140,9 @@ void msm_cvp_free_platform_resources(
 {
 	msm_cvp_free_clock_table(res);
 	msm_cvp_free_regulator_table(res);
+	if (res->gdsc_framework_type) {
+		err_load_load_PD_table(res);
+	}
 	msm_cvp_free_allowed_clocks_table(res);
 	msm_cvp_free_reg_table(res);
 	msm_cvp_free_qdss_addr_table(res);
@@ -691,6 +698,69 @@ err_reg_tbl_alloc:
 	return rc;
 }
 
+static void __deinit_power_domains(struct iris_hfi_device *devices)
+{
+	/*
+	 * Power domain and OPP resources are managed by devm_* APIs.
+	 * They are released automatically when the platform device is detached
+	 * or when probe fails.
+	 *
+	 * Keep this function as a no-op to match the resource_deinit()
+	 * framework used by the non-GenPD regulator path.
+	 */
+}
+
+static int __init_power_domains(struct msm_cvp_platform_resources *res)
+{
+	// struct msm_cvp_platform_resources *res = device->res;
+	const char **pd_names = kzalloc(sizeof(char *)*(res->pd_set.count+1), GFP_KERNEL);
+	int i, ret = 0;
+	for (i = 0; i < res->pd_set.count; i++) {
+		pd_names[i] = res->pd_set.pd_tbl[i].name;
+	}
+
+	// Attch pd and add device link.
+	struct dev_pm_domain_attach_data attach_data = {
+		.pd_names = pd_names,
+		.num_pd_names = res->pd_set.count,
+		// .pd_flags = PD_FLAG_DEV_LINK_ON | PD_FLAG_REQUIRED_OPP
+		.pd_flags = PD_FLAG_REQUIRED_OPP | PD_FLAG_NO_DEV_LINK
+	};
+	ret = devm_pm_domain_attach_list(&res->pdev->dev, &attach_data, &res->pd_set.pm_domain_list);
+	if (ret < 0){
+		dprintk(CVP_ERR, "%s: Failed to attach power domain", __func__);
+		return ret;
+	}
+
+	for (i = 0; i < res->pd_set.count; i++) {
+		res->pd_set.pd_tbl[i].pd_device = res->pd_set.pm_domain_list->pd_devs[i];
+	}
+
+	// Set clk name
+	ret = devm_pm_opp_set_clkname(&res->pdev->dev, "eva_cc_mvs0_clk_src");
+	if (ret) {
+		dprintk(CVP_ERR, "Failed set clkname %s", "eva_cc_mvs0_clk_src");
+		return ret;
+	}
+
+	// Add opp table
+	ret = devm_pm_opp_of_add_table(&res->pdev->dev);
+	if (ret) {
+		if (ret == -ENODEV) {
+			dprintk(CVP_WARN, "No OPP table in device tree\n");
+			ret = 0;
+		} else {
+			dprintk(CVP_ERR, "Failed to add OPP table: %d\n", ret);
+			return ret;
+		}
+	}
+
+	dprintk(CVP_CORE, "Successfully attach opp table");
+	kfree(pd_names);
+	pd_names = NULL;
+	return 0;
+}
+
 static int msm_cvp_load_PD_table(
 		struct msm_cvp_platform_resources *res)
 {
@@ -752,20 +822,11 @@ static int msm_cvp_load_PD_table(
 				dprintk(CVP_ERR, "Failed to read pd name: %d\n", rc);
 				goto err_has_hw_pc_alloc;
 			}
-
-			pd_info->pd_device = dev_pm_domain_attach_by_name(&pdev->dev,
-									pd_info->name);
-			if (IS_ERR_OR_NULL(pd_info->pd_device)) {
-				rc = PTR_ERR(pd_info->pd_device);
-				dprintk(CVP_ERR,
-					"dev_pm_domain_attach_by_name failed: i %d, rc %d\n",
-					i, rc);
-				goto err_has_hw_pc_alloc;
-			} else {
-				dprintk(CVP_CORE,
-					"%s: dev_pm_domain_attach_by_name success for %s\n",
-					__func__, pd_info->name);
-			}
+		}
+		rc = __init_power_domains(res);
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to init power domain");
+			goto err_has_hw_pc_alloc;
 		}
 
 		return 0;
@@ -946,7 +1007,7 @@ int cvp_read_platform_resources_from_drv_data(
 
 	res->sku_version = platform_data->sku_version;
 
-	res->fw_name = "evass";
+	res->fw_name = "qcom/evass/evass";
 
 	dprintk(CVP_CORE, "Firmware filename: %s\n", res->fw_name);
 
@@ -1185,6 +1246,13 @@ static int msm_cvp_setup_context_bank(struct msm_cvp_platform_resources *res,
 	if (!dev->dma_parms)
 		dev->dma_parms =
 			devm_kzalloc(dev, sizeof(*dev->dma_parms), GFP_KERNEL);
+	
+	rc = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
+	dprintk(CVP_DBG, "%s: set dma mark",__func__);
+	if (rc) {
+		dprintk(CVP_ERR, "%s:context bank set mask error",cb->name);
+	}
+
 	dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
 	dma_set_seg_boundary(dev, DMA_BIT_MASK(64));
 
@@ -1314,10 +1382,10 @@ static int msm_cvp_populate_context_bank(struct device *dev,
 		dprintk(CVP_ERR, "Cannot setup context bank %d\n", rc);
 		goto err_setup_cb;
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0))
 	iommu_set_fault_handler(cb->domain,
 		msm_cvp_smmu_fault_handler, (void *)core);
-
+#endif
 	return 0;
 
 err_setup_cb:

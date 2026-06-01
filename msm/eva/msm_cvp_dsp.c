@@ -14,11 +14,14 @@
 #else
 #include <linux/qcom_scm.h>
 #endif
+#ifdef CVP_SECURE_BUF_ENABLED
 #include <soc/qcom/secure_buffer.h>
+#endif
 #include "msm_cvp_core.h"
 #include "msm_cvp.h"
 #include "cvp_hfi.h"
 #include "cvp_dump.h"
+#include "msm_cvp_dsp.h"
 
 static atomic_t nr_maps;
 struct cvp_dsp_apps gfa_cv;

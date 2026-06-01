@@ -5,18 +5,57 @@
 
 #ifndef _CVP_VM_MSGQ_H_
 #define _CVP_VM_MSGQ_H_
-
+#define GH_MSGQ_TX_PUSH BIT(0)
 #include <linux/types.h>
-#include <linux/gunyah/gh_msgq.h>
-#include <linux/gunyah/gh_rm_drv.h>
+// #include <linux/gunyah/gh_msgq.h>
+// #include <linux/gunyah/gh_rm_drv.h>
 #include "cvp_comm_def.h"
+#define GH_RM_NOTIF_VM_STATUS 0x56100008
+#define GH_RM_VM_STATUS_READY		2
+#define GH_MSGQ_MAX_MSG_SIZE_BYTES 240
 
 #define MAX_CVP_IPC_LEN 16
+#include <linux/notifier.h>
+#include <linux/completion.h>
 
 #define CVP_VM_RESPONSE_TIMEOUT			300
 
 #define CVP_IPC_MSG_TYPE_DIR_CHECK	0x10000000	/* direction check */
 #define CVP_IPC_MSG_TYPE_ACT_CHECK	0x00000011  /* action check */
+typedef uint32_t gh_vmid_t;
+
+enum gh_msgq_label {
+	GH_MSGQ_LABEL_RM,
+	GH_MSGQ_LABEL_MEMBUF,
+	GUNYAH_QCOM_MIN_MSGQ,
+	GH_MSGQ_LABEL_DISPLAY,
+	GH_MSGQ_LABEL_VSOCK,
+	GH_MSGQ_LABEL_TEST_TUIVM,
+	GH_MSGQ_LABEL_TEST_OEMVM,
+	GH_MSGQ_LABEL_MMRM,
+	GH_MSGQ_LABEL_EVA,
+	GH_MSGQ_VCPU_SCHED_TEST,
+	GH_MSGQ_VCPU_SCHED_TEST_OEMVM,
+	GH_MSGQ_LABEL_SMMU_PROXY,
+	GH_MSGQ_LABEL_RESOURCE_REQUEST,
+	GH_MSGQ_LABEL_MEMBUF_OEMVM,
+	GH_MSGQ_LABEL_DMABUF_TEST_TUIVM,
+	GH_MSGQ_LABEL_DMABUF_TEST_OEMVM,
+	GH_MSGQ_LABEL_MAX
+};
+
+enum gh_vm_names {
+	/*
+	 * GH_SELF_VM is an alias for VMID 0. Useful for RM APIs which allow
+	 * operations on current VM such as console
+	 */
+	GH_SELF_VM,
+	GH_PRIMARY_VM,
+	GH_TRUSTED_VM,
+	GH_CPUSYS_VM,
+	GH_OEM_VM,
+	GH_VM_MAX
+};
 
 enum CVP_IPC_MSG_TYPE {
 	REQUEST_SESS_CTRL = 1,

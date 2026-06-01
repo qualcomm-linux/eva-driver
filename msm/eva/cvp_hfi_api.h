@@ -275,7 +275,7 @@ struct cvp_hfi_ops {
 	int (*session_release_buffers)(void *sess);
 	int (*session_send)(void *sess, struct eva_kmd_hfi_packet *in_pkt);
 	int (*session_flush)(void *sess, u64 ktid);
-	int (*scale_clocks)(void *dev, u32 freq);
+	int (*scale_clocks)(void *dev, u64 freq);
 	int (*vote_bus)(void *dev, struct bus_info *bus, unsigned long bw);
 	int (*get_fw_info)(void *dev, struct cvp_hal_fw_info *fw_info);
 	int (*session_clean)(void *sess);
@@ -294,6 +294,11 @@ typedef void (*msm_cvp_callback) (enum hal_command_response response,
 			void *callback);
 struct msm_cvp_fw {
 	int cookie;
+#ifdef CVP_KVM_ENABLED
+	struct device *dev;
+	struct qcom_scm_pas_context *ctx;
+	struct iommu_domain *iommu_domain;
+#endif
 };
 
 int cvp_hfi_process_msg_packet(u32 device_id,

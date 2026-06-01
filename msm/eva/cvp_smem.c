@@ -8,12 +8,14 @@
 #include <linux/dma-heap.h>
 #include <linux/dma-direction.h>
 #include <linux/iommu.h>
+#ifdef CVP_QCOM_HEAP_ENABLED
 #include <linux/msm_dma_iommu_mapping.h>
 #include <soc/qcom/secure_buffer.h>
 #include <linux/mem-buf.h>
+#include <linux/qcom-dma-mapping.h>
+#endif
 #include <linux/slab.h>
 #include <linux/types.h>
-#include <linux/qcom-dma-mapping.h>
 #include <linux/version.h>
 #include "msm_cvp_core.h"
 #include "msm_cvp_debug.h"
@@ -22,6 +24,7 @@
 #include "msm_cvp_dsp.h"
 #include "msm_cvp_buf.h"
 #include "msm_cvp_common.h"
+#include "msm_cvp_dma_buf.h"
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
 #define DMA_ATTR_IOMMU_USE_UPSTREAM_HINT 1;
@@ -88,13 +91,14 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, u32 align,
 		 * We do the required cache operations separately for the
 		 * required buffer size
 		 */
+#ifdef CONFIG_QCOM_DMA_MAP_ATTRS
 		attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 		if (flags & SMEM_CAMERA)
 			attach->dma_map_attrs |= DMA_ATTR_QTI_SMMU_PROXY_MAP;
 		if (res->sys_cache_present)
 			attach->dma_map_attrs |=
 				DMA_ATTR_IOMMU_USE_UPSTREAM_HINT;
-
+#endif
 		table = __cvp_dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
 		if (IS_ERR_OR_NULL(table)) {
 			dprintk(CVP_ERR, "Failed to map table %d\n", PTR_ERR(table));
@@ -190,8 +194,11 @@ void msm_cvp_smem_put_dma_buf(void *dma_buf)
 		dprintk(CVP_ERR, "%s: NULL dma_buf\n", __func__);
 		return;
 	}
-
+#ifdef CVP_QCOM_HEAP_ENABLED
 	dma_heap_buffer_free((struct dma_buf *)dma_buf);
+#else
+	dma_buf_put((struct dma_buf *)dma_buf);
+#endif
 }
 
 static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_inst *inst)
@@ -210,7 +217,7 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 
 	dma_buf = smem->dma_buf;
 /*Symbol not yet defined for canoe*/
-
+#ifdef CVP_QCOM_HEAP_ENABLED
 	rc = mem_buf_dma_buf_copy_vmperm(dma_buf,
 			&vmid_list, &perms_list, &nelems);
 
@@ -219,6 +226,7 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 			__func__, rc);
 		return rc;
 	}
+#endif
 
 	for (temp = 0; temp < nelems; temp++) {
 		if (vmid_list[temp] == VMID_CP_PIXEL)
@@ -395,7 +403,9 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	int rc = 0;
 	struct dma_buf *dbuf = NULL;
 	struct dma_heap *heap = NULL;
+#ifdef CVP_QCOM_HEAP_ENABLED
 	struct mem_buf_lend_kernel_arg arg;
+#endif
 	int vmids[1];
 	int perms[1];
 
@@ -406,7 +416,7 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 
 	align = ALIGN(align, PAGE_SIZE);
 	size = ALIGN(size, PAGE_SIZE);
-
+#ifdef CVP_QCOM_HEAP_ENABLED
 	if (is_iommu_present(res)) {
 		heap = dma_heap_find("qcom,system");
 		dprintk(CVP_MEM, "%s size %zx align %d flag %d pagesize %d\n",
@@ -425,6 +435,9 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	}
 
 	dbuf = dma_heap_buffer_alloc(heap, size, user_access, 0);
+#else
+	dbuf = msm_cvp_alloc_dma_buffer(size, user_access);
+#endif
 	if (IS_ERR_OR_NULL(dbuf)) {
 		dprintk(CVP_ERR,
 			"Failed to allocate shared memory = %x bytes, %x %x\n",
@@ -433,7 +446,7 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		goto fail_shared_mem_alloc;
 	}
 
-#if (KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE) && CVP_QCOM_HEAP_ENABLED
 	if (buf_name && buf_name[0] != '\0') {
 		rc = dma_buf_set_name(dbuf, buf_name);
 		if (rc)
@@ -442,6 +455,7 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 #endif
 
 	perms[0] = PERM_READ | PERM_WRITE;
+#ifdef CVP_QCOM_HEAP_ENABLED
 	arg.nr_acl_entries = 1;
 	arg.vmids = vmids;
 	arg.perms = perms;
@@ -464,6 +478,7 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 			rc, vmids[0]);
 		goto fail_device_address;
 	}
+#endif
 
 	if (!gfa_cv.dmabuf_f_op)
 		gfa_cv.dmabuf_f_op = (const struct file_operations *)dbuf->file->f_op;
@@ -509,7 +524,11 @@ fail_map:
 	if (map_kernel)
 		dma_buf_end_cpu_access(dbuf, DMA_BIDIRECTIONAL);
 fail_device_address:
+#ifdef CVP_QCOM_HEAP_ENABLED
 	dma_heap_buffer_free(dbuf);
+#else
+	dma_buf_put(dbuf);
+#endif
 fail_shared_mem_alloc:
 	return rc;
 }
@@ -532,7 +551,11 @@ static int free_dma_mem(struct msm_cvp_smem *mem)
 	}
 
 	if (mem->dma_buf) {
+#ifdef CVP_QCOM_HEAP_ENABLED
 		dma_heap_buffer_free(mem->dma_buf);
+#else
+		dma_buf_put(mem->dma_buf);
+#endif
 		mem->dma_buf = NULL;
 	}
 
@@ -582,20 +605,36 @@ int msm_cvp_smem_cache_operations(struct dma_buf *dbuf,
 	switch (cache_op) {
 	case SMEM_CACHE_CLEAN:
 	case SMEM_CACHE_CLEAN_INVALIDATE:
+#ifdef CVP_QCOM_HEAP_ENABLED
 		rc = dma_buf_begin_cpu_access_partial(dbuf, DMA_BIDIRECTIONAL,
 				offset, size);
 		if (rc)
 			break;
 		rc = dma_buf_end_cpu_access_partial(dbuf, DMA_BIDIRECTIONAL,
 				offset, size);
+#else:
+		rc = dma_buf_begin_cpu_access(dbuf, DMA_BIDIRECTIONAL);
+
+		if (rc)
+			break;
+		rc = dma_buf_end_cpu_access(dbuf, DMA_BIDIRECTIONAL);
+#endif
 		break;
 	case SMEM_CACHE_INVALIDATE:
+#ifdef CVP_QCOM_HEAP_ENABLED
 		rc = dma_buf_begin_cpu_access_partial(dbuf, DMA_TO_DEVICE,
 				offset, size);
 		if (rc)
 			break;
 		rc = dma_buf_end_cpu_access_partial(dbuf, DMA_FROM_DEVICE,
 				offset, size);
+#else
+		rc = dma_buf_begin_cpu_access(dbuf, DMA_TO_DEVICE);
+
+		if (rc)
+			break;
+		rc = dma_buf_end_cpu_access(dbuf, DMA_TO_DEVICE);
+#endif
 		break;
 	default:
 		dprintk(CVP_ERR, "%s: cache (%d) operation not supported\n",

@@ -4,10 +4,14 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include "msm_cvp_common.h"
 #include "cvp_hfi_api.h"
 #include "msm_cvp_debug.h"
 #include "msm_cvp_clocks.h"
+#include <linux/types.h>
 
 static bool __mmrm_client_check_scaling_supported(
 				struct mmrm_client_desc *client)
@@ -54,6 +58,7 @@ static int __mmrm_client_set_value_in_range(struct mmrm_client *client,
 static int msm_cvp_mmrm_notifier_cb(
 	struct mmrm_client_notifier_data *notifier_data)
 {
+#ifdef CVP_MMRM_ENABLED
 	if (!notifier_data) {
 		dprintk(CVP_WARN, "%s Invalid notifier data: %pK\n",
 			__func__, notifier_data);
@@ -75,8 +80,10 @@ static int msm_cvp_mmrm_notifier_cb(
 			__func__, notifier_data->cb_type);
 		return -EINVAL;
 	}
-
 	return 0;
+#else
+	return -EINVAL;
+#endif
 }
 
 int msm_cvp_set_fmax(struct msm_cvp_core *core)
@@ -119,6 +126,7 @@ int msm_cvp_set_clocks(struct msm_cvp_core *core)
 
 int msm_cvp_mmrm_register(struct iris_hfi_device *device)
 {
+#ifdef CVP_MMRM_ENABLED
 	int rc = 0;
 	struct clock_info *cl = NULL;
 	char *name;
@@ -172,12 +180,15 @@ int msm_cvp_mmrm_register(struct iris_hfi_device *device)
 			device->mmrm_cvp->client_type,
 			device->mmrm_cvp->client_uid);
 	}
-
 	return rc;
+#else
+	return -EINVAL;
+#endif
 }
 
 int msm_cvp_mmrm_deregister(struct iris_hfi_device *device)
 {
+#ifdef CVP_MMRM_ENABLED
 	int rc = 0;
 	struct clock_info *cl = NULL;
 
@@ -217,13 +228,16 @@ int msm_cvp_mmrm_deregister(struct iris_hfi_device *device)
 	}
 
 	device->mmrm_cvp = NULL;
-
 	return rc;
+#else
+		return -EINVAL;
+#endif
 }
 
 int msm_cvp_mmrm_set_value_in_range(struct iris_hfi_device *device,
 	u32 freq_min, u32 freq_cur)
 {
+#ifdef CVP_MMRM_ENABLED
 	int rc = 0;
 	struct mmrm_client_res_value val;
 	struct mmrm_client_data data;
@@ -254,10 +268,15 @@ int msm_cvp_mmrm_set_value_in_range(struct iris_hfi_device *device,
 			__func__, val.min, val.cur, rc);
 	}
 	return rc;
+#else
+	return -EINVAL;
+#endif
 }
 
-int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u32 freq)
+#ifndef CVP_OPP_ENABLED
+int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u64 freq)
 {
+#ifdef CVP_MMRM_ENABLED
 	struct clock_info *cl;
 	int rc = 0;
 	int fsrc2clk = 3;
@@ -307,13 +326,48 @@ int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u32 freq)
 	}
 
 	return 0;
+#else
+		return -EINVAL;
+#endif
 }
+#else
+int msm_cvp_opp_set_rate(struct iris_hfi_device *device, u64 freq)
+{
+	unsigned long opp_freq = 0;
+	struct dev_pm_opp *opp;
+	int ret;
+
+	opp_freq = freq * 3;
+	device->clk_freq = freq;
+	dprintk(CVP_DBG, "Now we are in msm_cvp_opp_set_rate, and opp_freq is %lld", opp_freq);
+	opp = dev_pm_opp_find_freq_ceil(&device->res->pdev->dev, &opp_freq);
+	if (IS_ERR(opp)) {
+		opp = dev_pm_opp_find_freq_floor(&device->res->pdev->dev, &opp_freq);
+		if (IS_ERR(opp)) {
+			dprintk(CVP_ERR, "%s: unable to find freq %lld in opp table\n", __func__, freq);
+			return -EINVAL;
+		}
+	}
+	dev_pm_opp_put(opp);
+
+	ret = dev_pm_opp_set_rate(&device->res->pdev->dev, opp_freq);
+	if (ret) {
+		dprintk(CVP_ERR, "%s: failed to set rate\n", __func__);
+		return ret;
+	} else {
+		device->clk_freq = freq;
+		dprintk(CVP_PWR, "%s: clock source rate set to: %ld\n", __func__, opp_freq);
+	}
+
+	return ret;
+}
+#endif
 
 int msm_cvp_scale_clocks(struct iris_hfi_device *device)
 {
 	int rc = 0;
 	struct allowed_clock_rates_table *allowed_clks_tbl = NULL;
-	u32 rate = 0;
+	u64 rate = 0;
 
 	allowed_clks_tbl = device->res->allowed_clks_tbl;
 
@@ -321,7 +375,11 @@ int msm_cvp_scale_clocks(struct iris_hfi_device *device)
 		allowed_clks_tbl[0].clock_rate;
 
 	dprintk(CVP_PWR, "%s: scale clock rate %d\n", __func__, rate);
+#ifndef CVP_OPP_ENABLED
 	rc = msm_cvp_set_clocks_impl(device, rate);
+#else
+	rc = msm_cvp_opp_set_rate(device, rate);
+#endif
 	return rc;
 }
 
@@ -351,6 +409,7 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 		}
 
 		if (cl->has_scaling) {
+#ifdef CVP_MMRM_ENABLED
 			if (device->mmrm_cvp != NULL) {
 				// set min freq and cur freq to 0;
 				rc = msm_cvp_mmrm_set_value_in_range(device,
@@ -360,12 +419,18 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 						"%s Failed set clock %s: %d\n",
 						__func__, cl->name, rc);
 			}
-			else {
+			else 
+#endif
+			{
 				dprintk(CVP_PWR,
 					"%s: set clock with clk_set_rate\n",
 					__func__);
+#ifndef CVP_OPP_ENABLED
 				clk_set_rate(cl->clk,
 						clk_round_rate(cl->clk, 0));
+#else
+				msm_cvp_opp_set_rate(device, 0);
+#endif
 			}
 		}
 		rc = clk_prepare_enable(cl->clk);
@@ -414,6 +479,7 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 			cl->name);
 
 		if (cl->has_scaling) {
+#ifdef CVP_MMRM_ENABLED
 			if (device->mmrm_cvp != NULL) {
 				// set min freq and cur freq to 0;
 				rc = msm_cvp_mmrm_set_value_in_range(device,
@@ -422,6 +488,17 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 					dprintk(CVP_ERR,
 						"%s Failed set clock %s: %d\n",
 						__func__, cl->name, rc);
+			} 
+			else 
+#endif
+			{
+				dprintk(CVP_PWR, "%s: set clock with clk_set_rate\n", __func__);
+#ifndef CVP_OPP_ENABLED
+				clk_set_rate(cl->clk,
+						clk_round_rate(cl->clk, 0));
+#else
+				msm_cvp_opp_set_rate(device, 0);
+#endif
 			}
 		}
 		return 0;

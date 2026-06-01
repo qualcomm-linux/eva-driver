@@ -16,7 +16,7 @@
 #include <linux/sched.h>
 
 #ifdef CVP_FASTRPC_ENABLED
-#include <fastrpc.h>
+#include <misc/fastrpc.h>
 #else
 struct fastrpc_device {
 	int handle;
@@ -43,6 +43,17 @@ struct fastrpc_driver {
 
 #define CVP_APPS_DSP_GLINK_GUID "cvp-glink-apps-dsp"
 #define CVP_APPS_DSP_SMD_GUID "cvp-smd-apps-dsp"
+
+#ifndef CVP_SECURE_BUF_ENABLED
+#define VMID_HLOS 0x3
+#define PERM_READ 0x4
+#define PERM_WRITE 0x2
+#define PERM_EXEC 0x1
+#define VMID_CP_PIXEL       0xA
+#define VMID_CP_NON_PIXEL   0xB
+#define VMID_CP_CAMERA      0xD
+#define VMID_TVM            0x2D
+#endif
 
 #define VMID_CDSP_Q6 (30)
 #define HLOS_VM_NUM 1

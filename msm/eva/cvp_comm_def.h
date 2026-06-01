@@ -8,7 +8,9 @@
 #define _MSM_COMM_DEF_H_
 
 #include <linux/types.h>
+#ifdef CVP_GUNYAH_ENABLED
 #include <linux/gunyah/gh_rm_drv.h>
+#endif
 
 enum op_mode {
 	OP_NORMAL,
@@ -55,11 +57,15 @@ enum queue_state {
 #endif /* End of CONFIG_EVA_SUN*/
 
 #ifdef CONFIG_EVA_CANOE
-#define CVP_FASTRPC_ENABLED 1
-#define CVP_DSP_ENABLED 1
-#define CVP_SYNX_ENABLED 1
-#define CVP_MMRM_ENABLED 1
-#define CVP_SW_DBG_BUF_ENABLED 1
+// #define CVP_FASTRPC_ENABLED 1
+// #define CVP_DSP_ENABLED 1
+// #define CVP_SYNX_ENABLED 1
+// #define CVP_MMRM_ENABLED 1
+// #define CVP_SW_DBG_BUF_ENABLED 1
+// #define CVP_QCOM_HEAP_ENABLED 1
+// #define CVP_SECURE_BUF_ENABLED 1
+#define CVP_GENPD_ENABLED 1
+#define CVP_OPP_ENABLED 1
 #endif /* End of CONFIG_EVA_CANOE*/
 
 

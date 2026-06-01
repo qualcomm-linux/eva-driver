@@ -20,7 +20,9 @@
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 #include <linux/version.h>
+#ifdef CVP_MMRM_ENABLED
 #include <linux/soc/qcom/msm_mmrm.h>
+#endif
 
 #define HFI_MASK_QHDR_TX_TYPE			0xFF000000
 #define HFI_MASK_QHDR_RX_TYPE			0x00FF0000
@@ -286,7 +288,7 @@ struct iris_hfi_device {
 	struct list_head sess_head;
 	u32 version;
 	u32 intr_status;
-	u32 clk_freq;
+	u64 clk_freq;
 	u32 last_packet_type;
 	u32 error;
 	unsigned long clk_bitrate;
@@ -310,8 +312,10 @@ struct iris_hfi_device {
 	int reg_count;
 	struct iris_resources resources;
 	struct msm_cvp_platform_resources *res;
+#ifdef CVP_MMRM_ENABLED
 	struct mmrm_client_desc mmrm_desc;
 	struct mmrm_client *mmrm_cvp;
+#endif
 	enum iris_hfi_state state;
 	struct cvp_hfi_packetization_ops *pkt_ops;
 	enum hfi_packetization_type packetization_type;
@@ -335,6 +339,10 @@ int cvp_iris_hfi_initialize(struct cvp_hfi_ops *hdev,
 
 int load_cvp_fw_impl(struct iris_hfi_device *device);
 int unload_cvp_fw_impl(struct iris_hfi_device *device);
+#ifdef CVP_KVM_ENABLED
+int init_cvp_fw(struct iris_hfi_device *device);
+void uninit_cvp_fw(struct iris_hfi_device *device);
+#endif
 void cvp_clock_reg_print(struct iris_hfi_device *dev);
 struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 	unsigned int session_id);

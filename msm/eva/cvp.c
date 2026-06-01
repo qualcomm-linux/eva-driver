@@ -17,6 +17,9 @@
 #include <linux/version.h>
 #include <linux/io.h>
 #include <linux/vmalloc.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include "msm_cvp_core.h"
 #include "msm_cvp_common.h"
 #include "msm_cvp_debug.h"
@@ -357,8 +360,10 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_cores_exceeded;
 	}
 
+#ifdef CVP_GUNYAH_ENABLED
 	/* VM manager shall be started before HFI init */
 	vm_manager.vm_ops->vm_start(core);
+#endif
 
 	core->dev_ops = cvp_hfi_initialize(core->hfi_type,
 				&core->resources, &cvp_handle_cmd_response);
@@ -423,10 +428,13 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	}
 
 	if (core->platform_data->hal_version == DEFAULT_HAL_VER) {
+		dprintk(CVP_DBG, "%s: using default");
 		set_pakala_hal_functions();
 	} else if (core->platform_data->hal_version == KNP_HAL_VER) {
+		dprintk(CVP_DBG, "%s: using knp");
 		set_kaanapali_hal_functions();
 	} else if (core->platform_data->hal_version == HAWI_HAL_VER) {
+		dprintk(CVP_DBG, "%s: using hawi");
 		set_hawi_hal_functions();
 	} else {
 		dprintk(CVP_ERR, "Invalid hal_version %d\n", core->platform_data->hal_version);
@@ -487,6 +495,7 @@ static int msm_cvp_probe(struct platform_device *pdev)
 	 * the end of the probe function after msm-cvp device probe is
 	 * completed. Return immediately after completing sub-device probe.
 	 */
+	int ret = 0;
 	if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp")) {
 		return msm_probe_cvp_device(pdev);
 	} else if (of_device_is_compatible(pdev->dev.of_node,
@@ -495,10 +504,14 @@ static int msm_cvp_probe(struct platform_device *pdev)
 	} else if (of_device_is_compatible(pdev->dev.of_node,
 		"qcom,msm-cvp,context-bank")) {
 		return msm_cvp_probe_context_bank(pdev);
-	} else if (of_device_is_compatible(pdev->dev.of_node,
+	} 
+#ifdef CVP_DSP_ENABLED
+	else if (of_device_is_compatible(pdev->dev.of_node,
 		"qcom,msm-cvp,mem-cdsp")) {
 		return msm_cvp_probe_mem_cdsp(pdev);
-	} else if (of_device_is_compatible(pdev->dev.of_node,
+	}
+#endif
+	else if (of_device_is_compatible(pdev->dev.of_node,
 		"qcom,msm-cvp,ipclite")) {
 		return msm_cvp_probe_ipclite_mappings(pdev);
 	}
@@ -639,7 +652,9 @@ static int __init msm_cvp_init(void)
 
 static void __exit msm_cvp_exit(void)
 {
+#ifdef CVP_DSP_ENABLED
 	cvp_dsp_device_exit();
+#endif
 	kmem_cache_destroy(cvp_driver->msg_cache.cache);
 	kmem_cache_destroy(cvp_driver->frame_cache.cache);
 	kmem_cache_destroy(cvp_driver->buf_cache.cache);

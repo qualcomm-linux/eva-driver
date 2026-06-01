@@ -15,7 +15,11 @@
 #include <linux/of.h>
 #include <linux/pm_qos.h>
 #include <linux/pm_runtime.h>
+#include "cvp_comm_def.h"
 #include <linux/regulator/consumer.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
@@ -47,7 +51,7 @@
 #include "msm_cvp.h"
 
 // ysi - added for debug
-#include <linux/clk/qcom.h>
+// #include <linux/clk/qcom.h>
 #include "msm_cvp_common.h"
 
 #define REG_ADDR_OFFSET_BITMASK	0x000FFFFF
@@ -1342,7 +1346,7 @@ exit:
 	return rc;
 }
 
-static int iris_hfi_scale_clocks(void *dev, u32 freq)
+static int iris_hfi_scale_clocks(void *dev, u64 freq)
 {
 	int rc = 0;
 	struct iris_hfi_device *device = dev;
@@ -1361,8 +1365,11 @@ static int iris_hfi_scale_clocks(void *dev, u32 freq)
 		rc = -ENODEV;
 		goto exit;
 	}
-
+#ifndef CVP_OPP_ENABLED
 	rc = msm_cvp_set_clocks_impl(device, freq);
+#else
+	rc = msm_cvp_opp_set_rate(device, freq);
+#endif
 exit:
 	mutex_unlock(&device->lock);
 	CVPKERNEL_ATRACE_END("__iris_hfi_scale_clocks");
@@ -1870,7 +1877,9 @@ static void __setup_ucregion_memory_map(struct iris_hfi_device *device)
 	if (device->qdss.align_device_addr)
 		__write_register(device, CVP_MMAP_ADDR,
 				(u32)device->qdss.align_device_addr);
+#ifdef CVP_DSP_ENABLED
 	call_iris_op(device, setup_dsp_uc_memmap, device);
+#endif
 }
 
 static void __hfi_queue_init(struct iris_hfi_device *dev)
@@ -2084,11 +2093,13 @@ sfr_init:
 	}
 
 dsp_hfi_queue_init:
+#ifdef CVP_DSP_ENABLED
 	rc = __interface_dsp_queues_init(dev);
 	if (rc) {
 		dprintk(CVP_ERR, "dsp_queues_init failed\n");
 		goto fail_alloc_queue;
 	}
+#endif
 
 	__setup_ucregion_memory_map(dev);
 	return 0;
@@ -2498,7 +2509,9 @@ static int iris_hfi_core_init(void *device)
 pm_qos_bail:
 	mutex_unlock(&dev->lock);
 
+#ifdef CVP_DSP_ENABLED
 	cvp_dsp_send_hfi_queue();
+#endif
 
 	pm_relax(dev->res->pdev->dev.parent);
 	dprintk(CVP_CORE, "Core inited successfully\n");
@@ -2512,10 +2525,12 @@ err_init_queues:
 err_core_init:
 	__set_state(dev, IRIS_STATE_DEINIT);
 	__unload_fw(dev);
+#ifdef CVP_MMRM_ENABLED
 	if (dev->mmrm_cvp)
 	{
 		msm_cvp_mmrm_deregister(dev);
 	}
+#endif
 err_load_fw:
 	__hwfence_regs_unmap(dev);
 err_no_mem:
@@ -3239,6 +3254,7 @@ static void iris_hfi_pm_handler(struct work_struct *work)
 
 	dprintk(CVP_PWR,
 		"Entering %s\n", __func__);
+	
 	/*
 	 * It is ok to check this variable outside the lock since
 	 * it is being updated in this context only
@@ -4119,12 +4135,15 @@ static int __init_bus(struct iris_hfi_device *device)
 
 	if (!device)
 		return -EINVAL;
+	
+	dprintk(CVP_DBG, "%s: start, with bus count = %d", __func__, device->res->bus_set.count);
 
 	iris_hfi_for_each_bus(device, bus) {
 		/*
 		 * This is stupid, but there's no other easy way to ahold
 		 * of struct bus_info in iris_hfi_devfreq_*()
 		 */
+		dprintk(CVP_DBG, "%s: should cause warn", __func__);
 		WARN(dev_get_drvdata(bus->dev), "%s's drvdata already set\n",
 				dev_name(bus->dev));
 		dev_set_drvdata(bus->dev, device);
@@ -4146,6 +4165,7 @@ err_add_dev:
 	return rc;
 }
 
+#ifndef CVP_GENPD_ENABLED
 static void __deinit_regulators(struct iris_hfi_device *device)
 {
 	struct regulator_info *rinfo = NULL;
@@ -4191,6 +4211,7 @@ err_reg_get:
 do_nothing:
 	return rc;
 }
+#endif
 
 static void __deinit_subcaches(struct iris_hfi_device *device)
 {
@@ -4266,12 +4287,13 @@ static int __init_resources(struct iris_hfi_device *device,
 {
 	int i, rc = 0;
 	CVPKERNEL_ATRACE_BEGIN("__init_resources");
-
+#ifndef CVP_GENPD_ENABLED
 	rc = __init_regulators(device);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to get all regulators\n");
 		return -ENODEV;
 	}
+#endif
 
 	rc = msm_cvp_init_clocks(device);
 	if (rc) {
@@ -4310,7 +4332,11 @@ err_init_reset_clk:
 err_init_bus:
 	msm_cvp_deinit_clocks(device);
 err_init_clocks:
+#ifndef CVP_GENPD_ENABLED
 	__deinit_regulators(device);
+#endif
+// 	__deinit_power_domains(device);
+// #endif
 	return rc;
 }
 
@@ -4319,7 +4345,9 @@ static void __deinit_resources(struct iris_hfi_device *device)
 	__deinit_subcaches(device);
 	__deinit_bus(device);
 	msm_cvp_deinit_clocks(device);
+#ifndef CVP_GENPD_ENABLED
 	__deinit_regulators(device);
+#endif
 	kfree(device->sys_init_capabilities);
 	device->sys_init_capabilities = NULL;
 }
@@ -5035,7 +5063,9 @@ int __resume(struct iris_hfi_device *device)
 	__enable_subcaches(device);
 	__set_subcaches(device);
 
+#ifdef CVP_DSP_ENABLED
 	__dsp_resume(device);
+#endif
 
 	dprintk(CVP_PWR, "Resumed from power collapse\n");
 exit:
@@ -5089,6 +5119,11 @@ static int __load_fw(struct iris_hfi_device *device)
 
 	if ((!device->res->use_non_secure_pil && !device->res->firmware_base)
 		|| device->res->use_non_secure_pil) {
+#ifdef CVP_KVM_ENABLED
+		rc = init_cvp_fw(device);
+		if (rc)
+			goto fail_init_fw;
+#endif
 		rc = load_cvp_fw_impl(device);
 		if (rc)
 			goto fail_load_fw;
@@ -5096,6 +5131,10 @@ static int __load_fw(struct iris_hfi_device *device)
 	return rc;
 
 fail_load_fw:
+#ifdef CVP_KVM_ENABLED
+	uninit_cvp_fw(device);
+fail_init_fw:
+#endif
 	power_off_iris2(device);
 	return rc;
 }
@@ -5110,6 +5149,9 @@ static void __unload_fw(struct iris_hfi_device *device)
 		flush_workqueue(device->iris_pm_workq);
 
 	unload_cvp_fw_impl(device);
+#ifdef CVP_KVM_ENABLED
+	uninit_cvp_fw(device);
+#endif
 	__interface_queues_release(device);
 	power_off_iris2(device);
 	__deinit_resources(device);
@@ -5235,6 +5277,138 @@ static void __init_cvp_ops(struct iris_hfi_device *device)
 	device->hal_ops = &hal_ops;
 }
 
+// TODO: as a workaround
+#define FIRMWARE_SIZE			0X00A00000
+static int __check_core_registered(struct iris_hfi_device *device,
+		phys_addr_t fw_addr, u8 *reg_addr, u32 reg_size,
+		phys_addr_t irq)
+{
+	struct cvp_hal_data *cvp_hal_data;
+
+	if (!device) {
+		dprintk(CVP_INFO, "no device Registered\n");
+		return -EINVAL;
+	}
+
+	cvp_hal_data = device->cvp_hal_data;
+	if (!cvp_hal_data)
+		return -EINVAL;
+
+	if (cvp_hal_data->irq == irq &&
+		(CONTAINS(cvp_hal_data->firmware_base,
+				FIRMWARE_SIZE, fw_addr) ||
+		CONTAINS(fw_addr, FIRMWARE_SIZE,
+				cvp_hal_data->firmware_base) ||
+		CONTAINS(cvp_hal_data->register_base,
+				reg_size, reg_addr) ||
+		CONTAINS(reg_addr, reg_size,
+				cvp_hal_data->register_base) ||
+		OVERLAPS(cvp_hal_data->register_base,
+				reg_size, reg_addr, reg_size) ||
+		OVERLAPS(reg_addr, reg_size,
+				cvp_hal_data->register_base,
+				reg_size) ||
+		OVERLAPS(cvp_hal_data->firmware_base,
+				FIRMWARE_SIZE, fw_addr,
+				FIRMWARE_SIZE) ||
+		OVERLAPS(fw_addr, FIRMWARE_SIZE,
+				cvp_hal_data->firmware_base,
+				FIRMWARE_SIZE))) {
+		return 0;
+	}
+
+	dprintk(CVP_INFO, "Device not registered\n");
+	return -EINVAL;
+}
+
+static int _vm_init_reg_and_irq(struct iris_hfi_device *device,
+		struct msm_cvp_platform_resources *res)
+{
+	struct cvp_hal_data *hal = NULL;
+	int rc = 0;
+
+	// if (vm_manager.vm_id == VM_TRUSTED)
+		// return 0;
+
+	rc = __check_core_registered(device, res->firmware_base,
+			(u8 *)(uintptr_t)res->register_base,
+			res->register_size, res->irq);
+	if (!rc) {
+		dprintk(CVP_ERR, "Core present/Already added\n");
+		rc = -EEXIST;
+		goto err_core_init;
+	}
+
+	hal = kzalloc(sizeof(*hal), GFP_KERNEL);
+	if (!hal) {
+		dprintk(CVP_ERR, "Failed to alloc\n");
+		rc = -ENOMEM;
+		goto err_core_init;
+	}
+
+	hal->irq = res->irq;
+	hal->irq_wd = res->irq_wd;
+	hal->firmware_base = res->firmware_base;
+	hal->register_base = devm_ioremap(&res->pdev->dev,
+			res->register_base, res->register_size);
+	hal->register_size = res->register_size;
+	if (!hal->register_base) {
+		dprintk(CVP_ERR,
+			"could not map reg addr %pa of size %d\n",
+			&res->register_base, res->register_size);
+		goto error_irq_fail;
+	}
+
+	hal->tcsr_reg_base = devm_ioremap(&res->pdev->dev,
+			TCSR_REG_BASE, TCSR_REG_SIZE);
+	if (!hal->tcsr_reg_base) {
+		dprintk(CVP_ERR,
+		"could not map DDR reg addr %pa of size %d\n",
+		TCSR_REG_BASE, TCSR_REG_SIZE);
+	}
+
+	if (res->gcc_reg_base) {
+		hal->gcc_reg_base = devm_ioremap(&res->pdev->dev,
+				res->gcc_reg_base, res->gcc_reg_size);
+		hal->gcc_reg_size = res->gcc_reg_size;
+		if (!hal->gcc_reg_base)
+			dprintk(CVP_ERR,
+				"could not map gcc reg addr %pa of size %d\n",
+				&res->gcc_reg_base, res->gcc_reg_size);
+	}
+
+	device->cvp_hal_data = hal;
+
+#ifdef USE_PRESIL42
+	return presil42_set_irq_settings(hal, device, rc);
+#endif
+
+	rc = request_threaded_irq(res->irq, cvp_hfi_isr, iris_hfi_core_work_handler,
+			IRQF_TRIGGER_HIGH, "msm_cvp", device);
+	if (unlikely(rc)) {
+		dprintk(CVP_ERR, "%s: request_irq failed rc: %d\n", __func__, rc);
+		goto error_irq_fail;
+	}
+
+	rc = request_irq(res->irq_wd, iris_hfi_isr_wd, IRQF_TRIGGER_HIGH,
+			"msm_cvp", device);
+	if (unlikely(rc)) {
+		dprintk(CVP_ERR, "() :request_irq for WD failed\n");
+		goto error_irq_fail;
+	}
+
+	disable_irq_nosync(res->irq);
+	dprintk(CVP_INFO,
+		"firmware_base = %pa, register_base = %pa, register_size = %d\n",
+		&res->firmware_base, &res->register_base,
+		res->register_size);
+	return rc;
+error_irq_fail:
+	kfree(hal);
+err_core_init:
+	return rc;
+}
+
 static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *res,
 			hfi_cmd_response_callback callback)
 {
@@ -5266,9 +5440,15 @@ static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *r
 		goto err_cleanup;
 	}
 
+#ifdef CVP_GUNYAH_ENABLED
 	rc = vm_manager.vm_ops->vm_init_reg_and_irq(hdevice, res);
 	if (rc)
 		goto err_cleanup;
+#else
+	rc = _vm_init_reg_and_irq(hdevice, res);
+	if (rc)
+		goto err_cleanup;
+#endif
 
 	hdevice->res = res;
 	hdevice->callback = callback;
@@ -5340,6 +5520,9 @@ void cvp_iris_hfi_delete_device(void *device)
 	mutex_destroy(&dev->lock);
 	destroy_workqueue(dev->cvp_workq);
 	destroy_workqueue(dev->iris_pm_workq);
+	if (IS_ERR_OR_NULL(dev->cvp_hal_data)) {
+		dprintk(CVP_ERR, "The cvp hal data is null or error");
+	}
 
 #ifndef USE_PRESIL42
 	free_irq(dev->cvp_hal_data->irq, dev);
@@ -5418,6 +5601,7 @@ int cvp_iris_hfi_initialize(struct cvp_hfi_ops *ops_tbl,
 	}
 
 	ops_tbl->hfi_device_data = __get_device(res, callback);
+	dprintk(CVP_INFO, "Now ops_tbl->hfi_device_data->cvp_hal_data = %d", ((struct iris_hfi_device *)ops_tbl->hfi_device_data)->cvp_hal_data);
 
 	if (IS_ERR_OR_NULL(ops_tbl->hfi_device_data)) {
 		rc = PTR_ERR(ops_tbl->hfi_device_data) ?: -EINVAL;
