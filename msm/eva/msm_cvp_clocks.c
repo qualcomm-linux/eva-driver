@@ -7,6 +7,7 @@
 #include <linux/pm_domain.h>
 #include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
+#include <linux/devfreq.h>
 #include "msm_cvp_common.h"
 #include "cvp_hfi_api.h"
 #include "msm_cvp_debug.h"
@@ -333,30 +334,47 @@ int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u64 freq)
 #else
 int msm_cvp_opp_set_rate(struct iris_hfi_device *device, u64 freq)
 {
-	unsigned long opp_freq = 0;
 	struct dev_pm_opp *opp;
+	unsigned long opp_freq = freq;
 	int ret;
 
-	opp_freq = freq * 3;
 	device->clk_freq = freq;
-	dprintk(CVP_DBG, "Now we are in msm_cvp_opp_set_rate, and opp_freq is %lld", opp_freq);
-	opp = dev_pm_opp_find_freq_ceil(&device->res->pdev->dev, &opp_freq);
-	if (IS_ERR(opp)) {
-		opp = dev_pm_opp_find_freq_floor(&device->res->pdev->dev, &opp_freq);
-		if (IS_ERR(opp)) {
-			dprintk(CVP_ERR, "%s: unable to find freq %lld in opp table\n", __func__, freq);
-			return -EINVAL;
-		}
-	}
-	dev_pm_opp_put(opp);
 
-	ret = dev_pm_opp_set_rate(&device->res->pdev->dev, opp_freq);
+	/*
+	 * Use devfreq_recommended_opp to find the best OPP >= requested freq.
+	 * dev_pm_opp_set_opp then sets both OPP clocks (core0 + eva0) and
+	 * votes the RPMH power domain corners (via required-opps in DT).
+	 */
+	opp = devfreq_recommended_opp(&device->res->pdev->dev, &opp_freq, 0);
+	if (IS_ERR(opp)) {
+		dprintk(CVP_ERR, "%s: unable to find recommended OPP for freq %llu\n",
+			__func__, freq);
+		return PTR_ERR(opp);
+	}
+    
+	/* dev_pm_opp_set_opp applies the selected OPP to the device. 
+	* Internally calls clk_set_rate() for each clock in opp_clk_tbl 
+	*/
+	ret = dev_pm_opp_set_opp(&device->res->pdev->dev, opp);
+	/* dev_pm_opp_put releases the reference to the OPP handle obtained from devfreq_recommended_opp */
+	dev_pm_opp_put(opp);
 	if (ret) {
-		dprintk(CVP_ERR, "%s: failed to set rate\n", __func__);
+		dprintk(CVP_ERR, "%s: failed to set OPP: %d\n", __func__, ret);
 		return ret;
 	} else {
+		struct clock_info *cl;
+
 		device->clk_freq = freq;
-		dprintk(CVP_PWR, "%s: clock source rate set to: %ld\n", __func__, opp_freq);
+
+		/* Print actual clock rates for core0 and eva0 after OPP set */
+		iris_hfi_for_each_clock(device, cl) {
+			if (!strcmp(cl->name, "core0") ||
+			    !strcmp(cl->name, "eva0"))
+				dprintk(CVP_PWR,
+					"%s: OPP set, %s = %lu Hz\n",
+					__func__, cl->name,
+					clk_get_rate(cl->clk));
+		}
 	}
 
 	return ret;
@@ -408,6 +426,7 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 			return 0;
 		}
 
+#ifndef CVP_OPP_ENABLED
 		if (cl->has_scaling) {
 #ifdef CVP_MMRM_ENABLED
 			if (device->mmrm_cvp != NULL) {
@@ -425,14 +444,22 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 				dprintk(CVP_PWR,
 					"%s: set clock with clk_set_rate\n",
 					__func__);
-#ifndef CVP_OPP_ENABLED
 				clk_set_rate(cl->clk,
 						clk_round_rate(cl->clk, 0));
-#else
-				msm_cvp_opp_set_rate(device, 0);
-#endif
 			}
 		}
+#else /* CVP_OPP_ENABLED */
+		/*
+		 * For OPP-managed clocks (eva0), dev_pm_opp_set_opp handles
+		 * both eva0 and core0 together, and also votes mxc/mmcx corners.
+		 * Call msm_cvp_opp_set_rate(0) when enabling eva0 to set
+		 * minimum OPP before clock enable. eva0 is enabled first (in __power_on_controller),
+		 * core0 second (in __power_on_core).
+		 */
+		if (!strcmp(cl->name, "eva0")) {
+			msm_cvp_opp_set_rate(device, 0);
+		}
+#endif /* CVP_OPP_ENABLED */
 		rc = clk_prepare_enable(cl->clk);
 		if (rc) {
 			dprintk(CVP_ERR, "Failed to enable clock %s\n",
@@ -477,7 +504,7 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 		clk_disable_unprepare(cl->clk);
 		dprintk(CVP_PWR, "Clock: %s disable and unprepare\n",
 			cl->name);
-
+#ifndef CVP_OPP_ENABLED
 		if (cl->has_scaling) {
 #ifdef CVP_MMRM_ENABLED
 			if (device->mmrm_cvp != NULL) {
@@ -493,14 +520,22 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 #endif
 			{
 				dprintk(CVP_PWR, "%s: set clock with clk_set_rate\n", __func__);
-#ifndef CVP_OPP_ENABLED
 				clk_set_rate(cl->clk,
 						clk_round_rate(cl->clk, 0));
-#else
-				msm_cvp_opp_set_rate(device, 0);
-#endif
 			}
 		}
+#else /* CVP_OPP_ENABLED */
+		/*
+		 * msm_cvp_opp_set_rate sets both scalable clocks (eva0 + core0)
+		 * atomically. core0 is disabled first (in __power_off_core),
+		 * eva0 last (in __power_off_controller). Set OPP to 0 after
+		 * disabling eva0 (last scalable clock). Calling for core0 is
+		 * redundant since eva0 is still running when core0 is disabled.
+		 */
+		if (!strcmp(cl->name, "eva0")) {
+			msm_cvp_opp_set_rate(device, 0);
+		}
+#endif /* CVP_OPP_ENABLED */
 		return 0;
 	}
 

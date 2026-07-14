@@ -4122,7 +4122,6 @@ static void __deinit_bus(struct iris_hfi_device *device)
 	device->bus_vote = CVP_DEFAULT_BUS_VOTE;
 
 	iris_hfi_for_each_bus_reverse(device, bus) {
-		dev_set_drvdata(bus->dev, NULL);
 		icc_put(bus->client);
 		bus->client = NULL;
 	}
@@ -4135,18 +4134,9 @@ static int __init_bus(struct iris_hfi_device *device)
 
 	if (!device)
 		return -EINVAL;
-	
-	dprintk(CVP_DBG, "%s: start, with bus count = %d", __func__, device->res->bus_set.count);
 
 	iris_hfi_for_each_bus(device, bus) {
-		/*
-		 * This is stupid, but there's no other easy way to ahold
-		 * of struct bus_info in iris_hfi_devfreq_*()
-		 */
-		dprintk(CVP_DBG, "%s: should cause warn", __func__);
-		WARN(dev_get_drvdata(bus->dev), "%s's drvdata already set\n",
-				dev_name(bus->dev));
-		dev_set_drvdata(bus->dev, device);
+	   
 		bus->client = of_icc_get(bus->dev, bus->name);
 
 		if (IS_ERR_OR_NULL(bus->client)) {

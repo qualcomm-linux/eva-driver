@@ -652,9 +652,9 @@ struct context_bank_info *msm_cvp_smem_get_context_bank(
 {
 	struct context_bank_info *cb = NULL, *match = NULL;
 	char *search_str;
-	char *non_secure_cb = "cvp_hlos";
-	char *secure_nonpixel_cb = "cvp_sec_nonpixel";
-	char *secure_pixel_cb = "cvp_sec_pixel";
+	char *non_secure_cb = "eva_hlos";
+	char *secure_nonpixel_cb = "eva_sec_nonpixel";
+	char *secure_pixel_cb = "eva_sec_pixel";
 	char *camera_cb = "cvp_camera";
 	char *dsp_cb = "cvp_dsp";
 	bool is_secure = (flags & SMEM_SECURE) ? true : false;

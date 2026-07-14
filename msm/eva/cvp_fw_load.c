@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/of.h>
@@ -60,13 +60,8 @@ static int __load_fw_to_memory(struct platform_device *pdev,
 	}
 	scnprintf(firmware_name, ARRAY_SIZE(firmware_name), "%s.mbn", fw_name);
 
-	rc = of_property_read_u32(pdev->dev.of_node, "pas-id", &pas_id);
-	if (rc) {
-		dprintk(CVP_ERR,
-			"%s: error %d while reading DT for \"pas-id\"\n",
-				__func__, rc);
-		return rc;
-	}
+	pas_id = ((struct msm_cvp_platform_data *)
+		cvp_get_drv_data(&pdev->dev))->pas_id;
 
 	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
 	if (!node) {
