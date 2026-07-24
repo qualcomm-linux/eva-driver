@@ -23,6 +23,8 @@
 #include "msm_cvp_debug.h"
 #include "cvp_hfi_api.h"
 #include "cvp_hfi.h"
+#include <dt-bindings/clock/qcom,kaanapali-evacc.h>
+#include <dt-bindings/clock/qcom,kaanapali-gcc.h>
 
 extern int of_fdt_get_ddrtype(void);
 
@@ -400,7 +402,6 @@ static struct msm_cvp_common_data sm8735_common_data[] = {
 	}
 };
 
-
 static struct msm_cvp_common_data sm8850_common_data[] = {
 	{
 		.key = "qcom,pm-qos-latency-us",
@@ -462,6 +463,10 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 	{
 		.key = "qcom,dsp-enabled",
 		.value = 0,
+	},
+	{
+		.key = "CVP_GDSC_FRAMEWORK_TYPE",
+		.value = 1,    /* framework-type: 0x0 --> Regulator framework, 0x1 --> GenPD framework */
 	}
 };
 
@@ -687,6 +692,166 @@ static struct msm_cvp_qos_setting pakala_noc_qos = {
 };
 
 
+/*upstream properties*/
+static const char * const cvp_kaanapali_cache_slice_names[] = {
+    "cvpfw",
+    "cvp",
+};
+
+static const struct cvp_subcache_desc cvp_kaanapali_desc = {
+    .num_slices  = ARRAY_SIZE(cvp_kaanapali_cache_slice_names),
+    .cache_slice_names = cvp_kaanapali_cache_slice_names,
+};
+
+// Order of entries in cvp_bus_kaanapali_descs should be same as interconnects in DT
+static const struct cvp_bus_desc cvp_bus_kaanapali_descs[] = {  
+    {
+        .name = "eva-cfg",
+        .governor = "performance",
+        .min_bw = 1000,
+        .max_bw = 1000,
+    },
+    {
+        .name = "eva-ddr",
+        .governor = "performance",
+        .min_bw = 1000,
+        .max_bw = 6533000,
+    },
+};
+
+static const struct reg_value_pair kaanapali_reg_presets_data[] = {
+    { .reg = 0xB0088, .value = 0x0 },
+};
+
+static const struct cvp_reg_presets cvp_kaanapali_reg_presets = {
+    .count = ARRAY_SIZE(kaanapali_reg_presets_data),
+    .tbl   = kaanapali_reg_presets_data,
+};
+
+const struct cvp_gcc_reg_region cvp_kaanapali_gcc_reg = {
+    .base = 0x110000,
+    .size   = 0x90000,
+};
+
+static const struct cvp_ipcc_reg_region cvp_kaanapali_ipcc_reg = {
+    .base = 0x400000,
+    .size   = 0x100000,
+};
+
+static const u32 cvp_kaanapali_reset_power_states[] = {
+    0x0,  /* cvp_core_reset/core */
+};
+
+static const struct cvp_reset_power_set_desc cvp_kaanapali_reset_power_set_desc = {
+    .count  = ARRAY_SIZE(cvp_kaanapali_reset_power_states),
+    .pwr_stats = cvp_kaanapali_reset_power_states,
+};
+
+static const struct cvp_regspace_mappings cvp_kaanapali_regspace = {
+    .hwmutex = {
+        .iova = 0xFFB00000,
+        .size = 0x2000,
+        .phys = 0x1f4a000,
+    },
+    .aon = {
+        .iova = 0xFF80F000,
+        .size = 0x1000,
+        .phys = 0x0ABE0000,
+    },
+    .aon_timer = {
+        .iova = 0xFFA00000,
+        .size = 0x1000,
+        .phys = 0xc220000,
+    },
+};
+
+static const u32 kaanapali_pd_hw_pc[] = { 0x0, 0x1 };
+
+static const struct cvp_power_domains kaanapali_power_domains = {
+    .pd_count = ARRAY_SIZE(kaanapali_pd_hw_pc),
+    .power_domain_idx = 2,
+    .gdsc_has_hw_pc = kaanapali_pd_hw_pc,
+};
+
+static const u32 kaanapali_clock_props_data[] = {
+    0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x1 // eva0 and core0
+};
+
+static const struct cvp_clock_props kaanapali_clock_props = {
+    .clock_props = kaanapali_clock_props_data,
+    .count_clkProps     = ARRAY_SIZE(kaanapali_clock_props_data),
+};
+
+static const u32 kaanapali_allowed_clock_rates[] = {
+    350000000,
+    400000000,
+    450000000,
+    500000000,
+    550000000,
+};
+
+static const struct cvp_allowed_clock_rates kaanapali_allowed_clocks = {
+    .clk_rates = kaanapali_allowed_clock_rates,
+    .count = ARRAY_SIZE(kaanapali_allowed_clock_rates),
+};
+
+/*
+* Register OPP clocks: core0 (EVA_CC_MVS0_CLK) and eva0 (EVA_CC_MVS0C_CLK)
+* are scaled together via the OPP framework using dev_pm_opp_config_clks_simple.
+* The opp-hz values in DT map: first value -> core0, second value -> eva0.
+*/
+static const char *const kaanapali_eva_opp_clk_names[] = {
+	"core0",
+	"eva0",
+	NULL,
+};
+
+/*
+ * OPP voltage rail domains — attached with PD_FLAG_DEV_LINK_ON | PD_FLAG_REQUIRED_OPP
+ * so the OPP framework automatically votes the correct voltage corner when
+ * dev_pm_opp_set_opp() is called. Matches iris sm8550_opp_pd_table pattern.
+ */
+static const char *const kaanapali_opp_pd_table[] = { "mxc", "mmcx" };
+
+static const struct cvp_ipclite_mappings cvp_kaanapali_ipclite_desc = {
+    .iova_start = 0xFE500000,
+};
+
+static const struct cvp_iommu_context_bank kaanapali_cvp_context_banks[] = {
+    {
+        .name = "eva_hlos",
+        .buffer_type = 0xfff,
+        .iova_start = 0x4b000000,
+        .iova_size  = 0x90000000,
+        .vmid = 0,   // secure = false
+    },
+    {
+        .name = "eva_sec_nonpixel",
+        .buffer_type = 0x741,
+        .iova_start = 0x01000000,
+        .iova_size  = 0x25800000,
+        .vmid = 0xB,   // secure = true 
+    },
+    {
+        .name = "eva_sec_pixel",
+        .buffer_type = 0x106,
+        .iova_start = 0x26800000,
+        .iova_size  = 0x24800000,
+        .vmid = 0xA,   // secure = true 
+    },
+};
+
+/* clock-ids should have same sequence as clocks in DT*/
+static const u32 eva_kaanapali_clock_ids[] = {
+        GCC_EVA_AXI0C_CLK,
+        EVA_CC_SLEEP_CLK,
+        EVA_CC_MVS0C_FREERUN_CLK,
+        EVA_CC_MVS0C_CLK,
+        GCC_EVA_AXI0_CLK,
+        EVA_CC_MVS0_FREERUN_CLK,
+        EVA_CC_MVS0_CLK,
+};
+
 static struct msm_cvp_platform_data default_data = {
 	.common_data = default_common_data,
 	.common_data_length =  ARRAY_SIZE(default_common_data),
@@ -787,7 +952,7 @@ static struct msm_cvp_platform_data sm8735_data = {
 
 static struct msm_cvp_platform_data sm8850_data = {
 	.common_data = sm8850_common_data,
-	.common_data_length = ARRAY_SIZE(sm8650_common_data),
+	.common_data_length = ARRAY_SIZE(sm8850_common_data),
 	.sku_version = 0,
 	.vpu_ver = VPU_VERSION_5,
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
@@ -797,6 +962,25 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
 	.hfi_ver = 2,
 	.hal_version = KNP_HAL_VER,
+	.pas_id = 26,
+	.gcc_regs = &cvp_kaanapali_gcc_reg,
+	.ipcc_regs = &cvp_kaanapali_ipcc_reg,
+	.regspace_mappings = &cvp_kaanapali_regspace,
+	.reg_presets = &cvp_kaanapali_reg_presets,
+	.reset_power_sets = &cvp_kaanapali_reset_power_set_desc,
+	.power_domains = &kaanapali_power_domains,
+	.clock_props = &kaanapali_clock_props,
+	.clock_ids = eva_kaanapali_clock_ids, 
+	.num_clock_ids = ARRAY_SIZE(eva_kaanapali_clock_ids),
+	.allowed_clk_rates = &kaanapali_allowed_clocks,
+	.opp_clk_tbl = kaanapali_eva_opp_clk_names,
+	.opp_pd_tbl = kaanapali_opp_pd_table,
+	.opp_pd_tbl_size = ARRAY_SIZE(kaanapali_opp_pd_table),
+	.bus_descs = cvp_bus_kaanapali_descs,
+	.subcache_desc = &cvp_kaanapali_desc,
+	.ipclite_mappings = &cvp_kaanapali_ipclite_desc,
+	.cb_data = kaanapali_cvp_context_banks,
+	.cb_data_size = ARRAY_SIZE(kaanapali_cvp_context_banks),
 };
 
 static struct msm_cvp_platform_data sm8845_data = {
@@ -871,7 +1055,7 @@ static const struct of_device_id msm_cvp_dt_match[] = {
 		.data = &sm8850_data,
 	},
 	{
-		.compatible = "qcom,kaanapali-cvp",
+		.compatible = "qcom,kaanapali-eva",
 		.data = &sm8850_data,
 	},
 	{

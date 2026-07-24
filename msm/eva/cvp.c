@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -112,6 +113,9 @@ static int read_platform_resources(struct msm_cvp_core *core,
 	if (pdev->dev.of_node) {
 		/* Target supports DT, parse from it */
 		rc = cvp_read_platform_resources_from_drv_data(core);
+		if(rc){
+			return rc;
+		}
 		rc = cvp_read_platform_resources_from_dt(core);
 	} else {
 		dprintk(CVP_ERR, "pdev node is NULL\n");
@@ -222,7 +226,7 @@ static ssize_t boot_store(struct device *dev,
 {
 	int rc = 0, val = 0;
 	static int booted;
-
+	dprintk(CVP_INFO, "Processing boot sysfs command");
 	rc = kstrtoint(buf, 0, &val);
 	if (rc || val < 0) {
 		dprintk(CVP_WARN,
@@ -286,13 +290,23 @@ static struct attribute_group msm_cvp_core_attr_group = {
 };
 
 static const struct of_device_id msm_cvp_plat_match[] = {
-	{.compatible = "qcom,msm-cvp"},
-	{.compatible = "qcom,msm-cvp,context-bank"},
-	{.compatible = "qcom,msm-cvp,bus"},
+	{.compatible = "qcom,kaanapali-eva"},
+	{.compatible = "qcom,glymur-eva"},
+	#ifdef CVP_DSP_ENABLED
 	{.compatible = "qcom,msm-cvp,mem-cdsp"},
-	{.compatible = "qcom,msm-cvp,ipclite"},
+	#endif
 	{}
 };
+
+static int msm_cvp_probe_bus(struct platform_device *pdev)
+{
+	return cvp_read_bus_resources(pdev);
+}
+
+static int msm_cvp_probe_ipclite_mappings(struct platform_device *pdev)
+{
+	return cvp_read_ipclite_mappings(pdev);
+}
 
 static int msm_probe_cvp_device(struct platform_device *pdev)
 {
@@ -406,10 +420,9 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 
 	dprintk(CVP_CORE, "populating sub devices\n");
 	/*
-	 * Trigger probe for each sub-device i.e. qcom,msm-cvp,context-bank.
-	 * When msm_cvp_probe is called for each sub-device, parse the
-	 * context-bank details and store it in core->resources.context_banks
-	 * list.
+	 * Trigger probe for remaining sub-devices (e.g. qcom,msm-cvp,mem-cdsp).
+	 * Context banks are created explicitly below via
+	 * cvp_init_context_bank_devices(), not through this auto-probe path.
 	 */
 	rc = of_platform_populate(pdev->dev.of_node, msm_cvp_plat_match, NULL,
 			&pdev->dev);
@@ -418,6 +431,28 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_fail_sub_device_probe;
 	}
 	atomic64_set(&core->kernel_trans_id, MAX_PKT_IDX);
+    
+	rc = msm_cvp_probe_bus(pdev);
+	dprintk(CVP_INFO, "cvp %s bus prob return value is %d", dev_name(&pdev->dev), rc);
+	if (rc) {
+		dprintk(CVP_ERR, "Failed to probe bus resources\n");
+		goto err_fail_sub_device_probe;
+	}
+    
+	rc = cvp_init_context_bank_devices(pdev, core);
+	if (rc) {
+		dprintk(CVP_ERR, "Failed to init context bank devices\n");
+		goto err_fail_sub_device_probe;
+	}
+	
+#ifdef CVP_IPCLITE_MAPPING_ENABLED
+	rc = msm_cvp_probe_ipclite_mappings(pdev);
+	dprintk(CVP_INFO, "cvp %s ipclite mappings prob return value is %d", dev_name(&pdev->dev), rc);
+	if (rc) {
+		dprintk(CVP_ERR, "Failed to probe ipclite mappings resources\n");
+		goto err_fail_sub_device_probe;
+	}
+#endif
 
 	if (core->resources.dsp_enabled) {
 		rc = cvp_dsp_device_init();
@@ -449,6 +484,8 @@ err_fail_sub_device_probe:
 fail_dbglog_alloc:
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
 	debugfs_remove_recursive(cvp_driver->debugfs_root);
+	if (core->cb_devs)
+		cvp_deinit_context_bank_devices(core);
 err_hfi_initialize:
 err_cores_exceeded:
 	cdev_del(&core->cdev);
@@ -471,21 +508,6 @@ static int msm_cvp_probe_mem_cdsp(struct platform_device *pdev)
 	return cvp_read_mem_cdsp_resources_from_dt(pdev);
 }
 
-static int msm_cvp_probe_context_bank(struct platform_device *pdev)
-{
-	return cvp_read_context_bank_resources_from_dt(pdev);
-}
-
-static int msm_cvp_probe_bus(struct platform_device *pdev)
-{
-	return cvp_read_bus_resources_from_dt(pdev);
-}
-
-static int msm_cvp_probe_ipclite_mappings(struct platform_device *pdev)
-{
-	return cvp_read_ipclite_mappings_from_dt(pdev);
-}
-
 static int msm_cvp_probe(struct platform_device *pdev)
 {
 	if (!msm_cvp_probe_allowed)
@@ -496,27 +518,16 @@ static int msm_cvp_probe(struct platform_device *pdev)
 	 * completed. Return immediately after completing sub-device probe.
 	 */
 	int ret = 0;
-	if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp")) {
-		return msm_probe_cvp_device(pdev);
-	} else if (of_device_is_compatible(pdev->dev.of_node,
-		"qcom,msm-cvp,bus")) {
-		return msm_cvp_probe_bus(pdev);
-	} else if (of_device_is_compatible(pdev->dev.of_node,
-		"qcom,msm-cvp,context-bank")) {
-		return msm_cvp_probe_context_bank(pdev);
-	} 
-#ifdef CVP_DSP_ENABLED
-	else if (of_device_is_compatible(pdev->dev.of_node,
-		"qcom,msm-cvp,mem-cdsp")) {
-		return msm_cvp_probe_mem_cdsp(pdev);
+	if (of_match_device(msm_cvp_plat_match, &pdev->dev)) {
+		ret = msm_probe_cvp_device(pdev);
+		dprintk(CVP_INFO, "cvp %s cvp device prob return value is %d", dev_name(&pdev->dev), ret);
+		return ret;
 	}
-#endif
-	else if (of_device_is_compatible(pdev->dev.of_node,
-		"qcom,msm-cvp,ipclite")) {
-		return msm_cvp_probe_ipclite_mappings(pdev);
+	#ifdef CVP_DSP_ENABLED
+	else if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp,mem-cdsp")) {
+			return msm_cvp_probe_mem_cdsp(pdev);
 	}
-
-	/* How did we end up here? */
+	#endif
 	MSM_CVP_ERROR(1);
 	return -EINVAL;
 }
@@ -536,7 +547,7 @@ static int msm_cvp_remove(struct platform_device *pdev)
 		goto exit;
 	}
 
-	if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp"))
+	if (of_match_device(msm_cvp_plat_match, &pdev->dev) )
 		core = dev_get_drvdata(&pdev->dev);
 	else
 		core = dev_get_drvdata(pdev->dev.parent);
@@ -551,6 +562,9 @@ static int msm_cvp_remove(struct platform_device *pdev)
 		vfree(core->kmd_trace.kmd_debug_log.log);
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
 	msm_cvp_free_platform_resources(&core->resources);
+
+	if (core->cb_devs)
+		cvp_deinit_context_bank_devices(core);
 	sysfs_remove_group(&pdev->dev.kobj, &msm_cvp_core_attr_group);
 	dev_set_drvdata(&pdev->dev, NULL);
 	idr_destroy(&core->sess_idr);
@@ -578,7 +592,7 @@ static int msm_cvp_pm_suspend(struct device *dev)
 	 *   subdevices (e.g. context banks)
 	 */
 	if (!dev || !dev->driver ||
-		!of_device_is_compatible(dev->of_node, "qcom,msm-cvp"))
+		!of_match_device(msm_cvp_plat_match, dev) )
 		return 0;
 
 	core = dev_get_drvdata(dev);

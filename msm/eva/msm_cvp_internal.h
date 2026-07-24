@@ -153,7 +153,111 @@ struct msm_cvp_platform_data {
 	struct msm_cvp_hfi_defs *cvp_hfi_msg;
 	uint32_t hfi_ver;
 	uint32_t hal_version;
+	uint32_t pas_id;
+	const struct cvp_gcc_reg_region *gcc_regs;
+	const struct cvp_ipcc_reg_region *ipcc_regs;
+	const struct cvp_regspace_mappings *regspace_mappings;
+	const struct cvp_reg_presets *reg_presets;
+	const struct cvp_reset_power_set_desc *reset_power_sets;
+	const struct cvp_power_domains *power_domains;
+	const struct cvp_clock_props *clock_props;
+	const u32 *clock_ids;
+	u32 num_clock_ids;
+	const struct cvp_allowed_clock_rates *allowed_clk_rates;
+	const char * const *opp_clk_tbl;
+	const char * const *opp_pd_tbl;      /* OPP voltage rail domain names (e.g. "mxc", "mmcx") */
+	u32 opp_pd_tbl_size;                 /* Number of OPP voltage rail domains */
+	const struct cvp_bus_desc *bus_descs;
+	const struct cvp_subcache_desc *subcache_desc;
+	const struct cvp_ipclite_mappings *ipclite_mappings;
+	const struct cvp_iommu_context_bank *cb_data;
+	uint32_t cb_data_size;
 };
+
+/* Upstream Properties start*/
+
+struct cvp_gcc_reg_region {
+    u32 base;
+    u32 size;
+};
+
+struct cvp_ipcc_reg_region {
+    u32 base;
+    u32 size;
+};
+
+struct cvp_bus_desc {
+    const char *name;
+    const char *governor;  
+    u32 min_bw;
+    u32 max_bw;
+};
+
+struct cvp_subcache_desc {
+    int num_slices;
+    const char * const *cache_slice_names;
+};
+
+/*
+ * Register preset table descriptor
+ */
+struct cvp_reg_presets {
+    u32 count;
+    const struct reg_value_pair *tbl;
+};
+
+/* Reset policy for a single reset */
+struct cvp_reset_power_set_desc {
+    u32 count;
+    const u32 *pwr_stats;   // reset-power-status from downstream DT
+};
+
+/* DEVICE mapping aon_mappings, hwmutex_mappings, aon_timer_mappings */
+struct cvp_regspace_data {
+    u32 iova;
+    u32 size;
+    u32 phys;
+};
+
+struct cvp_regspace_mappings {
+    struct cvp_regspace_data hwmutex;
+    struct cvp_regspace_data aon;
+    struct cvp_regspace_data aon_timer;
+};
+
+/* Supply (power domain index and gdsc_has_hw_pc )*/
+struct cvp_power_domains {
+    u32 pd_count;     // Power domains count from DT
+    u32 power_domain_idx; /* replaces qcom,power-domain-idx from DT, Stores the index that differentiates the OPPs with the PDs. First two are the PDs and the last two are the OPPs. */
+    const u32 *gdsc_has_hw_pc; /* replaces gdsc_has_hw_pc from DT */
+};
+
+/* Clocks (clock configs/prop)*/
+struct cvp_clock_props {
+    const u32 *clock_props;
+    u32 count_clkProps;
+};
+
+/* qcom,allowed-clock-rates from downstream DT */
+struct cvp_allowed_clock_rates {
+    const u32 *clk_rates;
+    u32 count;
+};
+
+/* ipclite_mappings */
+struct cvp_ipclite_mappings {
+    u64 iova_start;
+};
+
+struct cvp_iommu_context_bank {
+    const char *name;
+    u32 buffer_type;
+    u64 iova_start;
+    u64 iova_size;
+    u32 vmid;
+};
+
+/* Upstream Properties end*/
 
 struct cvp_kmem_cache {
 	struct kmem_cache *cache;
@@ -277,7 +381,6 @@ struct cvp_session_event {
 	wait_queue_head_t wq;
 };
 
-
 struct msm_cvp_core {
 	struct mutex lock;
 	struct mutex clk_lock;
@@ -321,6 +424,9 @@ struct msm_cvp_core {
 	struct idr sess_idr;
 	struct mutex idr_lock;
 	u32 soc_hw_version;
+
+	struct device **cb_devs;
+	u32 num_cb_devs;
 };
 
 struct msm_cvp_inst {
