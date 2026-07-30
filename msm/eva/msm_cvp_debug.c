@@ -9,7 +9,6 @@
 #include "msm_cvp_common.h"
 #include "cvp_core_hfi.h"
 #include "cvp_hfi_api.h"
-#include "msm_cvp_dsp.h"
 
 #define MAX_SSR_STRING_LEN 10
 #ifdef USE_PRESIL
@@ -441,24 +440,6 @@ static int _clk_rate_get(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(clk_rate_fops, _clk_rate_get, _clk_rate_set, "%llu\n");
 
-static int _dsp_dbg_set(void *data, u64 val)
-{
-	gfa_cv.debug_mask = (uint32_t)val;
-
-	cvp_dsp_send_debug_mask();
-
-	return 0;
-}
-
-static int _dsp_dbg_get(void *data, u64 *val)
-{
-	*val = gfa_cv.debug_mask;
-
-	return 0;
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(dsp_debug_fops, _dsp_dbg_get, _dsp_dbg_set, "%llu\n");
-
 static int _max_ssr_set(void *data, u64 val)
 {
 	struct msm_cvp_core *core;
@@ -540,11 +521,6 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 	if (!debugfs_create_file("clock_rate", 0644, dir,
 			NULL, &clk_rate_fops)) {
 		dprintk(CVP_ERR, "debugfs_create_file: clock_rate fail\n");
-		goto failed_create_dir;
-	}
-	if (!debugfs_create_file("dsp_debug_level", 0644, dir,
-			NULL, &dsp_debug_fops)) {
-		dprintk(CVP_ERR, "debugfs_create: dsp_debug_level fail\n");
 		goto failed_create_dir;
 	}
 

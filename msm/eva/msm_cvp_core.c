@@ -104,29 +104,6 @@ static int __init_session_queue(struct msm_cvp_inst *inst)
 	return 0;
 }
 
-static void __init_fence_queue(struct msm_cvp_inst *inst)
-{
-	mutex_init(&inst->fence_cmd_queue.lock);
-	INIT_LIST_HEAD(&inst->fence_cmd_queue.wait_list);
-	INIT_LIST_HEAD(&inst->fence_cmd_queue.sched_list);
-	init_waitqueue_head(&inst->fence_cmd_queue.wq);
-	inst->fence_cmd_queue.state = QUEUE_ACTIVE;
-	inst->fence_cmd_queue.mode = OP_NORMAL;
-
-	spin_lock_init(&inst->session_queue_fence.lock);
-	INIT_LIST_HEAD(&inst->session_queue_fence.msgs);
-	inst->session_queue_fence.msg_count = 0;
-	init_waitqueue_head(&inst->session_queue_fence.wq);
-	inst->session_queue_fence.state = QUEUE_ACTIVE;
-}
-
-static void __deinit_fence_queue(struct msm_cvp_inst *inst)
-{
-	mutex_destroy(&inst->fence_cmd_queue.lock);
-	inst->fence_cmd_queue.state = QUEUE_INVALID;
-	inst->fence_cmd_queue.mode = OP_INVALID;
-}
-
 static void __deinit_session_queue(struct msm_cvp_inst *inst)
 {
 	struct cvp_session_msg *msg, *tmpmsg;
@@ -227,7 +204,6 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 	msm_cvp_session_init(inst);
 
-	__init_fence_queue(inst);
 	mutex_lock(&core->lock);
 	mutex_lock(&core->clk_lock);
 	list_add_tail(&inst->list, &core->instances);
@@ -348,7 +324,6 @@ wait_frame:
 			dprintk(CVP_WARN, "Unprocessed frame %08x ktid %llx\n",
 				frame->pkt_type, frame->ktid);
 		mutex_unlock(&inst->frames.lock);
-		inst->core->synx_ftbl->cvp_dump_fence_queue(inst);
 	}
 
 exit:
@@ -383,10 +358,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 
 	core = inst->core;
 
-	if (inst->session_type == MSM_CVP_DSP) {
-		cvp_dsp_del_sess(inst->dsp_handle, inst);
-		inst->task = NULL;
-	}
 	if (atomic_read(&inst->persist_usage) > 0 || atomic_read(&inst->frame_usage) > 0) {
 		dprintk(CVP_WARN,
 			"%s: Memleak detected for sess_id 0x%x persist_usage %d, frame_usage %d\n",
@@ -427,8 +398,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 	msm_cvp_debugfs_deinit_inst(inst);
 
 	__deinit_session_queue(inst);
-	__deinit_fence_queue(inst);
-	core->synx_ftbl->cvp_sess_deinit_synx(inst);
 
 	pr_info(CVP_PID_TAG
 		"closed cvp instance: %pK session_id = %d type %d %d\n",

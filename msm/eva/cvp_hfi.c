@@ -40,7 +40,6 @@
 #include "cvp_core_hfi.h"
 #include "cvp_hfi.h"
 #include "cvp_hfi_io.h"
-#include "msm_cvp_dsp.h"
 #include "msm_cvp_clocks.h"
 #include "vm/cvp_vm.h"
 #include "cvp_dump.h"
@@ -158,15 +157,6 @@ static inline bool is_sys_cache_present(struct iris_hfi_device *device)
 	return device->res->sys_cache_present;
 }
 
-static int cvp_synx_recover(void)
-{
-#ifdef CVP_SYNX_ENABLED
-	return synx_recover(SYNX_CLIENT_EVA_CTX0);
-#else
-	return 0;
-#endif	/* End of CVP_SYNX_ENABLED */
-}
-
 #define ROW_SIZE 32
 
 unsigned long long get_aon_time(void)
@@ -256,66 +246,6 @@ static void __dump_packet(u8 *packet, enum cvp_msg_prio log_level)
 				ROW_SIZE, 4, row, sizeof(row), false);
 		dprintk(log_level, "%s\n", row);
 	}
-}
-
-static int __dsp_suspend(struct iris_hfi_device *device, bool force)
-{
-	int rc;
-
-	if (msm_cvp_dsp_disable)
-		return 0;
-
-	dprintk(CVP_DSP, "%s: suspend dsp\n", __func__);
-	rc = cvp_dsp_suspend(force);
-	if (rc) {
-		if (rc != -EBUSY)
-			dprintk(CVP_ERR,
-				"%s: dsp suspend failed with error %d\n",
-				__func__, rc);
-		return rc;
-	}
-
-	dprintk(CVP_DSP, "%s: dsp suspended\n", __func__);
-	return 0;
-}
-
-static int __dsp_resume(struct iris_hfi_device *device)
-{
-	int rc;
-
-	if (msm_cvp_dsp_disable)
-		return 0;
-
-	dprintk(CVP_DSP, "%s: resume dsp\n", __func__);
-	rc = cvp_dsp_resume();
-	if (rc) {
-		dprintk(CVP_ERR,
-			"%s: dsp resume failed with error %d\n",
-			__func__, rc);
-		return rc;
-	}
-
-	dprintk(CVP_DSP, "%s: dsp resumed\n", __func__);
-	return rc;
-}
-
-static int __dsp_shutdown(struct iris_hfi_device *device)
-{
-	int rc;
-
-	if (msm_cvp_dsp_disable)
-		return 0;
-
-	dprintk(CVP_DSP, "%s: shutdown dsp\n", __func__);
-	rc = cvp_dsp_shutdown();
-	if (rc) {
-		dprintk(CVP_ERR,
-			"%s: dsp shutdown failed with error %d\n",
-			__func__, rc);
-	}
-
-	dprintk(CVP_DSP, "%s: dsp shutdown successful\n", __func__);
-	return rc;
 }
 
 static int __dev_pm_genpd_set_hwmode(struct device *dev, bool enable)
@@ -1175,13 +1105,7 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	u32 ctrl_init_val = 0, ctrl_status = 0, count = 0, max_tries = 5000;
 	CVPKERNEL_ATRACE_BEGIN("__boot_firmware");
 
-	ctrl_init_val = BIT(0);
-#ifndef CVP_DSP_ENABLED
-	ctrl_init_val |= BIT(1);
-#endif
-#ifndef CVP_SYNX_ENABLED
-	ctrl_init_val |= BIT(3);
-#endif
+	ctrl_init_val = BIT(0)|BIT(1)|BIT(3);
 #ifdef USE_PRESIL
 	/*Disable HW Synx if RUMI Support for Synx unavailable*/
 	ctrl_init_val |= BIT(3);
@@ -1637,107 +1561,6 @@ static void __interface_dsp_queues_release(struct iris_hfi_device *device)
 }
 */
 
-static int __interface_dsp_queues_init(struct iris_hfi_device *dev)
-{
-#ifdef CVP_DSP_ENABLED
-	int rc = 0;
-	u32 i;
-	struct cvp_iface_q_info *iface_q;
-	int offset = 0;
-	phys_addr_t fw_bias = 0;
-	size_t q_size;
-	struct msm_cvp_smem *mem_data;
-	void *kvaddr;
-	dma_addr_t dma_handle;
-	dma_addr_t iova;
-	struct context_bank_info *cb;
-	int count = 0;
-	const int max_retries = 10;
-
-	q_size = ALIGN(DSP_QUEUE_SIZE, SZ_1M);
-	mem_data = &dev->dsp_iface_q_table.mem_data;
-
-	if (mem_data->kvaddr) {
-		memset((void *)mem_data->kvaddr, 0, q_size);
-		cvp_dsp_init_hfi_queue_hdr(dev);
-		return 0;
-	}
-
-	while (count < max_retries) {
-		/* Allocate dsp queues from CDSP device memory */
-		kvaddr = dma_alloc_coherent(dev->res->mem_cdsp.dev, q_size,
-				&dma_handle, GFP_KERNEL);
-		if (IS_ERR_OR_NULL(kvaddr)) {
-			dprintk(CVP_ERR, "%s: failed dma allocation, retry %d\n",
-					__func__, count);
-			usleep_range(100000, 105000);
-			count++;
-		} else {
-			dprintk(CVP_INFO, "%s: DMA Allocation success\n", __func__);
-			break;
-		}
-	}
-	if (IS_ERR_OR_NULL(kvaddr)) {
-		dprintk(CVP_ERR, "%s: failed dma allocation\n", __func__);
-		goto fail_dma_alloc;
-	}
-	cb = msm_cvp_smem_get_context_bank(dev->res,  SMEM_CDSP);
-	if (!cb) {
-		dprintk(CVP_ERR,
-			"%s: failed to get DSP context bank\n", __func__);
-		goto fail_dma_map;
-	}
-	iova = dma_map_single_attrs(cb->dev, phys_to_virt(dma_handle),
-				q_size, DMA_BIDIRECTIONAL, 0);
-	if (dma_mapping_error(cb->dev, iova)) {
-		dprintk(CVP_ERR, "%s: failed dma mapping\n", __func__);
-		goto fail_dma_map;
-	}
-	dprintk(CVP_DSP,
-		"%s: kvaddr %pK dma_handle %#llx iova %#llx size %zd\n",
-		__func__, kvaddr, dma_handle, iova, q_size);
-
-	memset(mem_data, 0, sizeof(struct msm_cvp_smem));
-	mem_data->kvaddr = kvaddr;
-	mem_data->device_addr = iova;
-	mem_data->dma_handle = dma_handle;
-	mem_data->size = q_size;
-	mem_data->mapping_info.cb_info = cb;
-
-	if (!is_iommu_present(dev->res))
-		fw_bias = dev->cvp_hal_data->firmware_base;
-
-	dev->dsp_iface_q_table.align_virtual_addr = kvaddr;
-	dev->dsp_iface_q_table.align_device_addr = iova - fw_bias;
-	dev->dsp_iface_q_table.mem_size = CVP_IFACEQ_TABLE_SIZE;
-	offset = dev->dsp_iface_q_table.mem_size;
-
-	for (i = 0; i < CVP_IFACEQ_NUMQ; i++) {
-		iface_q = &dev->dsp_iface_queues[i];
-		iface_q->q_array.align_device_addr = iova + offset - fw_bias;
-		iface_q->q_array.align_virtual_addr = kvaddr + offset;
-		if (i == CVP_IFACEQ_CMDQ_IDX)
-			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_CMD_QUEUE_SIZE;
-		else if (i == CVP_IFACEQ_MSGQ_IDX)
-			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_MSG_QUEUE_SIZE;
-		else if (i == CVP_IFACEQ_DBGQ_IDX)
-			iface_q->q_array.mem_size = CVP_DSP_IFACEQ_DBG_QUEUE_SIZE;
-		offset += iface_q->q_array.mem_size;
-		spin_lock_init(&iface_q->hfi_lock);
-	}
-
-	cvp_dsp_init_hfi_queue_hdr(dev);
-
-	return rc;
-
-fail_dma_map:
-	dma_free_coherent(dev->res->mem_cdsp.dev, q_size, kvaddr, dma_handle);
-fail_dma_alloc:
-	return -ENOMEM;
-#else
-	return 0; // DSP is not enabled
-#endif
-}
 
 static void __interface_queues_release(struct iris_hfi_device *device)
 {
@@ -1877,9 +1700,6 @@ static void __setup_ucregion_memory_map(struct iris_hfi_device *device)
 	if (device->qdss.align_device_addr)
 		__write_register(device, CVP_MMAP_ADDR,
 				(u32)device->qdss.align_device_addr);
-#ifdef CVP_DSP_ENABLED
-	call_iris_op(device, setup_dsp_uc_memmap, device);
-#endif
 }
 
 static void __hfi_queue_init(struct iris_hfi_device *dev)
@@ -2093,14 +1913,6 @@ sfr_init:
 	}
 
 dsp_hfi_queue_init:
-#ifdef CVP_DSP_ENABLED
-	rc = __interface_dsp_queues_init(dev);
-	if (rc) {
-		dprintk(CVP_ERR, "dsp_queues_init failed\n");
-		goto fail_alloc_queue;
-	}
-#endif
-
 	__setup_ucregion_memory_map(dev);
 	return 0;
 fail_alloc_queue:
@@ -2389,12 +2201,6 @@ static int iris_hfi_core_init(void *device)
 		goto err_load_fw;
 	}
 
-	rc = cvp_synx_recover();
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to recover synx\n");
-		goto err_core_init;
-	}
-
 	/* mmrm registration */
 	if (msm_cvp_mmrm_enabled) {
 		rc = msm_cvp_mmrm_register(device);
@@ -2509,10 +2315,6 @@ static int iris_hfi_core_init(void *device)
 pm_qos_bail:
 	mutex_unlock(&dev->lock);
 
-#ifdef CVP_DSP_ENABLED
-	cvp_dsp_send_hfi_queue();
-#endif
-
 	pm_relax(dev->res->pdev->dev.parent);
 	dprintk(CVP_CORE, "Core inited successfully\n");
 	CVPKERNEL_ATRACE_END("iris_hfi_core_init");
@@ -2574,8 +2376,6 @@ static int iris_hfi_core_release(void *dev)
 	rc = __tzbsp_set_cvp_state(TZ_SUBSYS_STATE_SUSPEND);
 	if (rc)
 		dprintk(CVP_WARN, "Failed to suspend cvp FW%d\n", rc);
-
-	__dsp_shutdown(device);
 
 	__disable_subcaches(device);
 	ipcc_iova = __read_register(device, CVP_MMAP_ADDR);
@@ -3268,10 +3068,7 @@ static void iris_hfi_pm_handler(struct work_struct *work)
 	}
 
 	mutex_lock(&device->lock);
-	if (gfa_cv.state == DSP_SUSPEND)
-		rc = __power_collapse(device, true);
-	else
-		rc = __power_collapse(device, false);
+	rc = __power_collapse(device, false);
 	mutex_unlock(&device->lock);
 	switch (rc) {
 	case 0:
@@ -3326,12 +3123,6 @@ static int __power_collapse(struct iris_hfi_device *device, bool force)
 				"Core is in bad state, Skipping power collapse\n");
 		return -EINVAL;
 	}
-
-	rc = __dsp_suspend(device, force);
-	if (rc == -EBUSY || rc == -EINVAL)
-		goto exit;
-	else if (rc)
-		goto skip_power_off;
 
 	__flush_debug_queue(device, device->raw_packet);
 
@@ -5052,10 +4843,6 @@ int __resume(struct iris_hfi_device *device)
 
 	__enable_subcaches(device);
 	__set_subcaches(device);
-
-#ifdef CVP_DSP_ENABLED
-	__dsp_resume(device);
-#endif
 
 	dprintk(CVP_PWR, "Resumed from power collapse\n");
 exit:

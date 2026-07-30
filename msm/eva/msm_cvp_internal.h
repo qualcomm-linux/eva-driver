@@ -55,7 +55,6 @@
 #define MAX_CVP_ERROR_COUNT 65535
 
 struct msm_cvp_inst;
-struct cvp_dsp_fastrpc_driver_entry;
 
 enum cvp_core_state {
 	CVP_CORE_UNINIT = 0,
@@ -435,8 +434,6 @@ struct msm_cvp_inst {
 	struct mutex sync_lock, lock;
 	struct msm_cvp_core *core;
 	enum session_type session_type;
-	struct cvp_dsp_fastrpc_driver_entry *fastrpc_entry;
-	u32 dsp_handle;
 	struct task_struct *task;
 	atomic_t smem_count;
 	struct cvp_session_queue session_queue;
@@ -471,8 +468,6 @@ struct msm_cvp_inst {
 	u32 prev_hfi_error_code;
 	/* Stores error codes of enum 'cvp_session_errorcode' queried by UMD using IOCTL  */
 	u32 session_error_code;
-	struct synx_session *synx_session_id;
-	struct cvp_fence_queue fence_cmd_queue;
 	char proc_name[TASK_COMM_LEN];
 	u32 pm_qos_latency;
 	atomic_t va_inst_watermark;

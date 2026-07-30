@@ -21,10 +21,20 @@
 #include "msm_cvp_debug.h"
 #include "msm_cvp_resources.h"
 #include "cvp_core_hfi.h"
-#include "msm_cvp_dsp.h"
 #include "msm_cvp_buf.h"
 #include "msm_cvp_common.h"
 #include "msm_cvp_dma_buf.h"
+
+#ifndef CVP_SECURE_BUF_ENABLED
+#define VMID_HLOS 0x3
+#define PERM_READ 0x4
+#define PERM_WRITE 0x2
+#define PERM_EXEC 0x1
+#define VMID_CP_PIXEL       0xA
+#define VMID_CP_NON_PIXEL   0xB
+#define VMID_CP_CAMERA      0xD
+#define VMID_TVM            0x2D
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
 #define DMA_ATTR_IOMMU_USE_UPSTREAM_HINT 1;
@@ -374,26 +384,6 @@ int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-		struct msm_cvp_smem *smem,
-		const char *str)
-{
-	int rc = 0;
-
-	if (!smem) {
-		dprintk(CVP_ERR, "%s: Invalid params: %pK\n", __func__, smem);
-		rc = -EINVAL;
-		return rc;
-	}
-
-	print_smem_no_instance(CVP_MEM, str, smem);
-	rc = msm_cvp_unmap_smem_helper(smem);
-
-	if (!rc)
-		atomic_dec(&frpc_node->smem_count);
-
-	return rc;
-}
 
 static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	struct msm_cvp_platform_resources *res, struct msm_cvp_smem *mem,
@@ -479,9 +469,6 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 		goto fail_device_address;
 	}
 #endif
-
-	if (!gfa_cv.dmabuf_f_op)
-		gfa_cv.dmabuf_f_op = (const struct file_operations *)dbuf->file->f_op;
 
 	mem->size = size;
 	mem->dma_buf = dbuf;
@@ -656,7 +643,6 @@ struct context_bank_info *msm_cvp_smem_get_context_bank(
 	char *secure_nonpixel_cb = "eva_sec_nonpixel";
 	char *secure_pixel_cb = "eva_sec_pixel";
 	char *camera_cb = "cvp_camera";
-	char *dsp_cb = "cvp_dsp";
 	bool is_secure = (flags & SMEM_SECURE) ? true : false;
 
 	if (flags & SMEM_PIXEL)
@@ -666,8 +652,6 @@ struct context_bank_info *msm_cvp_smem_get_context_bank(
 	else if (flags & SMEM_CAMERA)
 		/* Secure Camera pixel buffer */
 		search_str = camera_cb;
-	else if (flags & SMEM_CDSP)
-		search_str = dsp_cb;
 	else
 		search_str = non_secure_cb;
 

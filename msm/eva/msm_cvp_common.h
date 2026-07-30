@@ -44,6 +44,4 @@ unsigned long long get_aon_time(void);
 void handle_session_error(enum hal_command_response cmd, void *data);
 void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required);
 void msm_cvp_bug_on(bool flag, bool isdelay);
-int cvp_print_frpc_node(u32 tag,
-	struct cvp_dsp_fastrpc_driver_entry *frpc_node);
 #endif

@@ -15,7 +15,7 @@
 #include "cvp_hfi_api.h"
 #include "msm_cvp_debug.h"
 #include "msm_cvp_core.h"
-#include "msm_cvp_dsp.h"
+#include "cvp_core_hfi.h"
 #include "eva_shared_def.h"
 #include "cvp_presil.h"
 #include "cvp_hfi.h"
@@ -127,41 +127,6 @@ int print_smem_no_instance(u32 tag, const char *str,
 	return 0;
 }
 
-static int print_smem_dsp(u32 tag, const char *str, struct cvp_dsp_trace_session *dsp_trace_sess,
-		struct msm_cvp_smem *smem)
-{
-	int i;
-	char name[PKT_NAME_LEN] = "Unknown";
-
-	if (!(tag & msm_cvp_debug))
-		return 0;
-
-	if (!dsp_trace_sess || !smem) {
-		dprintk(CVP_ERR, "Invalid dsp_trace_sess 0x%llx or smem 0x%llx\n",
-				dsp_trace_sess, smem);
-		return -EINVAL;
-	}
-
-	if (smem->dma_buf) {
-		i = get_pkt_index_from_type(smem->pkt_type);
-		if (i > 0)
-			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
-
-		if (!atomic_read(&smem->refcount))
-			dprintk(tag,
-				"UNUSED mapping %s: 0x%llx sessionid %#x size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
-				str, smem->dma_buf, dsp_trace_sess->session_id, smem->size,
-				smem->device_addr, name, smem->buf_idx, smem->fd,
-				smem->dma_buf->name);
-		else
-			dprintk(tag,
-				"%s:sessionid %x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
-				str, dsp_trace_sess->session_id, smem->dma_buf, smem->size, smem->flags, smem->device_addr,
-				atomic_read(&smem->refcount), name, smem->buf_idx,
-				smem->fd, smem->dma_buf->name);
-	}
-	return 0;
-}
 
 static void print_internal_buffer(u32 tag, const char *str,
 		struct msm_cvp_inst *inst, struct cvp_internal_buf *cbuf)
@@ -194,20 +159,6 @@ void print_cvp_buffer(u32 tag, const char *str, struct msm_cvp_inst *inst,
 	}
 
 	print_smem(tag, str, inst, cbuf->smem);
-}
-
-static void print_cvp_buffer_dsp(u32 tag, const char *str,
-		struct cvp_dsp_trace_session *dsp_trace_sess,
-		struct cvp_internal_buf *cbuf)
-{
-	if (!dsp_trace_sess || !cbuf) {
-		dprintk(CVP_ERR,
-			"%s Invalid params dsp_trace_sess %pK, cbuf %pK\n",
-			str, dsp_trace_sess, cbuf);
-		return;
-	}
-
-	print_smem_dsp(tag, str, dsp_trace_sess, cbuf->smem);
 }
 
 static void _log_smem(struct inst_snapshot *snapshot, struct msm_cvp_inst *inst,
@@ -2197,8 +2148,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 	struct msm_cvp_inst *instance = (struct  msm_cvp_inst *)0xdeadbeef;
 	struct msm_cvp_core *core = NULL;
 	struct list_head *ptr = NULL, *next = NULL;
-	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
-	struct cvp_dsp_apps *me = &gfa_cv;
 
 	core = cvp_driver->cvp_core;
 	if (!core)
@@ -2259,18 +2208,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 					msm_cvp_print_inst_bufs(instance, false);
 				}
 				mutex_unlock(&core->lock);
-
-				dprintk(CVP_ERR, "dsp mapping list:\n");
-				mutex_lock(&me->fastrpc_driver_list.lock);
-				list_for_each_safe(ptr, next, &me->fastrpc_driver_list.list) {
-					if (!ptr)
-						break;
-					frpc_node = list_entry(ptr,
-							struct cvp_dsp_fastrpc_driver_entry, list);
-					msm_cvp_print_frpc_bufs(frpc_node, CVP_ERR, true);
-				}
-				mutex_unlock(&me->fastrpc_driver_list.lock);
-
 				msm_cvp_unmap_frame_buf(inst, frame);
 				return -EINVAL;
 			}
@@ -2408,69 +2345,6 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 	return rc;
 }
 
-static void msm_cvp_print_dsp_buf_info(struct cvp_internal_buf *buf,
-					struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-					struct msm_cvp_core *core,
-					u32 tag,
-					bool raw)
-{
-	struct cvp_hfi_ops *dev_ops = (struct cvp_hfi_ops *) core->dev_ops;
-	struct iris_hfi_device *cvp_device = (struct iris_hfi_device *) dev_ops->hfi_device_data;
-	struct cvp_iface_q_info dsp_debugQ_info = cvp_device->dsp_iface_queues[DEBUG_Q];
-	struct cvp_dsp_trace_buf *trace_buf;
-	struct cvp_dsp_trace_session *trace_session;
-	struct cvp_dsp_trace *dsp_debug_trace;
-	struct msm_cvp_smem *smem = buf->smem;
-
-	dsp_debug_trace = (struct cvp_dsp_trace *) dsp_debugQ_info.q_array.align_virtual_addr;
-
-	if (!dsp_debug_trace) {
-		dprintk(CVP_ERR, "dsp trace is NULL\n");
-		return;
-	}
-
-	if (smem->dma_buf) {
-		int i = get_pkt_index_from_type(smem->pkt_type);
-		char name[PKT_NAME_LEN] = "Unknown";
-
-		if (i > 0)
-			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
-
-		if (!atomic_read(&smem->refcount))
-			dprintk(tag,
-				"UNUSED mapping %s of PD %#x: 0x%llx size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
-				"PD mapping", frpc_node->handle, smem->dma_buf,
-				smem->size, smem->device_addr,
-				name, smem->buf_idx, smem->fd, smem->dma_buf->name);
-		else
-			dprintk(tag,
-				"%s: PD  %#x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
-				"PD mapping", frpc_node->handle, smem->dma_buf,
-				smem->size, smem->flags, smem->device_addr,
-				atomic_read(&smem->refcount),
-				name, smem->buf_idx, smem->fd, smem->dma_buf->name);
-	}
-
-	if (!raw) {
-		for (int session_idx = 0; session_idx < EVA_TRACE_MAX_SESSION_NUM; session_idx++) {
-			if (dsp_debug_trace->sessions[session_idx].handle == frpc_node->handle) {
-				for (int buf_idx = 0; buf_idx < EVA_TRACE_MAX_BUF_NUM; buf_idx++) {
-					trace_session = &dsp_debug_trace->sessions[session_idx];
-					trace_buf = &trace_session->buf[buf_idx];
-					if (smem->device_addr == trace_buf->iova) {
-						smem->buf_idx = trace_buf->buf_idx;
-						smem->pkt_type = trace_buf->pkt_type;
-						smem->fd = trace_buf->fd;
-						print_cvp_buffer_dsp(tag, "dsp buf dump",
-					&dsp_debug_trace->sessions[session_idx], buf);
-						break;
-					}
-				}
-			}
-		}
-	}
-}
-
 #define MAX_NUM_FRAMES_DUMP 4
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 {
@@ -2559,53 +2433,6 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 	dprintk(CVP_ERR, "unmapped wncc bufs\n");
 	for (i = 0; i < inst->unused_wncc_bufs.nr; i++)
 		_log_smem(snap, inst, &inst->unused_wncc_bufs.smem[i], log);
-}
-
-void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32 tag, bool raw)
-{
-	struct cvp_internal_buf *buf = (struct cvp_internal_buf *)0xdeadbeef;
-	struct msm_cvp_core *core = cvp_driver->cvp_core;
-	int i = 0, j = 0;
-	char name[PKT_NAME_LEN] = "Unknown";
-
-	if (!core) {
-		dprintk(CVP_ERR, "core is null\n");
-		return;
-	}
-
-	mutex_lock(&frpc_node->cvpdspbufs.lock);
-	dprintk(CVP_ERR, "dsp buffer list:\n");
-	list_for_each_entry(buf, &frpc_node->cvpdspbufs.list, list) {
-		msm_cvp_print_dsp_buf_info(buf, frpc_node, cvp_driver->cvp_core, tag, raw);
-	}
-	mutex_unlock(&frpc_node->cvpdspbufs.lock);
-
-	if (!raw) {
-		dprintk(CVP_ERR, "unmapped dsp bufs\n");
-		for (i = 0; i < frpc_node->unused_dsp_bufs.nr; i++) {
-			struct msm_cvp_smem *smem = &frpc_node->unused_dsp_bufs.smem[i];
-
-			if (smem && smem->dma_buf) {
-				j = get_pkt_index_from_type(smem->pkt_type);
-				if (j > 0)
-					strscpy(name, cvp_hfi_defs[j].name, PKT_NAME_LEN);
-
-				if (!atomic_read(&smem->refcount))
-					dprintk(tag,
-						"UNUSED mapping %s of PD %#x: 0x%llx size %x iova %#x pkt_type %s buf_idx %#x fd %d name %s\n",
-						"PD mapping", smem->dma_buf, frpc_node->handle,
-						smem->size, smem->device_addr,
-						name, smem->buf_idx, smem->fd, smem->dma_buf->name);
-				else
-					dprintk(tag,
-						"%s: PD %#x: 0x%llx size %x flags %#x iova %#x ref %d pkt_type %s buf_idx %#x fd %d name %s\n",
-						"PD mapping", smem->dma_buf, frpc_node->handle,
-						smem->size, smem->flags, smem->device_addr,
-						atomic_read(&smem->refcount),
-						name, smem->buf_idx, smem->fd, smem->dma_buf->name);
-			}
-		}
-	}
 }
 
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
@@ -2882,9 +2709,7 @@ int msm_cvp_register_buffer(struct msm_cvp_inst *inst,
 	ops_tbl = inst->core->dev_ops;
 	print_client_buffer(CVP_HFI, "register", inst, buf);
 
-	if (buf->index)
-		rc = msm_cvp_map_buf_dsp(inst, buf);
-	else if (buf->type == EVA_KMD_BUFTYPE_INTERNAL_1)
+	if (buf->type == EVA_KMD_BUFTYPE_INTERNAL_1)
 		rc = msm_cvp_map_feature_persist(inst, buf);
 	else
 		rc = msm_cvp_map_buf_wncc(inst, buf);
@@ -2920,9 +2745,7 @@ int msm_cvp_unregister_buffer(struct msm_cvp_inst *inst,
 
 	print_client_buffer(CVP_HFI, "unregister", inst, buf);
 
-	if (buf->index)
-		rc = msm_cvp_unmap_buf_dsp(inst, buf);
-	else if (buf->type == EVA_KMD_BUFTYPE_INTERNAL_1)
+	if (buf->type == EVA_KMD_BUFTYPE_INTERNAL_1)
 		rc = msm_cvp_unmap_feature_persist(inst, buf);
 	else
 		rc = msm_cvp_unmap_buf_wncc(inst, buf);

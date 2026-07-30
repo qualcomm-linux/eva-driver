@@ -62,9 +62,7 @@ msm-eva-objs := eva/cvp.o \
         eva/hfi_packetization.o \
         eva/cvp_core_hfi.o \
         eva/msm_cvp_clocks.o\
-        eva/msm_cvp_dsp.o \
         eva/msm_cvp_buf.o \
-        eva/msm_cvp_synx.o \
         eva/msm_cvp_dma_buf.o \
         eva/target/cvp_kaanapali_hal.o \
         eva/target/cvp_pakala_hal.o \
