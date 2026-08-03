@@ -348,7 +348,7 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_class_create;
 	}
 
-	core->dev = device_create(core->class, NULL,
+	core->dev = device_create(core->class, &pdev->dev,
 		core->dev_num, NULL, DRIVER_NAME);
 	if (IS_ERR(core->dev)) {
 		rc = PTR_ERR(core->dev);
