@@ -13,7 +13,6 @@
 #include "cvp_core_hfi.h"
 #include "msm_cvp_internal.h"
 #include "msm_cvp_buf.h"
-#include "eva_shared_def.h"
 
 #define MAP_ADDR_OFFSET 0x0 /* 0xD0000000 */
 

@@ -44,25 +44,6 @@ set_default_pkt_hdr:
 	return 0;
 }
 
-static int _get_fence_pkt_hdr_from_user(struct eva_kmd_arg __user *up,
-		struct cvp_hal_session_cmd_pkt *pkt_hdr)
-{
-	struct eva_kmd_hfi_synx_packet __user *u;
-
-	u = &up->data.hfi_synx_pkt;
-
-	if (get_user(pkt_hdr->size, &u->pkt_data[0]))
-		return -EFAULT;
-
-	if (get_user(pkt_hdr->packet_type, &u->pkt_data[1]))
-		return -EFAULT;
-
-	if (pkt_hdr->size > (MAX_HFI_PKT_SIZE*sizeof(unsigned int)))
-		return -EINVAL;
-
-	return 0;
-}
-
 /* Size is in unit of u32 */
 static int _copy_pkt_from_user(struct eva_kmd_arg *kp,
 		struct eva_kmd_arg __user *up,
@@ -81,68 +62,6 @@ static int _copy_pkt_from_user(struct eva_kmd_arg *kp,
 		return -EFAULT;
 
 	return 0;
-}
-
-static int _copy_synx_data_from_user(
-	struct eva_kmd_hfi_synx_packet *k,
-	struct eva_kmd_hfi_synx_packet __user *u)
-{
-	int i;
-
-	for (i = 0; i < MAX_FENCE_DATA_SIZE; i++) {
-		if (get_user(k->fence_data[i], &u->fence_data[i]))
-			return -EFAULT;
-	}
-
-	if (get_user(k->oob_buf, &u->oob_buf))
-		return -EFAULT;
-
-	return 0;
-}
-
-/* Size is in unit of u32 */
-static int _copy_fence_data_from_user_deprecate(
-	struct eva_kmd_hfi_fence_packet *k,
-	struct eva_kmd_hfi_fence_packet __user *u)
-{
-	int i;
-
-	for (i = 0; i < MAX_HFI_FENCE_SIZE; i++) {
-		if (get_user(k->fence_data[i], &u->fence_data[i]))
-			return -EFAULT;
-	}
-
-	if (get_user(k->frame_id, &u->frame_id)) {
-		dprintk(CVP_ERR, "Failed to get frame id from fence pkt\n");
-		return -EFAULT;
-	}
-
-	return 0;
-}
-
-static int _copy_fence_pkt_from_user(struct eva_kmd_arg *kp,
-		struct eva_kmd_arg __user *up)
-{	struct eva_kmd_hfi_synx_packet *k;
-	struct eva_kmd_hfi_synx_packet __user *u;
-	struct eva_kmd_hfi_fence_packet __user *u1;
-	int i;
-
-	k = &kp->data.hfi_synx_pkt;
-	u = &up->data.hfi_synx_pkt;
-	u1 = &up->data.hfi_fence_pkt;
-
-	for (i = 0; i < MAX_HFI_PKT_SIZE; i++)
-		if (get_user(k->pkt_data[i], &u->pkt_data[i]))
-			return -EFAULT;
-
-	if (get_user(k->fence_data[0], &u->fence_data[0]))
-		return -EFAULT;
-
-	if (k->fence_data[0] == 0xFEEDFACE)
-		return _copy_synx_data_from_user(k, u);
-	else
-		return _copy_fence_data_from_user_deprecate(
-				(struct eva_kmd_hfi_fence_packet *)k, u1);
 }
 
 static int _copy_frameid_from_user(struct eva_kmd_arg *kp,
@@ -188,26 +107,6 @@ static int _copy_pkt_to_user(struct eva_kmd_arg *kp,
 	for (i = 0; i < size; i++)
 		if (put_user(k->pkt_data[i], &u->pkt_data[i]))
 			return -EFAULT;
-
-	if (put_user(k->oob_buf, &u->oob_buf))
-		return -EFAULT;
-
-	return 0;
-}
-
-static int _copy_fence_pkt_to_user(struct eva_kmd_arg *kp,
-		struct eva_kmd_arg __user *up)
-{
-	struct eva_kmd_hfi_synx_packet *k;
-	struct eva_kmd_hfi_synx_packet __user *u;
-	int i;
-
-	k = &kp->data.hfi_synx_pkt;
-	u = &up->data.hfi_synx_pkt;
-	for (i = 0; i < MAX_HFI_PKT_SIZE; i++) {
-		if (put_user(k->pkt_data[i], &u->pkt_data[i]))
-			return -EFAULT;
-	}
 
 	if (put_user(k->oob_buf, &u->oob_buf))
 		return -EFAULT;
@@ -333,44 +232,6 @@ static int convert_from_user(struct eva_kmd_arg *kp,
 
 		break;
 	}
-	case EVA_KMD_REGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *k, *u;
-
-		k = &kp->data.regbuf;
-		u = &up->data.regbuf;
-		if (get_user(k->type, &u->type) ||
-			get_user(k->index, &u->index) ||
-			get_user(k->fd, &u->fd) ||
-			get_user(k->size, &u->size) ||
-			get_user(k->offset, &u->offset) ||
-			get_user(k->pixelformat, &u->pixelformat) ||
-			get_user(k->flags, &u->flags))
-			return -EFAULT;
-		for (i = 0; i < 5; i++)
-			if (get_user(k->reserved[i], &u->reserved[i]))
-				return -EFAULT;
-		break;
-	}
-	case EVA_KMD_UNREGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *k, *u;
-
-		k = &kp->data.unregbuf;
-		u = &up->data.unregbuf;
-		if (get_user(k->type, &u->type) ||
-			get_user(k->index, &u->index) ||
-			get_user(k->fd, &u->fd) ||
-			get_user(k->size, &u->size) ||
-			get_user(k->offset, &u->offset) ||
-			get_user(k->pixelformat, &u->pixelformat) ||
-			get_user(k->flags, &u->flags))
-			return -EFAULT;
-		for (i = 0; i < 5; i++)
-			if (get_user(k->reserved[i], &u->reserved[i]))
-				return -EFAULT;
-		break;
-	}
 	case EVA_KMD_SEND_CMD_PKT:
 	{
 		if (_get_pkt_hdr_from_user(up, &pkt_hdr)) {
@@ -382,28 +243,6 @@ static int convert_from_user(struct eva_kmd_arg *kp,
 		rc = _copy_pkt_from_user(kp, up, 0, (pkt_hdr.size >> 2));
 		if (rc == 0)
 			kp->data.hfi_pkt.pkt_data[0] = pkt_hdr.size;
-		break;
-	}
-	case EVA_KMD_SEND_FENCE_CMD_PKT:
-	{
-		if (_get_fence_pkt_hdr_from_user(up, &pkt_hdr)) {
-			dprintk(CVP_ERR, "Invalid syscall: %x, %x, %x\n",
-				kp->type, pkt_hdr.size, pkt_hdr.packet_type);
-			return -EFAULT;
-		}
-		dprintk(CVP_HFI, "system call cmd pkt: %d 0x%x\n",
-				pkt_hdr.size, pkt_hdr.packet_type);
-
-		pkt_idx = get_pkt_index(&pkt_hdr);
-		if (pkt_idx < 0) {
-			dprintk(CVP_ERR, "%s incorrect packet %d, %x\n",
-				__func__,
-				pkt_hdr.size,
-				pkt_hdr.packet_type);
-			return -EFAULT;
-		}
-
-		rc = _copy_fence_pkt_from_user(kp, up);
 		break;
 	}
 	case EVA_KMD_RECEIVE_MSG_PKT:
@@ -513,44 +352,6 @@ static int convert_to_user(struct eva_kmd_arg *kp, unsigned long arg)
 
 		break;
 	}
-	case EVA_KMD_REGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *k, *u;
-
-		k = &kp->data.regbuf;
-		u = &up->data.regbuf;
-		if (put_user(k->type, &u->type) ||
-			put_user(k->index, &u->index) ||
-			put_user(k->fd, &u->fd) ||
-			put_user(k->size, &u->size) ||
-			put_user(k->offset, &u->offset) ||
-			put_user(k->pixelformat, &u->pixelformat) ||
-			put_user(k->flags, &u->flags))
-			return -EFAULT;
-		for (i = 0; i < 5; i++)
-			if (put_user(k->reserved[i], &u->reserved[i]))
-				return -EFAULT;
-		break;
-	}
-	case EVA_KMD_UNREGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *k, *u;
-
-		k = &kp->data.unregbuf;
-		u = &up->data.unregbuf;
-		if (put_user(k->type, &u->type) ||
-			put_user(k->index, &u->index) ||
-			put_user(k->fd, &u->fd) ||
-			put_user(k->size, &u->size) ||
-			put_user(k->offset, &u->offset) ||
-			put_user(k->pixelformat, &u->pixelformat) ||
-			put_user(k->flags, &u->flags))
-			return -EFAULT;
-		for (i = 0; i < 5; i++)
-			if (put_user(k->reserved[i], &u->reserved[i]))
-				return -EFAULT;
-		break;
-	}
 	case EVA_KMD_SEND_CMD_PKT:
 	{
 		if (_get_pkt_hdr_from_user(up, &pkt_hdr))
@@ -559,17 +360,6 @@ static int convert_to_user(struct eva_kmd_arg *kp, unsigned long arg)
 		dprintk(CVP_HFI, "Send user cmd pkt: %d %d\n",
 				pkt_hdr.size, pkt_hdr.packet_type);
 		rc = _copy_pkt_to_user(kp, up, (pkt_hdr.size >> 2));
-		break;
-	}
-	case EVA_KMD_SEND_FENCE_CMD_PKT:
-	{
-		if (_get_fence_pkt_hdr_from_user(up, &pkt_hdr))
-			return -EFAULT;
-
-		dprintk(CVP_HFI, "Send user cmd pkt: %d %d\n",
-				pkt_hdr.size, pkt_hdr.packet_type);
-
-		rc = _copy_fence_pkt_to_user(kp, up);
 		break;
 	}
 	case EVA_KMD_SESSION_CONTROL:

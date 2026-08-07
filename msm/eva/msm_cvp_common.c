@@ -1179,11 +1179,6 @@ exit:
 	return rc;
 }
 
-void msm_cvp_comm_handle_thermal_event(void)
-{
-	dprintk(CVP_WARN, "deprecated %s called\n", __func__);
-}
-
 int msm_cvp_comm_check_core_init(struct msm_cvp_core *core)
 {
 	int rc = 0;

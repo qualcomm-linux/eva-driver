@@ -376,11 +376,6 @@ static int msm_cvp_session_process_hfi(
 		rc = -EINVAL;
 		goto exit;
 	}
-	rc = msm_cvp_proc_oob(inst, in_pkt);
-	if (rc) {
-		dprintk(CVP_ERR, "%s: failed to process OOB buffer", __func__);
-		goto exit;
-	}
 
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_BEGIN");
@@ -399,15 +394,6 @@ exit:
 	CVPKERNEL_ATRACE_END("msm_cvp_session_process_hfi");
 	return rc;
 }
-
-
-static int msm_cvp_session_process_hfi_fence(struct msm_cvp_inst *inst,
-					struct eva_kmd_arg *arg)
-{
-	dprintk(CVP_WARN, "Deprecated IOCTL command %s\n", __func__);
-	return -EINVAL;
-}
-
 
 static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	struct eva_kmd_hfi_packet *in_pkt,
@@ -773,6 +759,7 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	return 0;
 
 restore_state:
+
 	spin_lock(&sq->lock);
 	sq->state = old_state;
 	spin_unlock(&sq->lock);
@@ -1580,22 +1567,6 @@ int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
 		rc = msm_cvp_update_power(inst);
 		break;
 	}
-	case EVA_KMD_REGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *buf =
-			(struct eva_kmd_buffer *)&arg->data.regbuf;
-
-		rc = msm_cvp_register_buffer(inst, buf);
-		break;
-	}
-	case EVA_KMD_UNREGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *buf =
-			(struct eva_kmd_buffer *)&arg->data.unregbuf;
-
-		rc = msm_cvp_unregister_buffer(inst, buf);
-		break;
-	}
 	case EVA_KMD_RECEIVE_MSG_PKT:
 	{
 		struct eva_kmd_hfi_packet *out_pkt =
@@ -1610,11 +1581,6 @@ int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
 
 		rc = msm_cvp_session_process_hfi(inst, in_pkt,
 				arg->buf_offset, arg->buf_num);
-		break;
-	}
-	case EVA_KMD_SEND_FENCE_CMD_PKT:
-	{
-		rc = msm_cvp_session_process_hfi_fence(inst, arg);
 		break;
 	}
 	case EVA_KMD_SESSION_CONTROL:

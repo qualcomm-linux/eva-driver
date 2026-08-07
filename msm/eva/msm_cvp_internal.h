@@ -448,12 +448,8 @@ struct msm_cvp_inst {
 	atomic_t persist_usage;
 	atomic_t frame_usage;
 	struct cvp_dmamap_cache dma_cache;
-	struct msm_cvp_list cvpwnccbufs;
 	struct msm_cvp_list frames;
 	struct cvp_frame_bufs last_frame;
-	struct cvp_frame_bufs unused_wncc_bufs;
-	u32 cvpwnccbufs_num;
-	struct msm_cvp_wncc_buffer* cvpwnccbufs_table;
 	struct completion completions[SESSION_MSG_END - SESSION_MSG_START + 1];
 	struct dentry *debugfs_root;
 	struct msm_cvp_debug debug;
@@ -479,7 +475,6 @@ void cvp_handle_cmd_response(enum hal_command_response cmd, void *data);
 int msm_cvp_trigger_ssr(struct msm_cvp_core *core,
 	enum hal_ssr_trigger_type type);
 int msm_cvp_noc_error_info(struct msm_cvp_core *core);
-void msm_cvp_comm_handle_thermal_event(void);
 
 void msm_cvp_ssr_handler(struct work_struct *work);
 void msm_cvp_iova_cleanup_handler(struct work_struct *work);

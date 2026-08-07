@@ -105,12 +105,6 @@ struct msm_cvp_smem {
 	struct cvp_dma_mapping_info mapping_info;
 };
 
-struct msm_cvp_wncc_buffer {
-	u32 fd;
-	u32 iova;
-	u32 size;
-};
-
 struct cvp_dmamap_cache {
 	struct mutex lock;
 	struct rb_root rbtree;
@@ -172,21 +166,6 @@ struct cvp_frame_bufs {
 	struct msm_cvp_smem smem[MAX_FRAME_BUFFER_NUMS];
 };
 
-struct wncc_oob_buf {
-	u32 bitmap_idx;
-	struct eva_kmd_oob_wncc *buf;
-};
-
-#define NUM_WNCC_BUFS 8
-struct cvp_oob_pool {
-	struct mutex lock;
-	bool allocated;
-	u32 used_bitmap;
-	struct eva_kmd_oob_wncc *bufs[NUM_WNCC_BUFS];
-};
-
-extern struct cvp_oob_pool wncc_buf_pool;
-
 void print_cvp_buffer(u32 tag, const char *str,
 		struct msm_cvp_inst *inst,
 		struct cvp_internal_buf *cbuf);
@@ -228,8 +207,6 @@ int msm_cvp_unmap_ipcc_regs(u32 iova);
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 					u32 buffer_size);
 int cvp_release_arp_buffers(struct msm_cvp_inst *inst);
-int msm_cvp_proc_oob(struct msm_cvp_inst* inst,
-			struct eva_kmd_hfi_packet* in_pkt);
 void msm_cvp_cache_operations(struct msm_cvp_smem *smem,
 			u32 type, u32 offset, u32 size);
 int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
@@ -242,10 +219,6 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		struct eva_kmd_hfi_packet *in_pkt,
 		unsigned int offset, unsigned int buf_num);
 void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid);
-int msm_cvp_register_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_unregister_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
 int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,

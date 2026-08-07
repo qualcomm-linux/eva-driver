@@ -640,7 +640,6 @@ static int __init msm_cvp_init(void)
 	cvp_driver->frame_cache.cache = KMEM_CACHE(msm_cvp_frame, 0);
 	cvp_driver->buf_cache.cache = KMEM_CACHE(cvp_internal_buf, 0);
 	cvp_driver->smem_cache.cache = KMEM_CACHE(msm_cvp_smem, 0);
-	mutex_init(&wncc_buf_pool.lock);
 
 	return rc;
 }
@@ -655,7 +654,6 @@ static void __exit msm_cvp_exit(void)
 	platform_driver_unregister(&msm_cvp_driver);
 	debugfs_remove_recursive(cvp_driver->debugfs_root);
 	mutex_destroy(&cvp_driver->lock);
-	mutex_destroy(&wncc_buf_pool.lock);
 	kfree(cvp_driver);
 	cvp_driver = NULL;
 }

@@ -569,13 +569,6 @@ static int inst_info_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int publish_unreleased_reference(struct msm_cvp_inst *inst,
-		char **dbuf, char *end)
-{
-	dprintk(CVP_SESS, "%s deprecated function\n", __func__);
-	return 0;
-}
-
 static void put_inst_helper(struct kref *kref)
 {
 	struct msm_cvp_inst *inst;
@@ -642,7 +635,6 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		"pending" : "done");
 	}
 
-	publish_unreleased_reference(inst, &cur, end);
 	len = simple_read_from_buffer(buf, count, ppos,
 		dbuf, cur - dbuf);
 
