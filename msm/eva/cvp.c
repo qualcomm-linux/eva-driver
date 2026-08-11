@@ -21,6 +21,11 @@
 #include <linux/pm_domain.h>
 #include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
+#include <drm/drm_accel.h>
+#include <drm/drm_drv.h>
+#include <drm/drm_file.h>
+#include <drm/drm_ioctl.h>
+#include <drm/drm_gem.h>
 #include "msm_cvp_core.h"
 #include "msm_cvp_common.h"
 #include "msm_cvp_debug.h"
@@ -39,11 +44,11 @@
 #include "cvp_comm_def.h"
 
 #define CLASS_NAME              "cvp"
-#define DRIVER_NAME             "cvp"
+#define DRIVER_NAME             "eva"
 
 struct msm_cvp_drv *cvp_driver;
 
-static int cvp_open(struct inode *inode, struct file *filp)
+static int eva_drm_open(struct drm_device *dev, struct drm_file *file)
 {
 	struct msm_cvp_inst *inst;
 
@@ -54,46 +59,72 @@ static int cvp_open(struct inode *inode, struct file *filp)
 		dprintk(CVP_ERR, "Failed to create cvp instance\n");
 		return -ENOMEM;
 	}
-	filp->private_data = inst;
+	file->driver_priv = inst;
 	return 0;
 }
 
-static int cvp_close(struct inode *inode, struct file *filp)
+static void eva_drm_postclose(struct drm_device *dev, struct drm_file *file)
 {
-	int rc = 0;
-	struct msm_cvp_inst *inst = filp->private_data;
+	struct msm_cvp_inst *inst = file->driver_priv;
 
-	rc = msm_cvp_close(inst);
-	filp->private_data = NULL;
-	return rc;
+	if (inst)
+		msm_cvp_close(inst);
+	file->driver_priv = NULL;
 }
 
-static unsigned int cvp_poll(struct file *filp, struct poll_table_struct *p)
+static const struct drm_ioctl_desc eva_ioctls[] = {
+	DRM_IOCTL_DEF_DRV(EVA_GET_SESSION_INFO,   eva_ioctl_get_session_info,  0),
+	DRM_IOCTL_DEF_DRV(EVA_UPDATE_POWER,       eva_ioctl_update_power,      0),
+	DRM_IOCTL_DEF_DRV(EVA_SEND_CMD_PKT,       eva_ioctl_send_cmd_pkt,      0),
+	DRM_IOCTL_DEF_DRV(EVA_RECEIVE_MSG_PKT,    eva_ioctl_receive_msg_pkt,   0),
+	DRM_IOCTL_DEF_DRV(EVA_SET_SYS_PROPERTY,   eva_ioctl_set_sysprop,       0),
+	DRM_IOCTL_DEF_DRV(EVA_GET_SYS_PROPERTY,   eva_ioctl_get_sysprop,       0),
+	DRM_IOCTL_DEF_DRV(EVA_SESSION_CONTROL,    eva_ioctl_session_ctrl,      0),
+	DRM_IOCTL_DEF_DRV(EVA_FLUSH_ALL,          eva_ioctl_flush_all,         0),
+	DRM_IOCTL_DEF_DRV(EVA_FLUSH_FRAME,        eva_ioctl_flush_frame,       0),
+};
+
+static __poll_t eva_poll(struct file *filp, struct poll_table_struct *p)
 {
-	int rc = 0;
-	struct msm_cvp_inst *inst = filp->private_data;
+	__poll_t rc = 0;
+	struct drm_file *drm_filp = filp->private_data;
+	struct msm_cvp_inst *inst = drm_filp->driver_priv;
 	unsigned long flags = 0;
 
 	poll_wait(filp, &inst->event_handler.wq, p);
 
 	spin_lock_irqsave(&inst->event_handler.lock, flags);
 	if (inst->event_handler.event == EVA_EVENT)
-		rc |= POLLPRI;
+		rc |= EPOLLPRI;
 	if (inst->event_handler.event == CVP_DUMP_EVENT)
-		rc |= POLLIN;
+		rc |= EPOLLIN;
 	inst->event_handler.event = CVP_NO_EVENT;
 	spin_unlock_irqrestore(&inst->event_handler.lock, flags);
 
 	return rc;
 }
 
-static const struct file_operations cvp_fops = {
-	.owner = THIS_MODULE,
-	.open = cvp_open,
-	.release = cvp_close,
-	.unlocked_ioctl = cvp_unblocked_ioctl,
-	.compat_ioctl = cvp_compat_ioctl,
-	.poll = cvp_poll,
+static const struct file_operations eva_accel_fops = {
+	.owner          = THIS_MODULE,
+	.open           = accel_open,
+	.release        = drm_release,
+	.unlocked_ioctl = drm_ioctl,
+	.compat_ioctl   = drm_compat_ioctl,
+	.poll           = eva_poll,
+	.llseek         = noop_llseek,
+	.mmap           = drm_gem_mmap,
+	.fop_flags      = FOP_UNSIGNED_OFFSET,
+};
+
+static const struct drm_driver eva_drm_driver = {
+	.driver_features = DRIVER_COMPUTE_ACCEL | DRIVER_GEM,
+	.open            = eva_drm_open,
+	.postclose       = eva_drm_postclose,
+	.ioctls          = eva_ioctls,
+	.num_ioctls      = ARRAY_SIZE(eva_ioctls),
+	.fops            = &eva_accel_fops,
+	.name            = DRIVER_NAME,
+	.desc            = "Qualcomm EVA Accel driver",
 };
 
 static int read_platform_resources(struct msm_cvp_core *core,
@@ -314,12 +345,15 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	core = kzalloc(sizeof(*core), GFP_KERNEL);
-	if (!core) {
-		dprintk(CVP_ERR, "Failed to allocate memory for core, size 0x%x\n",
-				sizeof(*core));
-		return -ENOMEM;
+	core = devm_drm_dev_alloc(&pdev->dev, &eva_drm_driver,
+				  struct msm_cvp_core, drm_dev);
+	if (IS_ERR(core)) {
+		dprintk(CVP_ERR, "Failed to alloc DRM device: %ld\n",
+			PTR_ERR(core));
+		return PTR_ERR(core);
 	}
+
+	core->dev = core->drm_dev.dev;
 
 	core->platform_data = cvp_get_drv_data(&pdev->dev);
 	dev_set_drvdata(&pdev->dev, core);
@@ -329,45 +363,10 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_core_init;
 	}
 
-	rc = alloc_chrdev_region(&core->dev_num, 0, 1, DRIVER_NAME);
-	if (rc < 0) {
-		dprintk(CVP_ERR, "alloc_chrdev_region failed: %d\n",
-				rc);
-		goto err_alloc_chrdev;
-	}
-
-	core->class = class_create(CLASS_NAME);
-	if (IS_ERR(core->class)) {
-		rc = PTR_ERR(core->class);
-		dprintk(CVP_ERR, "class_create failed: %d\n",
-				rc);
-		goto err_class_create;
-	}
-
-	core->dev = device_create(core->class, NULL,
-		core->dev_num, NULL, DRIVER_NAME);
-	if (IS_ERR(core->dev)) {
-		rc = PTR_ERR(core->dev);
-		dprintk(CVP_ERR, "device_create failed: %d\n",
-				rc);
-		goto err_device_create;
-	}
-	dev_set_drvdata(core->dev, core);
-
-	cdev_init(&core->cdev, &cvp_fops);
-	rc = cdev_add(&core->cdev,
-			MKDEV(MAJOR(core->dev_num), 0), 1);
-	if (rc < 0) {
-		dprintk(CVP_ERR, "cdev_add failed: %d\n",
-				rc);
-		goto error_cdev_add;
-	}
-
-	rc = sysfs_create_group(&core->dev->kobj, &msm_cvp_core_attr_group);
+	rc = sysfs_create_group(&core->drm_dev.dev->kobj, &msm_cvp_core_attr_group);
 	if (rc) {
-		dprintk(CVP_ERR,
-				"Failed to create attributes\n");
-		goto err_cores_exceeded;
+		dprintk(CVP_ERR, "Failed to create attributes\n");
+		goto err_core_init;
 	}
 
 #ifdef CVP_GUNYAH_ENABLED
@@ -393,10 +392,11 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	cvp_driver->cvp_core = core;
 	mutex_unlock(&cvp_driver->lock);
 
-	cvp_driver->debugfs_root = msm_cvp_debugfs_init_drv();
+	cvp_driver->debugfs_root = core->drm_dev.debugfs_root;
 	if (!cvp_driver->debugfs_root)
 		dprintk(CVP_ERR, "Failed to create debugfs for msm_cvp\n");
-
+	
+	msm_cvp_debugfs_init_drv(cvp_driver->debugfs_root);
 	core->debugfs_root = msm_cvp_debugfs_init_core(
 		core, cvp_driver->debugfs_root);
 
@@ -462,8 +462,15 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		rc = -EINVAL;
 	}
 
-	return rc;
+	rc = drm_dev_register(&core->drm_dev, 0);
+	if (rc) {
+		dprintk(CVP_ERR, "drm_dev_register failed: %d\n", rc);
+		goto err_drm_register;
+	}
 
+	return 0;
+
+err_drm_register:
 err_fail_sub_device_probe:
 	vfree(core->kmd_trace.kmd_debug_log.log);
 	core->kmd_trace.kmd_debug_log.log = NULL;
@@ -473,19 +480,9 @@ fail_dbglog_alloc:
 	if (core->cb_devs)
 		cvp_deinit_context_bank_devices(core);
 err_hfi_initialize:
-err_cores_exceeded:
-	cdev_del(&core->cdev);
-error_cdev_add:
-	device_destroy(core->class, core->dev_num);
-err_device_create:
-	class_destroy(core->class);
-err_class_create:
-	unregister_chrdev_region(core->dev_num, 1);
-err_alloc_chrdev:
 	sysfs_remove_group(&pdev->dev.kobj, &msm_cvp_core_attr_group);
 err_core_init:
 	dev_set_drvdata(&pdev->dev, NULL);
-	kfree(core);
 	return rc;
 }
 
@@ -541,6 +538,8 @@ static int msm_cvp_remove(struct platform_device *pdev)
 
 	if (core->kmd_trace.kmd_debug_log.log)
 		vfree(core->kmd_trace.kmd_debug_log.log);
+	
+	drm_dev_unregister(&core->drm_dev);
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
 	msm_cvp_free_platform_resources(&core->resources);
 
@@ -552,7 +551,6 @@ static int msm_cvp_remove(struct platform_device *pdev)
 	mutex_destroy(&core->idr_lock);
 	mutex_destroy(&core->lock);
 	mutex_destroy(&core->clk_lock);
-	kfree(core);
 exit:
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	return rc;

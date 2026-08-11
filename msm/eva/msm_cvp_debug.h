@@ -122,7 +122,7 @@ extern int msm_cvp_max_frames_dump;
 	} while (0)
 
 
-struct dentry *msm_cvp_debugfs_init_drv(void);
+void msm_cvp_debugfs_init_drv(struct dentry *dir);
 struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 		struct dentry *parent);
 struct dentry *msm_cvp_debugfs_init_inst(struct msm_cvp_inst *inst,

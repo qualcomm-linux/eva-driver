@@ -47,23 +47,6 @@ int msm_cvp_poll(void *instance, struct file *filp,
 }
 EXPORT_SYMBOL(msm_cvp_poll);
 
-int msm_cvp_private(void *cvp_inst, unsigned int cmd,
-		struct eva_kmd_arg *arg)
-{
-	int rc = 0;
-	struct msm_cvp_inst *inst = (struct msm_cvp_inst *)cvp_inst;
-
-	if (!inst || !arg) {
-		dprintk(CVP_ERR, "%s: invalid args\n", __func__);
-		return -EINVAL;
-	}
-
-	rc = msm_cvp_handle_syscall(inst, arg);
-
-	return rc;
-}
-EXPORT_SYMBOL(msm_cvp_private);
-
 static bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *instance_count)
 {
 	u32 secure_instance_count = 0;

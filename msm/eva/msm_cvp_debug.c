@@ -345,16 +345,8 @@ static const struct file_operations session_info_fops = {
 };
 
 
-struct dentry *msm_cvp_debugfs_init_drv(void)
+void msm_cvp_debugfs_init_drv(struct dentry *dir)
 {
-	struct dentry *dir = NULL;
-
-	dir = debugfs_create_dir("msm_cvp", NULL);
-	if (IS_ERR_OR_NULL(dir)) {
-		dir = NULL;
-		goto failed_create_dir;
-	}
-
 	debugfs_create_x32("debug_level", 0644, dir, &msm_cvp_debug);
 	debugfs_create_x32("fw_level", 0644, dir, &msm_cvp_fw_debug);
 	debugfs_create_u32("fw_debug_mode", 0644, dir, &msm_cvp_fw_debug_mode);
@@ -375,14 +367,7 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 
 	debugfs_create_file("cvp_power", 0644, dir, NULL, &cvp_pwr_fops);
 
-	return dir;
-
-failed_create_dir:
-	if (dir)
-		debugfs_remove_recursive(cvp_driver->debugfs_root);
-
-	dprintk(CVP_WARN, "Failed to create debugfs\n");
-	return NULL;
+	return;
 }
 
 static int _clk_rate_set(void *data, u64 val)

@@ -218,7 +218,7 @@ exit:
 	return rc;
 }
 
-static int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
+int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
 			struct eva_kmd_hfi_packet *out_pkt)
 {
 	unsigned long wait_time;
@@ -277,7 +277,7 @@ static int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_session_process_hfi(
+int msm_cvp_session_process_hfi(
 	struct msm_cvp_inst *inst,
 	struct eva_kmd_hfi_packet *in_pkt,
 	unsigned int in_offset,
@@ -688,7 +688,7 @@ fail_create:
 	return rc;
 }
 
-static int session_state_check_init(struct msm_cvp_inst *inst)
+int session_state_check_init(struct msm_cvp_inst *inst)
 {
 	mutex_lock(&inst->lock);
 	if (inst->state == MSM_CVP_OPEN || inst->state == MSM_CVP_OPEN_DONE) {
@@ -985,7 +985,7 @@ int msm_cvp_session_queue_stop(struct msm_cvp_inst *inst)
 	return 0;
 }
 
-static int msm_cvp_session_ctrl(struct msm_cvp_inst *inst,
+int msm_cvp_session_ctrl(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
 	struct eva_kmd_session_control *ctrl = &arg->data.session_ctrl;
@@ -1023,7 +1023,7 @@ static int msm_cvp_session_ctrl(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
+int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
 	struct eva_kmd_sys_properties *props = &arg->data.sys_properties;
@@ -1428,7 +1428,7 @@ static int msm_cvp_set_sysprop_pwr_fps(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
+int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
 	struct eva_kmd_sys_properties *props = &arg->data.sys_properties;
@@ -1525,88 +1525,6 @@ exit:
 	msm_cvp_set_clocks(inst->core);
 	cvp_put_inst(s);
 	CVPKERNEL_ATRACE_END("cvp_session_flush_all");
-	return rc;
-}
-
-int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
-{
-	int rc = 0;
-	CVPKERNEL_ATRACE_BEGIN("msm_cvp_handle_syscall");
-
-	if (!inst || !arg) {
-		dprintk(CVP_ERR, "%s: invalid args\n", __func__);
-		return -EINVAL;
-	}
-	dprintk(CVP_HFI, "%s: arg->type = %x, for session_id 0x%x",
-			__func__, arg->type, inst->sess_id);
-
-	if (arg->type != EVA_KMD_SESSION_CONTROL &&
-		arg->type != EVA_KMD_SET_SYS_PROPERTY &&
-		arg->type != EVA_KMD_GET_SYS_PROPERTY) {
-
-		rc = session_state_check_init(inst);
-		if (rc) {
-			dprintk(CVP_ERR,
-				"Incorrect session state %d for command %#x",
-				inst->state, arg->type);
-			return rc;
-		}
-	}
-
-	switch (arg->type) {
-	case EVA_KMD_GET_SESSION_INFO:
-	{
-		struct eva_kmd_session_info *session =
-			(struct eva_kmd_session_info *)&arg->data.session;
-
-		rc = msm_cvp_get_session_info(inst, &session->session_id);
-		break;
-	}
-	case EVA_KMD_UPDATE_POWER:
-	{
-		rc = msm_cvp_update_power(inst);
-		break;
-	}
-	case EVA_KMD_RECEIVE_MSG_PKT:
-	{
-		struct eva_kmd_hfi_packet *out_pkt =
-			(struct eva_kmd_hfi_packet *)&arg->data.hfi_pkt;
-		rc = msm_cvp_session_receive_hfi(inst, out_pkt);
-		break;
-	}
-	case EVA_KMD_SEND_CMD_PKT:
-	{
-		struct eva_kmd_hfi_packet *in_pkt =
-			(struct eva_kmd_hfi_packet *)&arg->data.hfi_pkt;
-
-		rc = msm_cvp_session_process_hfi(inst, in_pkt,
-				arg->buf_offset, arg->buf_num);
-		break;
-	}
-	case EVA_KMD_SESSION_CONTROL:
-		rc = msm_cvp_session_ctrl(inst, arg);
-		break;
-	case EVA_KMD_GET_SYS_PROPERTY:
-		rc = msm_cvp_get_sysprop(inst, arg);
-		break;
-	case EVA_KMD_SET_SYS_PROPERTY:
-		rc = msm_cvp_set_sysprop(inst, arg);
-		break;
-	case EVA_KMD_FLUSH_ALL:
-		rc = cvp_session_flush_all(inst);
-		break;
-	case EVA_KMD_FLUSH_FRAME:
-		dprintk(CVP_WARN, "EVA_KMD_FLUSH_FRAME IOCTL deprecated\n");
-		rc = 0;
-		break;
-	default:
-		dprintk(CVP_HFI, "%s: unknown arg type %#x\n",
-				__func__, arg->type);
-		rc = -ENOTSUPP;
-		break;
-	}
-	CVPKERNEL_ATRACE_END("msm_cvp_handle_syscall");
-
 	return rc;
 }
 

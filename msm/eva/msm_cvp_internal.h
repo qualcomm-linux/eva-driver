@@ -17,8 +17,8 @@
 #include <linux/workqueue.h>
 #include <linux/interconnect.h>
 #include <linux/kref.h>
-#include <linux/cdev.h>
 #include <linux/slab.h>
+#include <drm/drm_device.h>
 #include <linux/kthread.h>
 #include <linux/dma-mapping.h>
 #include "msm_cvp_core.h"
@@ -381,11 +381,9 @@ struct cvp_session_event {
 };
 
 struct msm_cvp_core {
+	struct drm_device drm_dev;
 	struct mutex lock;
 	struct mutex clk_lock;
-	dev_t dev_num;
-	struct cdev cdev;
-	struct class *class;
 	struct device *dev;
 	struct cvp_hfi_ops *dev_ops;
 	struct msm_cvp_platform_data *platform_data;
@@ -427,6 +425,9 @@ struct msm_cvp_core {
 	struct device **cb_devs;
 	u32 num_cb_devs;
 };
+
+
+#define eva_core_from_drm(d) container_of(d, struct msm_cvp_core, drm_dev)
 
 struct msm_cvp_inst {
 	struct list_head list;

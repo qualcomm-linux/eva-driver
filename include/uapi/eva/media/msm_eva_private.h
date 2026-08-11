@@ -7,38 +7,7 @@
 #define __MSM_EVA_PRIVATE_H__
 
 #include <linux/types.h>
-
-/* Commands type */
-#define EVA_KMD_CMD_BASE		0x10000000
-#define EVA_KMD_CMD_START		(EVA_KMD_CMD_BASE + 0x1000)
-
-/*
- * userspace clients pass one of the below arguments type
- * in struct eva_kmd_arg (@type field).
- */
-
-/*
- * EVA_KMD_GET_SESSION_INFO - this argument type is used to
- *          get the session information from driver. it passes
- *          struct eva_kmd_session_info {}
- */
-#define EVA_KMD_GET_SESSION_INFO	(EVA_KMD_CMD_START + 1)
-
-#define EVA_KMD_UPDATE_POWER	(EVA_KMD_CMD_START + 17)
-
-#define EVA_KMD_SEND_CMD_PKT	(EVA_KMD_CMD_START + 64)
-
-#define EVA_KMD_RECEIVE_MSG_PKT	 (EVA_KMD_CMD_START + 65)
-
-#define EVA_KMD_SET_SYS_PROPERTY	(EVA_KMD_CMD_START + 66)
-
-#define EVA_KMD_GET_SYS_PROPERTY	(EVA_KMD_CMD_START + 67)
-
-#define EVA_KMD_SESSION_CONTROL		(EVA_KMD_CMD_START + 68)
-
-#define EVA_KMD_FLUSH_ALL	(EVA_KMD_CMD_START + 70)
-
-#define EVA_KMD_FLUSH_FRAME	(EVA_KMD_CMD_START + 71)
+#include <drm/drm.h>
 
 /* flags */
 #define EVA_KMD_FLAG_UNSECURE			0x00000000
@@ -239,4 +208,31 @@ struct eva_kmd_arg {
 	} data;
 };
 
+/*
+ * DRM ioctl command indices (relative to DRM_COMMAND_BASE).
+ * These are the indices passed to DRM_IOCTL_DEF_DRV().
+ */
+#define DRM_EVA_GET_SESSION_INFO	0x00
+#define DRM_EVA_UPDATE_POWER		0x01
+#define DRM_EVA_SEND_CMD_PKT		0x02
+#define DRM_EVA_RECEIVE_MSG_PKT		0x03
+#define DRM_EVA_SET_SYS_PROPERTY	0x04
+#define DRM_EVA_GET_SYS_PROPERTY	0x05
+#define DRM_EVA_SESSION_CONTROL		0x06
+#define DRM_EVA_FLUSH_ALL		0x07
+#define DRM_EVA_FLUSH_FRAME		0x08
+
+/*
+ * Userspace-facing DRM ioctl numbers.
+ * All use struct eva_kmd_arg as the data structure.
+ */
+#define DRM_IOCTL_EVA_GET_SESSION_INFO   DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_GET_SESSION_INFO,   struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_UPDATE_POWER       DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_UPDATE_POWER,       struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_SEND_CMD_PKT       DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_SEND_CMD_PKT,       struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_RECEIVE_MSG_PKT    DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_RECEIVE_MSG_PKT,    struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_SET_SYS_PROPERTY   DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_SET_SYS_PROPERTY,   struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_GET_SYS_PROPERTY   DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_GET_SYS_PROPERTY,   struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_SESSION_CONTROL    DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_SESSION_CONTROL,    struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_FLUSH_ALL          DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_FLUSH_ALL,          struct eva_kmd_arg)
+#define DRM_IOCTL_EVA_FLUSH_FRAME        DRM_IOWR(DRM_COMMAND_BASE + DRM_EVA_FLUSH_FRAME,        struct eva_kmd_arg)
 #endif
