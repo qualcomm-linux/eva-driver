@@ -19,6 +19,7 @@
 #include <linux/kref.h>
 #include <linux/slab.h>
 #include <drm/drm_device.h>
+#include <drm/drm_file.h>
 #include <linux/kthread.h>
 #include <linux/dma-mapping.h>
 #include "msm_cvp_core.h"
@@ -428,6 +429,7 @@ struct msm_cvp_core {
 
 
 #define eva_core_from_drm(d) container_of(d, struct msm_cvp_core, drm_dev)
+#define eva_core_from_res(r) container_of(r, struct msm_cvp_core, resources)
 
 struct msm_cvp_inst {
 	struct list_head list;
@@ -468,6 +470,7 @@ struct msm_cvp_inst {
 	char proc_name[TASK_COMM_LEN];
 	u32 pm_qos_latency;
 	atomic_t va_inst_watermark;
+	struct drm_file *file_priv;
 };
 
 extern struct msm_cvp_drv *cvp_driver;

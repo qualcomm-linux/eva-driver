@@ -18,6 +18,7 @@
 #include "cvp_core_hfi.h"
 #include "msm_cvp_events.h"
 #include "cvp_hfi.h"
+#include "eva_gem.h"
 
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
@@ -434,6 +435,7 @@ static void handle_session_release_buf_done(enum hal_command_response cmd,
 	struct msm_cvp_inst *inst;
 	struct cvp_internal_buf *buf;
 	struct list_head *ptr, *next;
+	struct msm_cvp_smem *smem;
 	u32 buf_found = false;
 	u32 address;
 
@@ -455,9 +457,10 @@ static void handle_session_release_buf_done(enum hal_command_response cmd,
 	mutex_lock(&inst->persistbufs.lock);
 	list_for_each_safe(ptr, next, &inst->persistbufs.list) {
 		buf = list_entry(ptr, struct cvp_internal_buf, list);
-		if (address == buf->smem->device_addr + buf->offset) {
+		smem = buf->gem? eva_gem_smem(buf->gem): buf->smem;
+		if (address == smem->device_addr + buf->offset) {
 			dprintk(CVP_SESS, "releasing persist: %#x\n",
-					buf->smem->device_addr);
+					smem->device_addr);
 			buf_found = true;
 		}
 	}
@@ -2013,7 +2016,7 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 		goto error;
 	}
 
-	rc = set_internal_buf_on_fw(inst, buf->smem);
+	rc = set_internal_buf_on_fw(inst, to_eva_gem(buf->gem)->smem);;
 	if (rc)
 		goto error;
 

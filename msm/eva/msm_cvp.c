@@ -11,6 +11,7 @@
 #include "cvp_comm_def.h"
 #include "cvp_power.h"
 #include "cvp_hfi_api.h"
+#include "eva_gem.h"
 /*
  * only need #define CREATE_TRACE_POINTS in one source file
  * but every source file which add CVPKERNEL_ATRACE_BEGIN/CVPKERNEL_ATRACE_END
@@ -1074,11 +1075,27 @@ int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 		}
 		case EVA_KMD_PROP_SESSION_ERROR:
 		{
-			get_dma_buf(hfi->sfr.mem_data.dma_buf);
-			rc = dma_buf_fd(hfi->sfr.mem_data.dma_buf, O_RDONLY | O_CLOEXEC);
+			struct msm_cvp_smem *sfr_smem = &hfi->sfr.mem_data;
+			if (!sfr_smem->dma_buf) {
+				mutex_lock(&hfi->lock);
+				if (!sfr_smem->dma_buf) {
+					struct dma_buf *dbuf = eva_gem_export_dma_buf(
+							to_eva_gem(sfr_smem->gem));
+
+					if (IS_ERR(dbuf)) {
+						mutex_unlock(&hfi->lock);
+						rc = PTR_ERR(dbuf);
+						break;
+					}
+					sfr_smem->dma_buf = dbuf;
+				}
+				mutex_unlock(&hfi->lock);
+			}
+			get_dma_buf(sfr_smem->dma_buf);
+			rc = dma_buf_fd(sfr_smem->dma_buf, O_RDONLY | O_CLOEXEC);
 			if (rc < 0) {
 				dprintk(CVP_WARN, "Failed get dma_buf fd %d\n", rc);
-				dma_buf_put(hfi->sfr.mem_data.dma_buf);
+				dma_buf_put(sfr_smem->dma_buf);
 				break;
 			}
 

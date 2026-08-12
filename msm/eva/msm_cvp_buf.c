@@ -18,6 +18,7 @@
 #include "cvp_core_hfi.h"
 #include "cvp_presil.h"
 #include "cvp_hfi.h"
+#include "eva_gem.h"
 
 extern bool trigger_smmu_fault;
 
@@ -123,26 +124,34 @@ int print_smem_no_instance(u32 tag, const char *str,
 static void print_internal_buffer(u32 tag, const char *str,
 		struct msm_cvp_inst *inst, struct cvp_internal_buf *cbuf)
 {
+	struct msm_cvp_smem *smem;
+
 	if (!(tag & msm_cvp_debug) || !inst || !cbuf)
 		return;
+	
+	smem = eva_gem_smem(cbuf->gem);
+	if (!smem)
+		return;
 
-	if (cbuf->smem->dma_buf) {
+	if (smem->dma_buf) {
 		dprintk(tag,
 		"%s: %x : fd %d off %d 0x%llx %s size %d iova %#x\n",
 		str, inst->sess_id, cbuf->fd,
-		cbuf->offset, cbuf->smem->dma_buf, cbuf->smem->dma_buf->name,
-		cbuf->size, cbuf->smem->device_addr);
+		cbuf->offset, smem->dma_buf, smem->dma_buf->name,
+		cbuf->size, smem->device_addr);
 	} else {
 		dprintk(tag,
 		"%s: %x : idx %2d fd %d off %d size %d iova %#x\n",
 		str, inst->sess_id, cbuf->index, cbuf->fd,
-		cbuf->offset, cbuf->size, cbuf->smem->device_addr);
+		cbuf->offset, cbuf->size, smem->device_addr);
 	}
 }
 
 void print_cvp_buffer(u32 tag, const char *str, struct msm_cvp_inst *inst,
 		struct cvp_internal_buf *cbuf)
 {
+	struct msm_cvp_smem *smem;
+
 	if (!inst || !cbuf) {
 		dprintk(CVP_ERR,
 			"%s Invalid params inst %pK, cbuf %pK\n",
@@ -150,7 +159,9 @@ void print_cvp_buffer(u32 tag, const char *str, struct msm_cvp_inst *inst,
 		return;
 	}
 
-	print_smem(tag, str, inst, cbuf->smem);
+	smem = eva_gem_smem(cbuf->gem);
+	if (smem)
+		print_smem(tag, str, inst, smem);
 }
 
 static void _log_smem(struct inst_snapshot *snapshot, struct msm_cvp_inst *inst,
@@ -180,8 +191,14 @@ static void _log_buf(struct inst_snapshot *snapshot, enum smem_prop prop,
 		bool logging)
 {
 	struct cvp_buf_data *buf = NULL;
+	struct msm_cvp_smem *smem;
 	u32 index;
-	if (prop == SMEM_CDSP && cbuf->smem->pkt_type == 0)
+
+	smem = eva_gem_smem(cbuf->gem);
+	if (!smem)
+		return;
+
+	if (prop == SMEM_CDSP && smem->pkt_type == 0)
 		return;
 	print_cvp_buffer(CVP_ERR, "bufdump", inst, cbuf);
 	if (!logging)
@@ -198,7 +215,7 @@ static void _log_buf(struct inst_snapshot *snapshot, enum smem_prop prop,
 			snapshot->persist_index++;
 		}
 		if (buf) {
-			buf->device_addr = cbuf->smem->device_addr;
+			buf->device_addr = smem->device_addr;
 			buf->size = cbuf->size;
 		}
 	}
@@ -218,7 +235,7 @@ void print_client_buffer(u32 tag, const char *str,
 		cbuf->reserved[0]);
 }
 
-static void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
+void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
 		struct msm_cvp_inst *inst, struct eva_kmd_hfi_packet *pkt)
 {
 	struct cvp_hfi_persist_buffer_packet *persist_pkt =
@@ -244,6 +261,7 @@ static bool is_mapped_persist_buf(struct msm_cvp_inst *inst, struct cvp_buf_type
 	struct cvp_internal_buf *pbuf = (struct cvp_internal_buf *)0xdeadbeef;
 	struct list_head *ptr = (struct list_head *)0xdead;
 	struct list_head *next = (struct list_head *)0xdead;
+	struct msm_cvp_smem *smem;
 
 	if (!inst || !inst->core || buf->fd < 0) {
 		dprintk(CVP_ERR, "%s: invalid params", __func__);
@@ -258,9 +276,11 @@ static bool is_mapped_persist_buf(struct msm_cvp_inst *inst, struct cvp_buf_type
 		}
 		pbuf = list_entry(ptr, struct cvp_internal_buf, list);
 		if (pbuf->fd == buf->fd && pbuf->size == buf->size) {
-			*iova = pbuf->smem->device_addr;
+			smem = pbuf->gem ? eva_gem_smem(pbuf->gem) : pbuf->smem;
+			if (smem)
+				*iova = smem->device_addr;
 			mutex_unlock(&inst->persistbufs.lock);
-			return true;
+			return smem != NULL;
 		}
 	}
 	mutex_unlock(&inst->persistbufs.lock);
@@ -312,7 +332,7 @@ static struct msm_cvp_smem *find_smem_rb_node(struct msm_cvp_inst *inst, struct 
 	}
 	return NULL;
 }
-static struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
+struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst,
 				struct dma_buf *dma_buf,
 				u32 pkt_type)
 {
@@ -381,7 +401,7 @@ static int msm_cvp_free_unused_mapping(struct msm_cvp_inst *inst)
 		if (atomic_read(&smem->refcount) == 0) {
 			print_smem(CVP_MEM, "free", inst, smem);
 			rb_erase(&smem->node, &inst->dma_cache.rbtree);
-			rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu cache");
+			rc = eva_gem_unmap_iova(to_eva_gem(smem->gem));
 			if (rc)
 				dprintk(CVP_ERR, "%s: Fail to unmap smem 0x%x, error %d\n",
 					__func__, smem, rc);
@@ -428,7 +448,7 @@ static void msm_cvp_add_smem_rb_node(struct msm_cvp_inst *inst,
 	atomic_add(smem->size, &core->va_watermark);
 }
 
-static int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
+int msm_cvp_session_add_smem(struct msm_cvp_inst *inst,
 				struct msm_cvp_smem *smem)
 {
 	struct msm_cvp_core *core;
@@ -615,9 +635,7 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 	int rc = 0;
 	struct list_head *next;
 	struct cvp_internal_buf *pbuf;
-	struct msm_cvp_core *core = cvp_driver->cvp_core;
 	struct msm_cvp_smem *smem = NULL;
-	struct msm_cvp_smem *smem_cache_entry = NULL;
 	struct dma_buf *dma_buf;
 	int ret = -EINVAL;
 
@@ -631,61 +649,62 @@ static int msm_cvp_unmap_user_persist_buf(struct msm_cvp_inst *inst,
 		return -EINVAL;
 
 	mutex_lock(&inst->persistbufs.lock);
-	mutex_lock(&inst->dma_cache.lock);
 	list_for_each_safe(ptr, next, &inst->persistbufs.list) {
 		pbuf = list_entry(ptr, struct cvp_internal_buf, list);
-		smem = pbuf->smem;
-		if (dma_buf == smem->dma_buf && (smem->flags & SMEM_PERSIST)) {
+
+		if (pbuf->gem) {
+			/* GEM-backed persist: check by GEM object identity */
+			struct msm_cvp_smem *psmem = eva_gem_smem(pbuf->gem);
+			if (psmem && psmem->dma_buf == dma_buf) {
+				if (eva_gem_refcount_is_one(pbuf->gem)) {
+					*iova = psmem->device_addr;
+					dprintk(CVP_MEM,
+						"Unmap persist fd %d, dma_buf %#llx iova %#x\n",
+						pbuf->fd, smem->dma_buf, *iova);
+					list_del(&pbuf->list);
+					atomic_sub(pbuf->size, &inst->persist_usage);
+					eva_gem_put(pbuf->gem);
+					pbuf->gem = NULL;
+					cvp_kmem_cache_free(&cvp_driver->buf_cache, pbuf);
+					ret = 0;
+					goto exit;
+				} else {
+					eva_gem_put(pbuf->gem);
+				}
+			}
+		} else {
+			smem = pbuf->smem;
+			if (!smem || smem->dma_buf != dma_buf ||
+			    !(smem->flags & SMEM_PERSIST))
+				continue;
+
 			if (atomic_dec_and_test(&smem->refcount)) {
 				*iova = smem->device_addr;
-				dprintk(CVP_MEM,
-					"Unmap persist fd %d, dma_buf %#llx iova %#x\n",
-					pbuf->fd, smem->dma_buf, *iova);
 				list_del(&pbuf->list);
-
-				/*
-				 * Remove from 64 bit cache entry for DMM & WARP_DS PARAMS.
-				 * Only clear bit in bitmap and leave the unmap and put
-				 * dma to add_smem
-				 */
-				if (is_params_pkt(pkt_type) && (smem->cached == true)) {
-					smem_cache_entry = find_smem_rb_node(inst, smem->dma_buf);
-					if (smem_cache_entry) {
-						rb_erase(&smem_cache_entry->node,
-							&inst->dma_cache.rbtree);
-						atomic_sub(smem->size, &inst->va_inst_watermark);
-						atomic_sub(smem->size, &core->va_watermark);
-						smem->cached = false;
-						inst->dma_cache.nr--;
-					}
-				} else {
-					atomic_sub(smem->size, &inst->persist_usage);
-					print_persist_buffer_info(CVP_MEM, "FREE user persist",
-						smem->size, inst, in_pkt);
-					rc = msm_cvp_unmap_smem(inst, smem, "unmap user persist");
-					if (rc)
-						dprintk(CVP_ERR,
-						"%s: Fail to unmap smem 0x%x error %d\n",
-						__func__, smem, rc);
-					else
-						msm_cvp_smem_put_dma_buf(smem->dma_buf);
-					smem->buf_idx |= 0xdead0000;
-					smem->device_addr = 0;
-					cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-					smem = NULL;
-				}
+				atomic_sub(pbuf->size, &inst->persist_usage);
+				print_persist_buffer_info(CVP_MEM, "FREE user persist",
+					smem->size, inst, in_pkt);
+				rc = msm_cvp_unmap_smem(inst, smem, "unmap user persist");
+				if (rc)
+					dprintk(CVP_ERR,
+					"%s: Fail to unmap smem 0x%x error %d\n",
+					__func__, smem, rc);
+				else
+					msm_cvp_smem_put_dma_buf(smem->dma_buf);
+				smem->device_addr = 0;
+				cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
+				pbuf->smem = NULL;
 				cvp_kmem_cache_free(&cvp_driver->buf_cache, pbuf);
 				ret = 0;
-				goto exit;
+				break;
 			}
 			dprintk(CVP_INFO, "%s - pbuf in use, smem refcount: %d",
-					__func__, pbuf->smem->refcount);
+					__func__, atomic_read(&smem->refcount));
 			ret = -EAGAIN;
-			goto exit;
+			break;
 		}
 	}
 exit:
-	mutex_unlock(&inst->dma_cache.lock);
 	mutex_unlock(&inst->persistbufs.lock);
 	dma_buf_put(dma_buf);
 
@@ -718,11 +737,11 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 				u32 pkt_type, u32 buf_idx, u32 *iova,
 				struct eva_kmd_hfi_packet *in_pkt)
 {
-	struct msm_cvp_smem *smem = NULL;
 	struct list_head *ptr;
 	struct list_head *next;
 	struct cvp_internal_buf *pbuf;
-	struct dma_buf *dma_buf;
+	struct drm_gem_object *obj = NULL;
+	struct msm_cvp_smem *smem;
 	int ret;
 
 	if (!inst) {
@@ -730,64 +749,35 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 		return -EINVAL;
 	}
 
-	dma_buf = msm_cvp_smem_get_dma_buf(buf->fd);
-	if (!dma_buf)
-		return -EINVAL;
+	ret = eva_gem_get_imported(inst, inst->file_priv, buf, EVA_GEM_USER_PERSIST, pkt_type, &obj);
 
-	mutex_lock(&inst->persistbufs.lock);
-	if (!inst->persistbufs.list.next) {
-		mutex_unlock(&inst->persistbufs.lock);
+	if (ret) {
+		dprintk(CVP_ERR, "%s: gem get failed fd %d ret %d\n",
+			__func__, buf->fd, ret);
+		return ret;
+	}
+	smem = eva_gem_smem(obj);
+	if (!smem || !IS_CVP_BUF_VALID(buf, smem)) {
+		dprintk(CVP_ERR, "%s: invalid buf or smem fd %d\n",
+			__func__, buf->fd);
+		eva_gem_put(obj);
 		return -EINVAL;
 	}
-	list_for_each_safe(ptr, next, &inst->persistbufs.list) {
-		if (!ptr)
-			return -EINVAL;
-		pbuf = list_entry(ptr, struct cvp_internal_buf, list);
-		if (dma_buf == pbuf->smem->dma_buf) {
-			atomic_sub(pbuf->size, &inst->persist_usage);
-			pbuf->size =
-				(pbuf->size >= buf->size) ?
-				pbuf->size : buf->size;
-			*iova = pbuf->smem->device_addr + buf->offset;
-			atomic_add(pbuf->size, &inst->persist_usage);
-			print_persist_buffer_info(CVP_MEM, "MAP user persist",
-					pbuf->size, inst, NULL);
-			atomic_inc(&pbuf->smem->refcount);
-			dprintk(CVP_MEM,
-				"map persist Reuse fd %d, dma_buf %#llx\n",
-				pbuf->fd, pbuf->smem->dma_buf);
-			mutex_unlock(&inst->persistbufs.lock);
-			dma_buf_put(dma_buf);
-			return 0;
-		}
-	}
-	mutex_unlock(&inst->persistbufs.lock);
-
-	dma_buf_put(dma_buf);
 
 	pbuf = cvp_kmem_cache_zalloc(&cvp_driver->buf_cache, GFP_KERNEL);
 	if (!pbuf) {
 		dprintk(CVP_ERR, "%s failed to allocate kmem obj\n",
 			__func__);
+		eva_gem_put(obj);
 		return -ENOMEM;
 	}
 
-	if (is_params_pkt(pkt_type))
-		smem = msm_cvp_session_get_smem(inst, buf, false, pkt_type);
-	else
-		smem = msm_cvp_session_get_smem(inst, buf, true, pkt_type);
-
-	if (!smem) {
-		ret = -ENOMEM;
-		goto exit;
-	}
 #ifndef CONFIG_EVA_SUN
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 #endif
-	smem->pkt_type = pkt_type;
 	smem->buf_idx = buf_idx;
-	smem->fd = buf->fd;
-	pbuf->smem = smem;
+	pbuf->smem = NULL;
+	pbuf->gem = obj;
 	pbuf->fd = buf->fd;
 	pbuf->size = buf->size;
 	pbuf->offset = buf->offset;
@@ -825,6 +815,7 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 {
 	u32 iova = 0;
 	struct msm_cvp_smem *smem = NULL;
+	struct drm_gem_object *obj = NULL;
 	struct msm_cvp_core *core;
 	struct cvp_hfi_ops *ops_tbl;
 	struct iris_hfi_device *dev = NULL;
@@ -832,6 +823,7 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 	u32 type;
 	u32 ipcc_reg_base_iova;
 	u32 ipcc_reg_size;
+	int ret;
 
 	core = cvp_driver->cvp_core;
 	if (core) {
@@ -857,16 +849,28 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 		return 0;
 	}
 
-	smem = msm_cvp_session_get_smem(inst, buf, false, pkt_type);
-	if (!smem)
+	ret = eva_gem_get_imported(inst, inst->file_priv, buf, EVA_GEM_FRAME, pkt_type, &obj);
+	if (ret) {
+		dprintk(CVP_ERR, "%s: gem get failed fd %d ret %d\n",
+			__func__, buf->fd, ret);
 		return 0;
+	}
+	smem = eva_gem_smem(obj);
+	if (!smem || !IS_CVP_BUF_VALID(buf, smem)) {
+		dprintk(CVP_ERR, "%s: invalid buf or smem fd %d\n",
+			__func__, buf->fd);
+		eva_gem_put(obj);
+		return 0;
+	}
+
 #ifndef CONFIG_EVA_SUN
 	buf->context_bank_id = msm_cvp_get_cb(smem->flags);
 #endif
 	smem->buf_idx = buf_idx;
 
 	frame->bufs[nr].fd = buf->fd;
-	frame->bufs[nr].smem = smem;
+	frame->bufs[nr].smem = NULL;
+	frame->bufs[nr].gem = obj;
 	frame->bufs[nr].size = buf->size;
 	frame->bufs[nr].offset = buf->offset;
 
@@ -913,28 +917,22 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 
 	for (i = 0; i < frame->nr; ++i) {
 		buf = &frame->bufs[i];
-		smem = buf->smem;
-		msm_cvp_cache_operations(smem, type, buf->offset, buf->size);
+		smem = eva_gem_smem(buf->gem);
 
 		if (!smem) {
 			dprintk(CVP_ERR, "%s: Invalid smem\n", __func__);
 			continue;
 		}
+		msm_cvp_cache_operations(smem, type, buf->offset, buf->size);
 
 #ifdef USE_PRESIL42
 	presil42_unmap_frame_buf(smem, buf);
 #endif
 			if (smem->cached == true) {
-				mutex_lock(&inst->dma_cache.lock);
-				if (atomic_dec_and_test(&smem->refcount)) {
-					print_smem(CVP_MEM, "Map dereference",
-						inst, smem);
-					smem->buf_idx |= 0x10000000;
-				}
-				mutex_unlock(&inst->dma_cache.lock);
+				eva_gem_put(buf->gem);
 			} else {
-				if (smem && atomic_dec_and_test(&smem->refcount)) {
-					rc = msm_cvp_unmap_smem(inst, smem, "unmap cpu");
+				if (atomic_dec_and_test(&smem->refcount)) {
+					rc = eva_gem_unmap_iova(to_eva_gem(smem->gem));
 					if (rc)
 						dprintk(CVP_ERR, "%s:unmap smem 0x%x,error %d\n",
 							__func__, smem, rc);
@@ -955,6 +953,7 @@ static void backup_frame_buffers(struct msm_cvp_inst *inst,
 {
 	/* Save frame buffers before unmap them */
 	int i = frame->nr;
+	struct msm_cvp_smem *smem;
 
 	if (i == 0 || i > MAX_FRAME_BUFFER_NUMS)
 		return;
@@ -964,7 +963,9 @@ static void backup_frame_buffers(struct msm_cvp_inst *inst,
 
 	do {
 		i--;
-		if (frame->bufs[i].smem->cached) {
+		smem = frame->bufs[i].gem ?
+			eva_gem_smem(frame->bufs[i].gem) : frame->bufs[i].smem;
+		if (smem->cached) {
 			/*
 			 * Frame buffer info can be found in dma_cache table,
 			 * Skip saving
@@ -973,7 +974,7 @@ static void backup_frame_buffers(struct msm_cvp_inst *inst,
 			return;
 		}
 
-		inst->last_frame.smem[i] = *(frame->bufs[i].smem);
+		inst->last_frame.smem[i] = *smem;
 	} while (i);
 }
 
@@ -1231,6 +1232,24 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 		if (!ptr)
 			return -EINVAL;
 		cbuf = list_entry(ptr, struct cvp_internal_buf, list);
+		if (cbuf->gem) {
+			if (cbuf->ownership != DRIVER) {
+				dprintk(CVP_MEM,
+				"%s: sess_id %x : fd %d size %d (GEM)",
+				"free user persistent", inst->sess_id, cbuf->fd,
+				cbuf->size);
+				atomic_sub(cbuf->size, &inst->persist_usage);
+				print_persist_buffer_info(CVP_MEM, "FREE user persist",
+							cbuf->size, inst, NULL);
+				list_del(&cbuf->list);
+				// deinit delete: diectly invoke the free ops instead of call put
+				eva_gem_free_object(cbuf->gem);
+				cbuf->gem = NULL;
+				cvp_kmem_cache_free(&cvp_driver->buf_cache, cbuf);
+			}
+			continue;
+		}
+		// TODO: we can delete following code
 		smem = cbuf->smem;
 		if (!smem) {
 			dprintk(CVP_ERR, "%s invalid persist smem\n", __func__);
@@ -1366,9 +1385,10 @@ void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
 		if (i <= MAX_NUM_FRAMES_DUMP) {
 			dprintk(CVP_ERR, "frame no %d tid %llx bufs\n",
 					i, frame->ktid);
-			for (c = 0; c < frame->nr; c++)
-				_log_smem(snap, inst, frame->bufs[c].smem,
-						log);
+			for (c = 0; c < frame->nr; c++){
+				struct msm_cvp_smem *fsmem = eva_gem_smem(frame->bufs[c].gem);
+				_log_smem(snap, inst, fsmem, log);
+			}
 		}
 	}
 	if (i > MAX_NUM_FRAMES_DUMP)
@@ -1393,6 +1413,7 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 {
 	struct cvp_internal_buf *buf;
 	struct msm_cvp_list *buf_list;
+	struct msm_cvp_smem *smem;
 	u32 smem_flags = SMEM_UNCACHED;
 	int rc = 0;
 
@@ -1420,23 +1441,24 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 		goto fail_kzalloc;
 	}
 
-	buf->smem = cvp_kmem_cache_zalloc(&cvp_driver->smem_cache, GFP_KERNEL);
-	if (!buf->smem) {
+	smem = cvp_kmem_cache_zalloc(&cvp_driver->smem_cache, GFP_KERNEL);
+	if (!smem) {
 		dprintk(CVP_ERR, "%s Out of memory\n", __func__);
 		goto err_no_smem;
 	}
 
-	buf->smem->flags = smem_flags;
+	smem->flags = smem_flags;
 	rc = msm_cvp_smem_alloc(buffer_size, 1, 0, /* 0: no mapping in kernel space */
-		&(inst->core->resources), buf->smem, 0, "ARP");
+		&(inst->core->resources), smem, 0, "ARP");
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to allocate ARP memory\n");
 		goto err_no_mem;
 	}
 
-	buf->smem->pkt_type = buf->smem->buf_idx = 0;
-	atomic_inc(&buf->smem->refcount);
-	buf->size = buf->smem->size;
+	smem->pkt_type = smem->buf_idx = 0;
+	buf->gem = smem->gem;
+	// atomic_inc(&buf->smem->refcount);
+	buf->size = smem->size;
 	buf->type = HFI_BUFFER_INTERNAL_PERSIST_1;
 	buf->ownership = DRIVER;
 	atomic_add(buf->size, &inst->persist_usage);
@@ -1449,7 +1471,7 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 	return buf;
 
 err_no_mem:
-	cvp_kmem_cache_free(&cvp_driver->smem_cache, buf->smem);
+	cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
 err_no_smem:
 	cvp_kmem_cache_free(&cvp_driver->buf_cache, buf);
 fail_kzalloc:
@@ -1458,6 +1480,7 @@ fail_kzalloc:
 
 int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 {
+	// struct msm_cvp_smem *smem;
 	struct msm_cvp_smem *smem;
 	struct list_head *ptr = (struct list_head *)0xdead;
 	struct list_head *next = (struct list_head *)0xdead;
@@ -1507,7 +1530,7 @@ int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 		if (!ptr)
 			return -EINVAL;
 		buf = list_entry(ptr, struct cvp_internal_buf, list);
-		smem = buf->smem;
+		smem = to_eva_gem(buf->gem)->smem;
 		if (!smem) {
 			dprintk(CVP_ERR, "%s invalid smem\n", __func__);
 			mutex_unlock(&inst->persistbufs.lock);
@@ -1515,18 +1538,20 @@ int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 		}
 
 		if (buf->ownership == DRIVER) {
-			dprintk(CVP_MEM,
-			"%s: %x : fd %d %pK size %d",
-			"free arp", inst->sess_id, buf->fd,
-			smem->dma_buf, buf->size);
+			// dprintk(CVP_MEM,
+			// "%s: %x : fd %d %pK size %d",
+			// "free arp", inst->sess_id, buf->fd,
+			// smem->dma_buf, buf->size);
 			atomic_sub(buf->size, &inst->persist_usage);
 			print_persist_buffer_info(CVP_MEM, "FREE ARP buffer",
 						buf->size, inst, NULL);
 			list_del(&buf->list);
-			atomic_dec(&smem->refcount);
+			// atomic_dec(&smem->refcount);
+			// invoke following API for internal buffers which will free smem and put gem
 			msm_cvp_smem_free(smem);
 			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-			buf->smem = NULL;
+			// buf->smem = NULL;
+			buf->gem = NULL;
 			cvp_kmem_cache_free(&cvp_driver->buf_cache, buf);
 		}
 	}
@@ -1615,7 +1640,7 @@ int cvp_release_dsp_buffers(struct cvp_internal_buf *buf)
 		dprintk(CVP_MEM,
 			"%s: fd %x %s size %d",
 			__func__, buf->fd,
-			smem->dma_buf->name, buf->size);
+			smem->dma_buf ? smem->dma_buf->name : "internal", buf->size);
 		if (atomic_dec_and_test(&smem->refcount)) {
 			msm_cvp_smem_free(smem);
 			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
@@ -1623,7 +1648,8 @@ int cvp_release_dsp_buffers(struct cvp_internal_buf *buf)
 	} else {
 		dprintk(CVP_ERR,
 			"%s: wrong owner %d : fd %x %s size %d",
-			__func__, buf->ownership, buf->fd, smem->dma_buf->name, buf->size);
+			__func__, buf->ownership, buf->fd,
+			smem->dma_buf ? smem->dma_buf->name : "internal", buf->size);
 	}
 
 	return rc;

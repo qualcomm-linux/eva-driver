@@ -23,7 +23,7 @@
 #include "cvp_core_hfi.h"
 #include "msm_cvp_buf.h"
 #include "msm_cvp_common.h"
-#include "msm_cvp_dma_buf.h"
+#include "eva_gem.h"
 
 #ifndef CVP_SECURE_BUF_ENABLED
 #define VMID_HLOS 0x3
@@ -389,15 +389,8 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 	struct msm_cvp_platform_resources *res, struct msm_cvp_smem *mem,
 	int user_access, const char *buf_name)
 {
-	dma_addr_t iova = 0;
+	struct eva_gem_obj *gobj;
 	int rc = 0;
-	struct dma_buf *dbuf = NULL;
-	struct dma_heap *heap = NULL;
-#ifdef CVP_QCOM_HEAP_ENABLED
-	struct mem_buf_lend_kernel_arg arg;
-#endif
-	int vmids[1];
-	int perms[1];
 
 	if (!res) {
 		dprintk(CVP_ERR, "%s: NULL res\n", __func__);
@@ -406,144 +399,82 @@ static int alloc_dma_mem(size_t size, u32 align, int map_kernel,
 
 	align = ALIGN(align, PAGE_SIZE);
 	size = ALIGN(size, PAGE_SIZE);
-#ifdef CVP_QCOM_HEAP_ENABLED
-	if (is_iommu_present(res)) {
-		heap = dma_heap_find("qcom,system");
-		dprintk(CVP_MEM, "%s size %zx align %d flag %d pagesize %d\n",
-		__func__, size, align, mem->flags, PAGE_SIZE);
-	} else {
-		dprintk(CVP_ERR,
-		"No IOMMU CB: allocate shared memory heap size %zx align %d\n",
-		size, align);
-	}
 
-	if (!heap) {
-		dprintk(CVP_ERR, "%s: Failed to find heap for qcom,system",
-		__func__);
-		rc = -ENOMEM;
+	gobj = eva_gem_create_internal(res, size);
+	if (IS_ERR(gobj)) {
+		dprintk(CVP_ERR,
+			"Failed to allocate shared memory = %zx bytes, %x %ld\n",
+			size, mem->flags, PTR_ERR(gobj));
+		rc = PTR_ERR(gobj);
 		goto fail_shared_mem_alloc;
 	}
-
-	dbuf = dma_heap_buffer_alloc(heap, size, user_access, 0);
-#else
-	dbuf = msm_cvp_alloc_dma_buffer(size, user_access);
-#endif
-	if (IS_ERR_OR_NULL(dbuf)) {
-		dprintk(CVP_ERR,
-			"Failed to allocate shared memory = %x bytes, %x %x\n",
-			size, mem->flags, PTR_ERR(dbuf));
-		rc = -ENOMEM;
-		goto fail_shared_mem_alloc;
-	}
-
-#if (KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE) && CVP_QCOM_HEAP_ENABLED
-	if (buf_name && buf_name[0] != '\0') {
-		rc = dma_buf_set_name(dbuf, buf_name);
-		if (rc)
-			dprintk(CVP_ERR, "Failed to set buf name %s, rc = %d\n", buf_name, rc);
-	}
-#endif
-
-	perms[0] = PERM_READ | PERM_WRITE;
-#ifdef CVP_QCOM_HEAP_ENABLED
-	arg.nr_acl_entries = 1;
-	arg.vmids = vmids;
-	arg.perms = perms;
-
-	if (mem->flags & SMEM_NON_PIXEL) {
-		vmids[0] = VMID_CP_NON_PIXEL;
-/*Symbol not yet defined for canoe*/
-
-		rc = mem_buf_lend(dbuf, &arg);
-
-	} else if (mem->flags & SMEM_PIXEL) {
-		vmids[0] = VMID_CP_PIXEL;
-
-		rc = mem_buf_lend(dbuf, &arg);
-
-	}
-
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to lend dmabuf %d, vmid %d\n",
-			rc, vmids[0]);
-		goto fail_device_address;
-	}
-#endif
 
 	mem->size = size;
-	mem->dma_buf = dbuf;
+	mem->gem = &gobj->base;
+	mem->dma_buf = NULL;
 	mem->kvaddr = NULL;
+	gobj->smem = mem;
 
-	rc = msm_dma_get_device_address(dbuf, align, &iova, mem->flags,
-			res, &mem->mapping_info);
+	rc = eva_gem_map_iova(gobj, res);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to get device address: %d\n",
 			rc);
 		goto fail_device_address;
 	}
-	mem->device_addr = (u32)iova;
-	if ((dma_addr_t)mem->device_addr != iova) {
-		dprintk(CVP_ERR, "iova(%pa) truncated to %#x",
-			&iova, mem->device_addr);
-		goto fail_device_address;
-	}
 
 	if (map_kernel) {
-		dma_buf_begin_cpu_access(dbuf, DMA_BIDIRECTIONAL);
-		msm_cvp_dma_buf_vmap(dbuf, &mem->vmap);
+		rc = drm_gem_vmap(&gobj->base, &gobj->smem->vmap.map);
 
-		mem->kvaddr = mem->vmap.vaddr;
-		if (!mem->kvaddr) {
-			dprintk(CVP_ERR,
-				"Failed to map shared mem in kernel\n");
-			rc = -EIO;
+		if (rc) {
+			dprintk(CVP_ERR, "Failed to map shared mem in kernel\n");
 			goto fail_map;
 		}
+		mem->kvaddr = mem->vmap.map.vaddr;
 	}
 
 	dprintk(CVP_MEM,
-		"%s: dma_buf=%pK,iova=%x,size=%d,kvaddr=%pK,flags=%#lx\n",
-		__func__, mem->dma_buf, mem->device_addr, mem->size,
+		"%s: gem=%pK,iova=%x,size=%d,kvaddr=%pK,flags=%#lx\n",
+		__func__, mem->gem, mem->device_addr, mem->size,
 		mem->kvaddr, mem->flags);
 	return rc;
 
 fail_map:
-	if (map_kernel)
-		dma_buf_end_cpu_access(dbuf, DMA_BIDIRECTIONAL);
+	eva_gem_unmap_iova(gobj);
 fail_device_address:
-#ifdef CVP_QCOM_HEAP_ENABLED
-	dma_heap_buffer_free(dbuf);
-#else
-	dma_buf_put(dbuf);
-#endif
+	gobj->smem = NULL;
+	drm_gem_object_put(&gobj->base);
+	mem->gem = NULL;
 fail_shared_mem_alloc:
 	return rc;
 }
 
 static int free_dma_mem(struct msm_cvp_smem *mem)
 {
+	struct eva_gem_obj *gobj = mem->gem ? to_eva_gem(mem->gem) : NULL;
 	dprintk(CVP_MEM,
-		"%s: dma_buf = %pK, device_addr = %x, size = %d, kvaddr = %pK\n",
-		__func__, mem->dma_buf, mem->device_addr, mem->size, mem->kvaddr);
+		"%s: gem = %pK, device_addr = %x, size = %d, kvaddr = %pK\n",
+		__func__, mem->gem, mem->device_addr, mem->size, mem->kvaddr);
 
 	if (mem->device_addr) {
-		msm_dma_put_device_address(mem->flags, &mem->mapping_info);
+		eva_gem_unmap_iova(gobj);
 		mem->device_addr = 0x0;
 	}
 
 	if (mem->kvaddr) {
-		msm_cvp_dma_buf_vunmap(mem->dma_buf, &mem->vmap);
+		eva_gem_vunmap(gobj, &mem->vmap.map);
 		mem->kvaddr = NULL;
-		dma_buf_end_cpu_access(mem->dma_buf, DMA_BIDIRECTIONAL);
 	}
 
 	if (mem->dma_buf) {
-#ifdef CVP_QCOM_HEAP_ENABLED
-		dma_heap_buffer_free(mem->dma_buf);
-#else
+		/* only non-NULL if SFR was lazy-exported*/
 		dma_buf_put(mem->dma_buf);
-#endif
 		mem->dma_buf = NULL;
+	}
+
+	if (mem->gem) {
+		dprintk(CVP_WARN, "%s: drm_gem_object_put mem->gem",__func__);
+		drm_gem_object_put(mem->gem);
+		mem->gem = NULL;
 	}
 
 	return 0;

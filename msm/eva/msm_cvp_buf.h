@@ -26,6 +26,7 @@
 	(buf->size <= smem->size - buf->offset))
 
 struct msm_cvp_inst;
+struct drm_gem_object;
 struct msm_cvp_platform_resources;
 struct msm_cvp_list;
 
@@ -92,6 +93,7 @@ struct msm_cvp_smem {
 	struct list_head list;
 	atomic_t refcount;
 	struct dma_buf *dma_buf;
+	struct drm_gem_object *gem;
 	void *kvaddr;
 	struct cvp_dma_buf_vmap vmap;
 	u32 device_addr;
@@ -149,6 +151,7 @@ struct cvp_internal_buf {
 	u64 ktid;
 	enum buffer_owner ownership;
 	struct msm_cvp_smem *smem;
+	struct drm_gem_object *gem;
 };
 
 struct msm_cvp_frame {
@@ -230,6 +233,9 @@ void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 enum cp_context_bank msm_cvp_get_cb(u32 flags);
-
+struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst, struct dma_buf *dma_buf, u32 pkt_type);
+int msm_cvp_session_add_smem(struct msm_cvp_inst *inst, struct msm_cvp_smem *smem);
+void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
+		struct msm_cvp_inst *inst, struct eva_kmd_hfi_packet *pkt);
 
 #endif

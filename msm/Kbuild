@@ -63,13 +63,13 @@ msm-eva-objs := eva/cvp.o \
         eva/cvp_core_hfi.o \
         eva/msm_cvp_clocks.o\
         eva/msm_cvp_buf.o \
-        eva/msm_cvp_dma_buf.o \
         eva/target/cvp_kaanapali_hal.o \
         eva/target/cvp_pakala_hal.o \
         eva/target/cvp_hawi_hal.o \
 	eva/cvp_fw_load.o \
 	eva/cvp_power.o \
 	eva/cvp_presil.o \
+    eva/eva_gem.o \
 #	eva/vm/cvp_vm_main.o \
 #	eva/vm/cvp_vm_msgq.o \
 #	eva/vm/cvp_vm_resource.o

@@ -42,6 +42,7 @@
 #include "target/cvp_pakala_hal.h"
 #include "target/cvp_hawi_hal.h"
 #include "cvp_comm_def.h"
+#include "eva_gem.h"
 
 #define CLASS_NAME              "cvp"
 #define DRIVER_NAME             "eva"
@@ -60,6 +61,7 @@ static int eva_drm_open(struct drm_device *dev, struct drm_file *file)
 		return -ENOMEM;
 	}
 	file->driver_priv = inst;
+	inst->file_priv = file;
 	return 0;
 }
 
