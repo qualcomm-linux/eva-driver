@@ -13,7 +13,6 @@
 #include <linux/refcount.h>
 #include <media/msm_eva_private.h>
 #include "msm_cvp_buf.h"
-#include "msm_cvp_synx.h"
 
 #define DDR_TYPE_LPDDR4 0x6
 #define DDR_TYPE_LPDDR4X 0x7

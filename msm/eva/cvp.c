@@ -31,7 +31,6 @@
 #include "cvp_hfi_api.h"
 #include "cvp_private.h"
 #include "msm_cvp_clocks.h"
-#include "msm_cvp_dsp.h"
 #include "msm_cvp.h"
 #include "vm/cvp_vm.h"
 #include "target/cvp_kaanapali_hal.h"
@@ -292,9 +291,6 @@ static struct attribute_group msm_cvp_core_attr_group = {
 static const struct of_device_id msm_cvp_plat_match[] = {
 	{.compatible = "qcom,kaanapali-eva"},
 	{.compatible = "qcom,glymur-eva"},
-	#ifdef CVP_DSP_ENABLED
-	{.compatible = "qcom,msm-cvp,mem-cdsp"},
-	#endif
 	{}
 };
 
@@ -393,8 +389,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_hfi_initialize;
 	}
 
-	cvp_synx_ftbl_init(core);
-
 	mutex_lock(&cvp_driver->lock);
 	cvp_driver->cvp_core = core;
 	mutex_unlock(&cvp_driver->lock);
@@ -453,14 +447,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_fail_sub_device_probe;
 	}
 #endif
-
-	if (core->resources.dsp_enabled) {
-		rc = cvp_dsp_device_init();
-		if (rc)
-			dprintk(CVP_WARN, "Failed to initialize DSP driver\n");
-	} else {
-		dprintk(CVP_DSP, "DSP interface not enabled\n");
-	}
 
 	if (core->platform_data->hal_version == DEFAULT_HAL_VER) {
 		dprintk(CVP_DBG, "%s: using default");
@@ -523,11 +509,6 @@ static int msm_cvp_probe(struct platform_device *pdev)
 		dprintk(CVP_INFO, "cvp %s cvp device prob return value is %d", dev_name(&pdev->dev), ret);
 		return ret;
 	}
-	#ifdef CVP_DSP_ENABLED
-	else if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cvp,mem-cdsp")) {
-			return msm_cvp_probe_mem_cdsp(pdev);
-	}
-	#endif
 	MSM_CVP_ERROR(1);
 	return -EINVAL;
 }
@@ -659,16 +640,12 @@ static int __init msm_cvp_init(void)
 	cvp_driver->frame_cache.cache = KMEM_CACHE(msm_cvp_frame, 0);
 	cvp_driver->buf_cache.cache = KMEM_CACHE(cvp_internal_buf, 0);
 	cvp_driver->smem_cache.cache = KMEM_CACHE(msm_cvp_smem, 0);
-	mutex_init(&wncc_buf_pool.lock);
 
 	return rc;
 }
 
 static void __exit msm_cvp_exit(void)
 {
-#ifdef CVP_DSP_ENABLED
-	cvp_dsp_device_exit();
-#endif
 	kmem_cache_destroy(cvp_driver->msg_cache.cache);
 	kmem_cache_destroy(cvp_driver->frame_cache.cache);
 	kmem_cache_destroy(cvp_driver->buf_cache.cache);
@@ -677,7 +654,6 @@ static void __exit msm_cvp_exit(void)
 	platform_driver_unregister(&msm_cvp_driver);
 	debugfs_remove_recursive(cvp_driver->debugfs_root);
 	mutex_destroy(&cvp_driver->lock);
-	mutex_destroy(&wncc_buf_pool.lock);
 	kfree(cvp_driver);
 	cvp_driver = NULL;
 }

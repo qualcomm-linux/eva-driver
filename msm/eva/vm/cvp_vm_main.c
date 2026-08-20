@@ -35,7 +35,6 @@
 #include "cvp_core_hfi.h"
 #include "cvp_hfi.h"
 #include "cvp_hfi_io.h"
-#include "msm_cvp_dsp.h"
 #include "msm_cvp_clocks.h"
 #include "cvp_dump.h"
 #include "cvp_vm.h"

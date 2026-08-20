@@ -376,11 +376,6 @@ static int msm_cvp_session_process_hfi(
 		rc = -EINVAL;
 		goto exit;
 	}
-	rc = msm_cvp_proc_oob(inst, in_pkt);
-	if (rc) {
-		dprintk(CVP_ERR, "%s: failed to process OOB buffer", __func__);
-		goto exit;
-	}
 
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_BEGIN");
@@ -400,434 +395,6 @@ exit:
 	return rc;
 }
 
-static bool cvp_fence_wait(struct cvp_fence_queue *q,
-			struct cvp_fence_command **fence,
-			enum queue_state *state)
-{
-	struct cvp_fence_command *f;
-
-	if (!q)
-		return false;
-
-	*fence = NULL;
-
-	while (!mutex_trylock(&q->lock))
-		usleep_range(100, 200);
-
-	*state = q->state;
-	if (*state != QUEUE_START) {
-		mutex_unlock(&q->lock);
-		return true;
-	}
-
-	if (list_empty(&q->wait_list)) {
-		mutex_unlock(&q->lock);
-		return false;
-	}
-
-	f = list_first_entry(&q->wait_list, struct cvp_fence_command, list);
-	list_del_init(&f->list);
-	list_add_tail(&f->list, &q->sched_list);
-
-	mutex_unlock(&q->lock);
-	*fence = f;
-
-	return true;
-}
-static int cvp_fence_proc(struct msm_cvp_inst *inst,
-			struct cvp_fence_command *fc,
-			struct cvp_hfi_cmd_session_hdr *pkt)
-{
-	int rc = 0;
-	unsigned long timeout;
-	u64 ktid;
-	int synx_state = SYNX_STATE_SIGNALED_SUCCESS;
-	struct cvp_hfi_ops *ops_tbl;
-	struct cvp_session_queue *sq;
-	u32 hfi_err = HFI_ERR_NONE;
-	struct cvp_hfi_msg_session_hdr_ext hdr;
-	CVPKERNEL_ATRACE_BEGIN("cvp_fence_proc");
-
-	dprintk(CVP_SYNX, "%s %s\n", current->comm, __func__);
-
-	if (!inst || !inst->core)
-		return -EINVAL;
-
-	ops_tbl = inst->core->dev_ops;
-	sq = &inst->session_queue_fence;
-	ktid = pkt->header.client_data.kdata;
-
-	if (fc->signature == 0xB0BABABE)
-		goto receive_msg;
-
-	CVPKERNEL_ATRACE_BEGIN("cvp_synx_ops CVP_INPUT_SYNX");
-	rc = inst->core->synx_ftbl->cvp_synx_ops(inst, CVP_INPUT_SYNX,
-			fc, &synx_state);
-	CVPKERNEL_ATRACE_END("cvp_synx_ops CVP_INPUT_SYNX");
-	if (rc) {
-		msm_cvp_unmap_frame(inst, pkt->header.client_data.kdata);
-		goto exit;
-	}
-	CVPKERNEL_ATRACE_BEGIN("call_hfi_op -- session_send");
-	rc = call_hfi_op(ops_tbl, session_send, (void *)inst->session,
-			(struct eva_kmd_hfi_packet *)pkt);
-	CVPKERNEL_ATRACE_END("call_hfi_op -- session_send");
-	if (rc) {
-		dprintk(CVP_ERR, "%s %s: Failed in call_hfi_op %d, %x\n",
-			current->comm, __func__, pkt->header.size, pkt->header.packet_type);
-		synx_state = SYNX_STATE_SIGNALED_CANCEL;
-		goto exit;
-	}
-
-receive_msg:
-	timeout = msecs_to_jiffies(
-			inst->core->resources.msm_cvp_hw_rsp_timeout);
-	rc = cvp_wait_process_message(inst, sq, &ktid, timeout,
-				(struct eva_kmd_hfi_packet *)&hdr);
-
-#ifdef CONFIG_EVA_SUN
-	hfi_err = hdr.header.error_type;
-#else
-	hfi_err = hdr.error_type;
-#endif
-
-	if (rc) {
-		dprintk(CVP_ERR, "%s %s: msg timeout rc: %d, sess_id: 0x%x, tran_id: %d",
-			current->comm, __func__, rc,
-			pkt->header.session_id,
-			pkt->header.client_data.data1);
-
-		dprintk(CVP_ERR, "pkt_type: 0x%x, frame_id: %llu, ktid: %llx\n",
-			pkt->header.packet_type, pkt->header.client_data.transaction_id,
-			ktid);
-
-		synx_state = SYNX_STATE_SIGNALED_CANCEL;
-		goto exit;
-	}
-	if (hfi_err == HFI_ERR_SESSION_FLUSHED) {
-		dprintk(CVP_SYNX, "%s %s: cvp_wait_process_message flushed\n",
-			current->comm, __func__);
-		synx_state = SYNX_STATE_SIGNALED_CANCEL;
-	} else if (hfi_err == HFI_ERR_SESSION_STREAM_CORRUPT) {
-		dprintk(CVP_INFO, "%s %s: cvp_wait_process_msg non-fatal %d\n",
-		current->comm, __func__, hfi_err);
-		synx_state = SYNX_STATE_SIGNALED_SUCCESS;
-	} else if (hfi_err != HFI_ERR_NONE) {
-		dprintk(CVP_ERR, "%s %s: cvp_wait_process_message hfi err %d\n",
-			current->comm, __func__, hfi_err);
-		synx_state = SYNX_STATE_SIGNALED_CANCEL;
-	}
-
-exit:
-	CVPKERNEL_ATRACE_BEGIN("cvp_synx_ops CVP_OUTPUT_SYNX");
-	fc->msg_pkt = (struct cvp_hfi_msg_session_hdr *)(&hdr);
-	if (fc->signature == 0xFEEDFACE)
-		rc = inst->core->synx_ftbl->cvp_synx_ops(
-			inst, CVP_OUTPUT_SYNX, fc, &synx_state);
-	fc->msg_pkt = NULL;
-	CVPKERNEL_ATRACE_END("cvp_synx_ops CVP_OUTPUT_SYNX");
-	CVPKERNEL_ATRACE_END("cvp_fence_proc");
-	return rc;
-}
-
-static int cvp_alloc_fence_data(struct cvp_fence_command **f, u32 size)
-{
-	struct cvp_fence_command *fcmd;
-	int alloc_size = sizeof(struct cvp_hfi_msg_session_hdr_ext);
-
-	fcmd = kzalloc(sizeof(struct cvp_fence_command), GFP_KERNEL);
-	if (!fcmd)
-		return -ENOMEM;
-
-	alloc_size = (alloc_size >= size) ? alloc_size : size;
-	fcmd->pkt = kzalloc(alloc_size, GFP_KERNEL);
-	if (!fcmd->pkt) {
-		kfree(fcmd);
-		return -ENOMEM;
-	}
-
-	*f = fcmd;
-	return 0;
-}
-
-static void cvp_free_fence_data(struct cvp_fence_command *f)
-{
-	kfree(f->pkt);
-	f->pkt = NULL;
-	kfree(f);
-	f = NULL;
-}
-
-static int cvp_fence_thread(void *data)
-{
-	int rc = 0, num_fences;
-	struct msm_cvp_inst *inst;
-	struct cvp_fence_queue *q;
-	enum queue_state state;
-	struct cvp_fence_command *f;
-	struct cvp_hfi_cmd_session_hdr *pkt;
-	u32 *synx;
-	u64 ktid = 0;
-	CVPKERNEL_ATRACE_BEGIN("cvp_fence_thread");
-	dprintk(CVP_SYNX, "Enter %s\n", current->comm);
-
-	inst = (struct msm_cvp_inst *)data;
-	if (!inst || !inst->core || !inst->core->dev_ops) {
-		dprintk(CVP_ERR, "%s invalid inst %pK\n", current->comm, inst);
-		rc = -EINVAL;
-		goto exit;
-	}
-
-	q = &inst->fence_cmd_queue;
-
-wait:
-	dprintk(CVP_SYNX, "%s starts wait\n", current->comm);
-
-	f = NULL;
-	wait_event_interruptible(q->wq, cvp_fence_wait(q, &f, &state));
-	if (state != QUEUE_START)
-		goto exit;
-
-	if (!f) {
-		usleep_range(100, 200);
-		goto wait;
-	}
-
-	pkt = f->pkt;
-	synx = (u32 *)f->synx;
-
-	num_fences = f->num_fences - f->output_index;
-	/*
-	 * If there is output fence, go through fence path
-	 * Otherwise, go through non-fenced path
-	 */
-	if (num_fences)
-		ktid = pkt->header.client_data.kdata & (FENCE_BIT - 1);
-
-	dprintk(CVP_SYNX, "%s pkt type %d on ktid %llx frameID %llu\n",
-		current->comm, pkt->header.packet_type, ktid, f->frame_id);
-
-	rc = cvp_fence_proc(inst, f, pkt);
-
-	mutex_lock(&q->lock);
-	inst->core->synx_ftbl->cvp_release_synx(inst, f);
-	list_del_init(&f->list);
-	state = q->state;
-	mutex_unlock(&q->lock);
-
-	dprintk(CVP_SYNX, "%s done with %d ktid %llx frameID %llu rc %d\n",
-		current->comm, pkt->header.packet_type, ktid, f->frame_id, rc);
-
-	cvp_free_fence_data(f);
-
-	if (rc && state != QUEUE_START)
-		goto exit;
-
-	goto wait;
-
-exit:
-	dprintk(CVP_SYNX, "%s exit\n", current->comm);
-	cvp_put_inst(inst);
-	CVPKERNEL_ATRACE_END("cvp_fence_thread");
-	return rc;
-}
-
-static int msm_cvp_session_process_hfi_fence(struct msm_cvp_inst *inst,
-					struct eva_kmd_arg *arg)
-{
-	dprintk(CVP_WARN, "Deprecated IOCTL command %s\n", __func__);
-	return -EINVAL;
-}
-
-
-static int cvp_populate_fences( struct eva_kmd_hfi_packet *in_pkt,
-	unsigned int offset, unsigned int num, struct msm_cvp_inst *inst)
-{
-	u32 i, buf_offset, fence_cnt;
-	struct eva_kmd_fence fences[MAX_HFI_FENCE_SIZE];
-	struct cvp_fence_command *f;
-	struct cvp_hfi_cmd_session_hdr *cmd_hdr;
-	struct cvp_fence_queue *q;
-	struct cvp_buf_type *buf;
-	bool override;
-	unsigned int total_fence_count = 0;
-	struct cvp_hfi_ops *ops_tbl;
-	int rc = 0;
-
-	ops_tbl = inst->core->dev_ops;
-
-	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-	CVPKERNEL_ATRACE_BEGIN("cvp_populate_fences");
-
-	if (!offset || !num) {
-		CVPKERNEL_ATRACE_END("cvp_populate_fences");
-		return 0;
-	}
-
-	if (offset < (sizeof(struct cvp_hfi_cmd_session_hdr)/sizeof(u32))) {
-		dprintk(CVP_ERR, "%s: Incorrect offset in cmd %d\n", __func__, offset);
-		rc = -EINVAL;
-		goto exit;
-	}
-	override = get_pkt_fenceoverride((struct cvp_hal_session_cmd_pkt*)in_pkt);
-
-#ifdef USE_PRESIL42
-	cvp_kernel_fence_enabled = 1;
-	dprintk(CVP_SYNX, "%s:Kernel Fence is 1 for Presil\n", __func__);
-#endif
-	dprintk(CVP_SYNX, "%s:Fence Override is %d\n",__func__, override);
-	dprintk(CVP_SYNX, "%s:Kernel Fence is %d\n", __func__, cvp_kernel_fence_enabled);
-
-	q = &inst->fence_cmd_queue;
-
-	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-	rc = cvp_alloc_fence_data((&f), cmd_hdr->header.size);
-	if (rc) {
-		dprintk(CVP_ERR,"%s: Failed to alloc fence data", __func__);
-		goto exit;
-	}
-
-	f->type = cmd_hdr->header.packet_type;
-	f->mode = OP_NORMAL;
-	f->signature = 0xFEEDFACE;
-	f->num_fences = 0;
-	f->output_index = 0;
-	buf_offset = offset;
-
-	if (cvp_kernel_fence_enabled == 0)
-	{
-		goto soc_fence;
-	}
-	else if (cvp_kernel_fence_enabled == 1)
-	{
-		goto kernel_fence;
-	}
-	else if (cvp_kernel_fence_enabled == 2)
-	{
-		if (override == true)
-			goto kernel_fence;
-		else if (override == false)
-			goto soc_fence;
-		else
-		{
-			dprintk(CVP_ERR, "%s: invalid params", __func__);
-			rc = -EINVAL;
-			goto free_exit;
-		}
-	}
-	else
-	{
-		dprintk(CVP_ERR, "%s: invalid params", __func__);
-		rc = -EINVAL;
-		goto free_exit;
-	}
-
-soc_fence:
-	for (i = 0; i < num; i++) {
-		buf = (struct cvp_buf_type*)&in_pkt->pkt_data[buf_offset];
-		buf_offset += sizeof(*buf) >> 2;
-
-		if (buf->input_handle || buf->output_handle) {
-			f->num_fences++;
-			if (buf->input_handle)
-				f->output_index++;
-		}
-	}
-	f->signature = 0xB0BABABE;
-	if (f->num_fences) {
-		cmd_hdr->header.client_data.kdata |= FENCE_BIT;
-		memcpy(f->pkt, cmd_hdr, sizeof(struct cvp_hfi_cmd_session_hdr));
-
-		rc = call_hfi_op(ops_tbl, session_send, (void *)inst->session, in_pkt);
-		if (rc) {
-			dprintk(CVP_ERR, "%s: Failed in call_hfi_op %d, %x\n",
-					 __func__, in_pkt->pkt_data[0], in_pkt->pkt_data[1]);
-			goto free_exit;
-		}
-		goto fence_cmd_queue;
-	}
-
-	goto free_exit;
-
-
-kernel_fence:
-	/* First pass to find INPUT synx handles */
-	for (i = 0; i < num; i++) {
-		buf = (struct cvp_buf_type *)&in_pkt->pkt_data[buf_offset];
-		buf_offset += sizeof(*buf) >> 2;
-
-		if (buf->input_handle) {
-			/* Check fence_type? */
-			fences[f->num_fences].h_synx = buf->input_handle;
-			f->num_fences++;
-			buf->fence_type &= ~INPUT_FENCE_BITMASK;
-			buf->input_handle = 0;
-			total_fence_count++;
-		}
-		if (buf->output_handle)
-			total_fence_count++;
-	}
-	if (total_fence_count > MAX_HFI_FENCE_SIZE) {
-		dprintk(CVP_ERR, "Invalid total_fence_count %d\n", total_fence_count);
-		rc = -EINVAL;
-		goto free_exit;
-	}
-	f->output_index = f->num_fences;
-
-	dprintk(CVP_SYNX, "%s:Input Fence passed - Number of Fences is %d\n",
-			__func__, f->num_fences);
-
-	/*
-	 * Second pass to find OUTPUT synx handle
-	 * If no of fences is 0 dont execute the below portion until line 911, return 0
-	 */
-	buf_offset = offset;
-	for (i = 0; i < num; i++) {
-		buf = (struct cvp_buf_type*)&in_pkt->pkt_data[buf_offset];
-		buf_offset += sizeof(*buf) >> 2;
-
-		if (buf->output_handle) {
-			/* Check fence_type? */
-			fences[f->num_fences].h_synx = buf->output_handle;
-			f->num_fences++;
-			buf->fence_type &= ~OUTPUT_FENCE_BITMASK;
-			buf->output_handle = 0;
-		}
-	}
-	dprintk(CVP_SYNX, "%s:Output Fence passed - Number of Fences is %d\n",
-			__func__, f->num_fences);
-
-	if (f->num_fences == 0)
-		goto free_exit;
-
-	rc = inst->core->synx_ftbl->cvp_import_synx(inst, f, (u32*)fences);
-	if (rc) {
-		dprintk(CVP_ERR,"%s: Failed to import fences", __func__);
-		goto free_exit;
-	}
-
-	memcpy(f->pkt, cmd_hdr, cmd_hdr->header.size);
-	f->pkt->header.client_data.kdata |= FENCE_BIT;
-
-fence_cmd_queue:
-	fence_cnt = f->num_fences;
-	mutex_lock(&q->lock);
-	list_add_tail(&f->list, &inst->fence_cmd_queue.wait_list);
-	mutex_unlock(&q->lock);
-
-	wake_up(&inst->fence_cmd_queue.wq);
-
-	CVPKERNEL_ATRACE_END("cvp_populate_fences");
-	return fence_cnt;
-
-free_exit:
-	cvp_free_fence_data(f);
-exit:
-	CVPKERNEL_ATRACE_END("cvp_populate_fences");
-	return rc;
-}
-
-
 static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	struct eva_kmd_hfi_packet *in_pkt,
 	unsigned int in_offset,
@@ -835,7 +402,6 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 {
 	struct cvp_hfi_ops *ops_tbl;
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr;
-	struct cvp_fence_queue *q;
 	int pkt_type, rc = 0, i = 0;
 	enum buf_map_type map_type;
 	uint32_t *fd_arr = NULL;
@@ -866,19 +432,6 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 		cmd_hdr->header.client_data.transaction_id,
 		cmd_hdr->header.client_data.kdata & (FENCE_BIT - 1));
 
-	q = &inst->fence_cmd_queue;
-	mutex_lock(&q->lock);
-
-	if (q->mode == OP_DRAINING) {
-		dprintk(CVP_WARN, "%s: flush in progress\n", __func__);
-		rc = -EBUSY;
-		mutex_unlock(&q->lock);
-		return rc;
-	}
-	atomic_inc(&q->send_count);
-	mutex_unlock(&q->lock);
-
-
 	if (map_type == MAP_PERSIST) {
 		fd_arr = kcalloc(in_buf_num, sizeof(uint32_t), GFP_KERNEL);
 		if (!fd_arr) {
@@ -898,43 +451,14 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	if (rc)
 		goto exit;
 
-	rc = cvp_populate_fences(in_pkt, in_offset, in_buf_num, inst);
-	if (rc == 0) {
-		CVPKERNEL_ATRACE_BEGIN(" call_hfi_op  -- session_send");
-		rc = call_hfi_op(ops_tbl, session_send, (void *)inst->session,
-			in_pkt);
-		CVPKERNEL_ATRACE_END(" call_hfi_op  -- session_send");
-		if (rc) {
-			dprintk(CVP_ERR,"%s: Failed in call_hfi_op %d, %x\n",
-					__func__, in_pkt->pkt_data[0],
-					in_pkt->pkt_data[1]);
-			if (map_type == MAP_FRAME) {
-				msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
-			} else if (map_type == MAP_PERSIST) {
-				offset = in_offset;
-				for (i = 0; i < in_buf_num; i++) {
-					/* Update the in_pkt s.t iova is replaced back with fd */
-					buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
-					offset += sizeof(*buf) >> 2;
-
-					if (offset > MAX_HFI_PKT_SIZE)
-						break;
-
-					if (!buf->size || fd_arr[i] < 0)
-						continue;
-
-					buf->fd = fd_arr[i];
-				}
-				rc = msm_cvp_unmap_user_persist(inst,
-						in_pkt, in_offset, in_buf_num);
-			}
-		}
-	} else if (rc > 0) {
-		dprintk(CVP_SYNX, "Going fenced path\n");
-		rc = 0;
-	} else {
-		dprintk(CVP_ERR,"%s: Failed to populate fences\n",
-			__func__);
+	CVPKERNEL_ATRACE_BEGIN(" call_hfi_op  -- session_send");
+	rc = call_hfi_op(ops_tbl, session_send, (void *)inst->session,
+		in_pkt);
+	CVPKERNEL_ATRACE_END(" call_hfi_op  -- session_send");
+	if (rc) {
+		dprintk(CVP_ERR,"%s: Failed in call_hfi_op %d, %x\n",
+				__func__, in_pkt->pkt_data[0],
+				in_pkt->pkt_data[1]);
 		if (map_type == MAP_FRAME) {
 			msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
 		} else if (map_type == MAP_PERSIST) {
@@ -958,7 +482,6 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	}
 	CVPKERNEL_ATRACE_END("cvp_enqueue_pkt");
 exit:
-	atomic_dec(&q->send_count);
 	if (map_type == MAP_PERSIST)
 		kfree(fd_arr);
 	return rc;
@@ -1150,7 +673,6 @@ int msm_cvp_session_create(struct msm_cvp_inst *inst)
 		goto fail_init;
 	}
 
-	inst->core->synx_ftbl->cvp_sess_init_synx(inst);
 	sq = &inst->session_queue;
 	spin_lock(&sq->lock);
 	sq->state = QUEUE_ACTIVE;
@@ -1176,97 +698,6 @@ static int session_state_check_init(struct msm_cvp_inst *inst)
 	mutex_unlock(&inst->lock);
 
 	return msm_cvp_session_create(inst);
-}
-
-static int cvp_fence_thread_start(struct msm_cvp_inst *inst)
-{
-	u32 tnum = 0;
-	u32 i = 0;
-	int rc = 0;
-	char tname[16];
-	struct task_struct *thread;
-	struct cvp_fence_queue *q;
-	struct cvp_session_queue *sq;
-	struct msm_cvp_core *core = NULL;
-
-	if (!inst) {
-		dprintk(CVP_ERR, "%s: invalid inst param\n", __func__);
-		return -EINVAL;
-	}
-
-	core = cvp_driver->cvp_core;
-	if (!core) {
-		dprintk(CVP_ERR, "%s: core is NULL", __func__);
-		return -EINVAL;
-	}
-
-	inst = cvp_get_inst_validate(core, inst);
-	if (!inst)
-		return -EINVAL;
-
-	if (!inst->prop.fthread_nr) {
-		cvp_put_inst(inst);
-		return 0;
-	}
-
-	q = &inst->fence_cmd_queue;
-	mutex_lock(&q->lock);
-	q->state = QUEUE_START;
-	mutex_unlock(&q->lock);
-
-	for (i = 0; i < inst->prop.fthread_nr; ++i) {
-		if (!cvp_get_inst_validate(core, inst)) {
-			rc = -ECONNRESET;
-			goto exit;
-		}
-
-		snprintf(tname, sizeof(tname), "fthread_%d", tnum++);
-		thread = kthread_run(cvp_fence_thread, inst, tname);
-		if (!thread) {
-			dprintk(CVP_ERR, "%s create %s fail", __func__, tname);
-			rc = -ECHILD;
-			goto exit;
-		}
-	}
-
-	sq = &inst->session_queue_fence;
-	spin_lock(&sq->lock);
-	sq->state = QUEUE_START;
-	spin_unlock(&sq->lock);
-
-exit:
-	if (rc) {
-		mutex_lock(&q->lock);
-		q->state = QUEUE_STOP;
-		mutex_unlock(&q->lock);
-		wake_up_all(&q->wq);
-	}
-	cvp_put_inst(inst);
-	return rc;
-}
-
-static int cvp_fence_thread_stop(struct msm_cvp_inst *inst)
-{
-	struct cvp_fence_queue *q;
-	struct cvp_session_queue *sq;
-
-	if (!inst->prop.fthread_nr)
-		return 0;
-
-	q = &inst->fence_cmd_queue;
-
-	mutex_lock(&q->lock);
-	q->state = QUEUE_STOP;
-	mutex_unlock(&q->lock);
-
-	sq = &inst->session_queue_fence;
-	spin_lock(&sq->lock);
-	sq->state = QUEUE_STOP;
-	spin_unlock(&sq->lock);
-
-	wake_up_all(&q->wq);
-	wake_up_all(&sq->wq);
-	return 0;
 }
 
 int msm_cvp_session_start(struct msm_cvp_inst *inst,
@@ -1303,15 +734,6 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	device = (struct iris_hfi_device *)ops_tbl->hfi_device_data;
 	call_iris_op(device, pm_qos_update, device);
 
-	/*
-	 * cvp_fence_thread_start will increment reference to instance.
-	 * It guarantees the EVA session won't be deleted. Use of session
-	 * functions, such as session_start requires the session to be valid.
-	 */
-	rc = cvp_fence_thread_start(inst);
-	if (rc)
-		goto restore_state;
-
 	/* Send SESSION_START command */
 	ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
 	ktid &= (FENCE_BIT - 1);
@@ -1319,7 +741,7 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	if (rc) {
 		dprintk(CVP_WARN, "%s: session start failed rc %d\n",
 				__func__, rc);
-		goto stop_thread;
+		goto restore_state;
 	}
 
 	/* Wait for FW response */
@@ -1327,7 +749,7 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 	if (rc) {
 		dprintk(CVP_WARN, "%s: wait for signal failed, rc %d\n",
 				__func__, rc);
-		goto stop_thread;
+		goto restore_state;
 	}
 
 	pr_info_ratelimited(CVP_PID_TAG "session %llx (%#x) started\n",
@@ -1336,9 +758,8 @@ int msm_cvp_session_start(struct msm_cvp_inst *inst,
 
 	return 0;
 
-stop_thread:
-	cvp_fence_thread_stop(inst);
 restore_state:
+
 	spin_lock(&sq->lock);
 	sq->state = old_state;
 	spin_unlock(&sq->lock);
@@ -1434,8 +855,6 @@ stop_thread:
 
 	wake_up_all(&inst->session_queue.wq);
 
-	cvp_fence_thread_stop(inst);
-
 exit:
 	cvp_put_inst(s);
 	return rc;
@@ -1530,8 +949,6 @@ stop_thread:
 
 	wake_up_all(&inst->session_queue.wq);
 
-	cvp_fence_thread_stop(inst);
-
 	device = (struct iris_hfi_device *)ops_tbl->hfi_device_data;
 	call_iris_op(device, pm_qos_update, device);
 
@@ -1565,7 +982,7 @@ int msm_cvp_session_queue_stop(struct msm_cvp_inst *inst)
 
 	wake_up_all(&inst->session_queue.wq);
 
-	return cvp_fence_thread_stop(inst);
+	return 0;
 }
 
 static int msm_cvp_session_ctrl(struct msm_cvp_inst *inst,
@@ -2049,168 +1466,11 @@ static int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int cvp_drain_fence_sched_list(struct msm_cvp_inst *inst)
-{
-	unsigned long wait_time;
-	struct cvp_fence_queue *q;
-	struct cvp_fence_command *f;
-	int rc = 0;
-	int count = 0, max_count = 0;
-	u64 ktid;
-
-	q = &inst->fence_cmd_queue;
-
-	if (!q)
-		return -EINVAL;
-
-	if (list_empty(&q->sched_list))
-		return rc;
-
-	mutex_lock(&q->lock);
-	list_for_each_entry(f, &q->sched_list, list) {
-		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
-		dprintk(CVP_SYNX, "%s: frame %llx %llu is in sched_list\n",
-			__func__, ktid, f->frame_id);
-		++count;
-	}
-	mutex_unlock(&q->lock);
-	wait_time = count * 1000;
-	wait_time *= inst->core->resources.msm_cvp_hw_rsp_timeout;
-
-	dprintk(CVP_SYNX, "%s: wait %d us for %d fence command\n",
-			__func__, wait_time, count);
-
-	count = 0;
-	max_count = wait_time / 100;
-
-retry:
-	mutex_lock(&q->lock);
-	if (list_empty(&q->sched_list)) {
-		mutex_unlock(&q->lock);
-		return rc;
-	}
-
-	mutex_unlock(&q->lock);
-	usleep_range(100, 200);
-	++count;
-	if (count < max_count) {
-		goto retry;
-	} else {
-		rc = -ETIMEDOUT;
-		dprintk(CVP_ERR, "%s: timed out!\n", __func__);
-	}
-
-	return rc;
-}
-
-static int cvp_clean_fence_queue(struct msm_cvp_inst *inst, int synx_state)
-{
-	struct cvp_fence_queue *q;
-	struct cvp_fence_command *f, *d;
-	u64 ktid;
-	u32 retry_count = 0, max_retries = 100;
-
-	q = &inst->fence_cmd_queue;
-
-	if (!q)
-		return -EINVAL;
-
-	mutex_lock(&q->lock);
-	q->mode = OP_DRAINING;
-	mutex_unlock(&q->lock);
-
-	/* Wait untill all the sending finish */
-	while (atomic_read(&q->send_count)) {
-		usleep_range(100, 200);
-		if (retry_count++ >= max_retries) {
-			dprintk(CVP_WARN,
-				"%s: Timeout waiting for packet sending\n",
-				__func__);
-			return -ETIMEDOUT;
-		}
-	}
-
-	mutex_lock(&q->lock);
-	if (list_empty(&q->wait_list))
-		goto check_sched;
-
-	list_for_each_entry_safe(f, d, &q->wait_list, list) {
-		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
-
-		dprintk(CVP_SYNX, "%s: (%#x) flush frame %llx %llu wait_list\n",
-			__func__, inst->sess_id, ktid, f->frame_id);
-
-		if (f->signature != 0xB0BABABE) {
-			list_del_init(&f->list);
-			msm_cvp_unmap_frame(inst, f->pkt->header.client_data.kdata);
-			/* Kernel fencing */
-			inst->core->synx_ftbl->cvp_cancel_synx(inst, CVP_OUTPUT_SYNX,
-				f, synx_state);
-			inst->core->synx_ftbl->cvp_release_synx(inst, f);
-			cvp_free_fence_data(f);
-		}
-	}
-
-check_sched:
-	if (list_empty(&q->sched_list)) {
-		mutex_unlock(&q->lock);
-		return 0;
-	}
-
-	list_for_each_entry(f, &q->sched_list, list) {
-		ktid = f->pkt->header.client_data.kdata & (FENCE_BIT - 1);
-
-		dprintk(CVP_SYNX, "%s: (%#x)flush frame %llx %llu sched_list\n",
-			__func__, inst->sess_id, ktid, f->frame_id);
-
-		if (f->signature != 0xB0BABABE)
-			/* Kernel Fencing */
-			inst->core->synx_ftbl->cvp_cancel_synx(inst, CVP_INPUT_SYNX,
-				f, synx_state);
-	}
-
-	mutex_unlock(&q->lock);
-	return 0;
-}
-
-int cvp_clean_session_queues(struct msm_cvp_inst *inst)
-{
-	struct cvp_fence_queue *q;
-	u32 count = 0, max_retries = 100;
-
-	q = &inst->fence_cmd_queue;
-	mutex_lock(&q->lock);
-	if (q->state == QUEUE_START || q->state == QUEUE_ACTIVE) {
-		mutex_unlock(&q->lock);
-		cvp_clean_fence_queue(inst, SYNX_STATE_SIGNALED_CANCEL);
-	} else {
-		dprintk(CVP_WARN, "Incorrect fence cmd queue state %d\n",
-			q->state);
-		mutex_unlock(&q->lock);
-	}
-
-	cvp_fence_thread_stop(inst);
-
-	/* Waiting for all output synx sent */
-retry:
-	mutex_lock(&q->lock);
-	if (list_empty(&q->sched_list)) {
-		mutex_unlock(&q->lock);
-		return 0;
-	}
-	mutex_unlock(&q->lock);
-	usleep_range(500, 1000);
-	if (++count > max_retries)
-		return -EBUSY;
-
-	goto retry;
-}
 
 int cvp_session_flush_all(struct msm_cvp_inst *inst)
 {
 	int rc = 0;
 	struct msm_cvp_inst *s;
-	struct cvp_fence_queue *q;
 	struct cvp_hfi_ops *ops_tbl;
 	u64 ktid;
 	struct msm_cvp_core *core = NULL;
@@ -2234,19 +1494,10 @@ int cvp_session_flush_all(struct msm_cvp_inst *inst)
 
 	dprintk(CVP_SESS, "session %llx (%#x)flush all starts\n",
 			inst, inst->sess_id);
-	q = &inst->fence_cmd_queue;
 	ops_tbl = inst->core->dev_ops;
 
 	/* Boost EVA clock frequency before sending flush to FW*/
 	msm_cvp_set_fmax(inst->core);
-
-	/*
-	 * Session fence queue is set to OP_DRAIN mode below
-	 * DO NOT return directly without goto exit
-	 */
-	rc = cvp_clean_fence_queue(inst, SYNX_STATE_SIGNALED_CANCEL);
-	if (rc)
-		goto exit;
 
 	dprintk(CVP_SESS, "%s: (%#x) send flush to fw\n",
 			__func__, inst->sess_id);
@@ -2272,12 +1523,6 @@ int cvp_session_flush_all(struct msm_cvp_inst *inst)
 exit:
 	/* Restore original EVA clock freq */
 	msm_cvp_set_clocks(inst->core);
-	if (!rc)
-		rc = cvp_drain_fence_sched_list(inst);
-	mutex_lock(&q->lock);
-	q->mode = OP_NORMAL;
-	mutex_unlock(&q->lock);
-
 	cvp_put_inst(s);
 	CVPKERNEL_ATRACE_END("cvp_session_flush_all");
 	return rc;
@@ -2322,22 +1567,6 @@ int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
 		rc = msm_cvp_update_power(inst);
 		break;
 	}
-	case EVA_KMD_REGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *buf =
-			(struct eva_kmd_buffer *)&arg->data.regbuf;
-
-		rc = msm_cvp_register_buffer(inst, buf);
-		break;
-	}
-	case EVA_KMD_UNREGISTER_BUFFER:
-	{
-		struct eva_kmd_buffer *buf =
-			(struct eva_kmd_buffer *)&arg->data.unregbuf;
-
-		rc = msm_cvp_unregister_buffer(inst, buf);
-		break;
-	}
 	case EVA_KMD_RECEIVE_MSG_PKT:
 	{
 		struct eva_kmd_hfi_packet *out_pkt =
@@ -2352,11 +1581,6 @@ int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg)
 
 		rc = msm_cvp_session_process_hfi(inst, in_pkt,
 				arg->buf_offset, arg->buf_num);
-		break;
-	}
-	case EVA_KMD_SEND_FENCE_CMD_PKT:
-	{
-		rc = msm_cvp_session_process_hfi_fence(inst, arg);
 		break;
 	}
 	case EVA_KMD_SESSION_CONTROL:

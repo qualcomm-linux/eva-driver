@@ -28,7 +28,6 @@
 struct msm_cvp_inst;
 struct msm_cvp_platform_resources;
 struct msm_cvp_list;
-struct cvp_dsp_fastrpc_driver_entry;
 
 enum smem_cache_ops {
 	SMEM_CACHE_CLEAN,
@@ -106,12 +105,6 @@ struct msm_cvp_smem {
 	struct cvp_dma_mapping_info mapping_info;
 };
 
-struct msm_cvp_wncc_buffer {
-	u32 fd;
-	u32 iova;
-	u32 size;
-};
-
 struct cvp_dmamap_cache {
 	struct mutex lock;
 	struct rb_root rbtree;
@@ -173,21 +166,6 @@ struct cvp_frame_bufs {
 	struct msm_cvp_smem smem[MAX_FRAME_BUFFER_NUMS];
 };
 
-struct wncc_oob_buf {
-	u32 bitmap_idx;
-	struct eva_kmd_oob_wncc *buf;
-};
-
-#define NUM_WNCC_BUFS 8
-struct cvp_oob_pool {
-	struct mutex lock;
-	bool allocated;
-	u32 used_bitmap;
-	struct eva_kmd_oob_wncc *bufs[NUM_WNCC_BUFS];
-};
-
-extern struct cvp_oob_pool wncc_buf_pool;
-
 void print_cvp_buffer(u32 tag, const char *str,
 		struct msm_cvp_inst *inst,
 		struct cvp_internal_buf *cbuf);
@@ -216,9 +194,6 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 			struct msm_cvp_smem *smem,
 			const char *str);
-int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-			struct msm_cvp_smem *smem,
-			const char *str);
 struct dma_buf *msm_cvp_smem_get_dma_buf(int fd);
 void msm_cvp_smem_put_dma_buf(void *dma_buf);
 int msm_cvp_smem_cache_operations(struct dma_buf *dbuf,
@@ -232,18 +207,6 @@ int msm_cvp_unmap_ipcc_regs(u32 iova);
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 					u32 buffer_size);
 int cvp_release_arp_buffers(struct msm_cvp_inst *inst);
-int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_unmap_buf_dsp(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_map_buf_dsp_new(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf,
-			int32_t pid,
-			uint32_t *iova);
-int msm_cvp_unmap_buf_dsp_new(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_proc_oob(struct msm_cvp_inst* inst,
-			struct eva_kmd_hfi_packet* in_pkt);
 void msm_cvp_cache_operations(struct msm_cvp_smem *smem,
 			u32 type, u32 offset, u32 size);
 int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
@@ -256,19 +219,8 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		struct eva_kmd_hfi_packet *in_pkt,
 		unsigned int offset, unsigned int buf_num);
 void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid);
-int msm_cvp_register_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_unregister_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_register_dsp_buffer(struct msm_cvp_inst *inst,
-		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_unregister_dsp_buffer(struct msm_cvp_inst *inst,
-		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-		struct eva_kmd_buffer *buf);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
-void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32 tag, bool raw);
 int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 			u32 buffer_size,
 			u32 secure_type,

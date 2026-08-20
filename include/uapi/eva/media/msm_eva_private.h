@@ -24,20 +24,6 @@
  */
 #define EVA_KMD_GET_SESSION_INFO	(EVA_KMD_CMD_START + 1)
 
-/*
- * EVA_KMD_REGISTER_BUFFER - this argument type is used to
- *          register the buffer to driver. it passes
- *          struct eva_kmd_buffer {}
- */
-#define EVA_KMD_REGISTER_BUFFER		(EVA_KMD_CMD_START + 3)
-
-/*
- * EVA_KMD_REGISTER_BUFFER - this argument type is used to
- *          unregister the buffer to driver. it passes
- *          struct eva_kmd_buffer {}
- */
-#define EVA_KMD_UNREGISTER_BUFFER	(EVA_KMD_CMD_START + 4)
-
 #define EVA_KMD_UPDATE_POWER	(EVA_KMD_CMD_START + 17)
 
 #define EVA_KMD_SEND_CMD_PKT	(EVA_KMD_CMD_START + 64)
@@ -50,8 +36,6 @@
 
 #define EVA_KMD_SESSION_CONTROL		(EVA_KMD_CMD_START + 68)
 
-#define EVA_KMD_SEND_FENCE_CMD_PKT	(EVA_KMD_CMD_START + 69)
-
 #define EVA_KMD_FLUSH_ALL	(EVA_KMD_CMD_START + 70)
 
 #define EVA_KMD_FLUSH_FRAME	(EVA_KMD_CMD_START + 71)
@@ -63,8 +47,6 @@
 /* buffer type */
 #define EVA_KMD_BUFTYPE_INPUT			0x00000001
 #define EVA_KMD_BUFTYPE_OUTPUT			0x00000002
-#define EVA_KMD_BUFTYPE_INTERNAL_1		0x00000003
-#define EVA_KMD_BUFTYPE_INTERNAL_2		0x00000004
 
 #define SW_DBG_BUF_SIZE				5242880
 #define SW_DBG_UMD_KMD_SIZE			1048576
@@ -224,37 +206,6 @@ struct eva_kmd_session_control {
 	__u32 ctrl_data[8];
 };
 
-#define MAX_HFI_FENCE_SIZE	64
-#define MAX_HFI_FENCE_OFFSET	MAX_HFI_PKT_SIZE
-struct eva_kmd_hfi_fence_packet {
-	__u32 pkt_data[MAX_HFI_FENCE_OFFSET];
-	__u32 fence_data[MAX_HFI_FENCE_SIZE];
-	__u64 frame_id;
-};
-
-struct eva_kmd_fence {
-	__u32 h_synx;
-};
-
-struct eva_kmd_fence_ctrl {
-	__u32 magic;
-	__u32 reserved;
-	__u64 frame_id;
-	__u32 num_fences;
-	__u32 output_index;
-	struct eva_kmd_fence fences[MAX_HFI_FENCE_SIZE];
-};
-
-#define MAX_FENCE_DATA_SIZE	(MAX_HFI_FENCE_SIZE + 6)
-
-struct eva_kmd_hfi_synx_packet {
-	__u32 pkt_data[MAX_HFI_PKT_SIZE];
-	union {
-		__u32 fence_data[MAX_FENCE_DATA_SIZE];
-		struct eva_kmd_fence_ctrl fc;
-	};
-	struct eva_kmd_oob_buf* oob_buf;
-};
 
 /**
  * struct eva_kmd_arg
@@ -283,14 +234,9 @@ struct eva_kmd_arg {
 		struct eva_kmd_send_cmd send_cmd;
 		struct eva_kmd_hfi_packet hfi_pkt;
 		struct eva_kmd_sys_properties sys_properties;
-		struct eva_kmd_hfi_fence_packet hfi_fence_pkt;
-		struct eva_kmd_hfi_synx_packet hfi_synx_pkt;
 		struct eva_kmd_session_control session_ctrl;
 		__u64 frame_id;
 	} data;
 };
 
-struct eva_kmd_request_power {
-	__u32 deprecated;
-};
 #endif
