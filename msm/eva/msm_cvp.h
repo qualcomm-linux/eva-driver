@@ -11,8 +11,6 @@
 #include "msm_cvp_common.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp_debug.h"
-#include "msm_cvp_dsp.h"
-#include "eva_shared_def.h"
 
 static inline bool is_buf_param_valid(u32 buf_num, u32 offset)
 {
@@ -35,7 +33,15 @@ static inline bool is_buf_param_valid(u32 buf_num, u32 offset)
 	return true;
 }
 
-int msm_cvp_handle_syscall(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg);
+int session_state_check_init(struct msm_cvp_inst *inst);
+int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
+		struct eva_kmd_hfi_packet *out_pkt);
+int msm_cvp_session_process_hfi(struct msm_cvp_inst *inst,
+		struct eva_kmd_hfi_packet *in_pkt,
+		unsigned int in_offset, unsigned int in_buf_num);
+int msm_cvp_session_ctrl(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg);
+int msm_cvp_get_sysprop(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg);
+int msm_cvp_set_sysprop(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg);
 int msm_cvp_session_init(struct msm_cvp_inst *inst);
 int msm_cvp_session_deinit(struct msm_cvp_inst *inst);
 int msm_cvp_session_queue_stop(struct msm_cvp_inst *inst);
@@ -46,7 +52,6 @@ int msm_cvp_session_stop(struct msm_cvp_inst *inst, struct eva_kmd_arg *arg);
 int msm_cvp_session_flush_stop(struct msm_cvp_inst *inst);
 int msm_cvp_get_session_info(struct msm_cvp_inst *inst, u32 *session);
 int msm_cvp_update_power(struct msm_cvp_inst *inst);
-int cvp_clean_session_queues(struct msm_cvp_inst *inst);
 int cvp_session_flush_all(struct msm_cvp_inst *inst);
 int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 	struct eva_kmd_sys_property *prop_array, int i);

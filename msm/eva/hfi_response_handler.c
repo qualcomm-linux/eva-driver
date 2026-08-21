@@ -596,15 +596,9 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 
 	if (pdata->hfi_ver == 1) {
 		pkt_old = (struct cvp_hfi_msg_session_hdr_old_format *)hdr;
-		if (pkt_old->client_data.kdata & FENCE_BIT)
-			sq = &inst->session_queue_fence;
-		else
-			sq = &inst->session_queue;
+		sq = &inst->session_queue;
 	} else {
-		if (pkt->header.client_data.kdata & FENCE_BIT)
-			sq = &inst->session_queue_fence;
-		else
-			sq = &inst->session_queue;
+		sq = &inst->session_queue;
 	}
 
 	sess_msg = cvp_kmem_cache_zalloc(&cvp_driver->msg_cache, GFP_KERNEL);

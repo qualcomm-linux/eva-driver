@@ -9,7 +9,6 @@
 #include "msm_cvp_common.h"
 #include "cvp_core_hfi.h"
 #include "cvp_hfi_api.h"
-#include "msm_cvp_dsp.h"
 
 #define MAX_SSR_STRING_LEN 10
 #ifdef USE_PRESIL
@@ -346,16 +345,8 @@ static const struct file_operations session_info_fops = {
 };
 
 
-struct dentry *msm_cvp_debugfs_init_drv(void)
+void msm_cvp_debugfs_init_drv(struct dentry *dir)
 {
-	struct dentry *dir = NULL;
-
-	dir = debugfs_create_dir("msm_cvp", NULL);
-	if (IS_ERR_OR_NULL(dir)) {
-		dir = NULL;
-		goto failed_create_dir;
-	}
-
 	debugfs_create_x32("debug_level", 0644, dir, &msm_cvp_debug);
 	debugfs_create_x32("fw_level", 0644, dir, &msm_cvp_fw_debug);
 	debugfs_create_u32("fw_debug_mode", 0644, dir, &msm_cvp_fw_debug_mode);
@@ -376,14 +367,7 @@ struct dentry *msm_cvp_debugfs_init_drv(void)
 
 	debugfs_create_file("cvp_power", 0644, dir, NULL, &cvp_pwr_fops);
 
-	return dir;
-
-failed_create_dir:
-	if (dir)
-		debugfs_remove_recursive(cvp_driver->debugfs_root);
-
-	dprintk(CVP_WARN, "Failed to create debugfs\n");
-	return NULL;
+	return;
 }
 
 static int _clk_rate_set(void *data, u64 val)
@@ -440,24 +424,6 @@ static int _clk_rate_get(void *data, u64 *val)
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(clk_rate_fops, _clk_rate_get, _clk_rate_set, "%llu\n");
-
-static int _dsp_dbg_set(void *data, u64 val)
-{
-	gfa_cv.debug_mask = (uint32_t)val;
-
-	cvp_dsp_send_debug_mask();
-
-	return 0;
-}
-
-static int _dsp_dbg_get(void *data, u64 *val)
-{
-	*val = gfa_cv.debug_mask;
-
-	return 0;
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(dsp_debug_fops, _dsp_dbg_get, _dsp_dbg_set, "%llu\n");
 
 static int _max_ssr_set(void *data, u64 val)
 {
@@ -542,11 +508,6 @@ struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
 		dprintk(CVP_ERR, "debugfs_create_file: clock_rate fail\n");
 		goto failed_create_dir;
 	}
-	if (!debugfs_create_file("dsp_debug_level", 0644, dir,
-			NULL, &dsp_debug_fops)) {
-		dprintk(CVP_ERR, "debugfs_create: dsp_debug_level fail\n");
-		goto failed_create_dir;
-	}
 
 	if (!debugfs_create_file("max_ssr_allowed", 0644, dir,
 			NULL, &max_ssr_fops)) {
@@ -590,13 +551,6 @@ static int inst_info_open(struct inode *inode, struct file *file)
 {
 	dprintk(CVP_INFO, "Open inode ptr: %pK\n", inode->i_private);
 	file->private_data = inode->i_private;
-	return 0;
-}
-
-static int publish_unreleased_reference(struct msm_cvp_inst *inst,
-		char **dbuf, char *end)
-{
-	dprintk(CVP_SESS, "%s deprecated function\n", __func__);
 	return 0;
 }
 
@@ -666,7 +620,6 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		"pending" : "done");
 	}
 
-	publish_unreleased_reference(inst, &cur, end);
 	len = simple_read_from_buffer(buf, count, ppos,
 		dbuf, cur - dbuf);
 

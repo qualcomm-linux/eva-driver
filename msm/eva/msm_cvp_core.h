@@ -13,7 +13,6 @@
 #include <linux/refcount.h>
 #include <media/msm_eva_private.h>
 #include "msm_cvp_buf.h"
-#include "msm_cvp_synx.h"
 
 #define DDR_TYPE_LPDDR4 0x6
 #define DDR_TYPE_LPDDR4X 0x7
@@ -34,7 +33,5 @@ int msm_cvp_close(void *instance);
 int msm_cvp_suspend(void);
 int msm_cvp_poll(void *instance, struct file *filp,
 		struct poll_table_struct *pt);
-int msm_cvp_private(void *cvp_inst, unsigned int cmd,
-		struct eva_kmd_arg *arg);
 
 #endif

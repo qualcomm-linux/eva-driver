@@ -18,6 +18,7 @@
 #include "cvp_core_hfi.h"
 #include "msm_cvp_events.h"
 #include "cvp_hfi.h"
+#include "eva_gem.h"
 
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
@@ -434,6 +435,7 @@ static void handle_session_release_buf_done(enum hal_command_response cmd,
 	struct msm_cvp_inst *inst;
 	struct cvp_internal_buf *buf;
 	struct list_head *ptr, *next;
+	struct msm_cvp_smem *smem;
 	u32 buf_found = false;
 	u32 address;
 
@@ -455,9 +457,10 @@ static void handle_session_release_buf_done(enum hal_command_response cmd,
 	mutex_lock(&inst->persistbufs.lock);
 	list_for_each_safe(ptr, next, &inst->persistbufs.list) {
 		buf = list_entry(ptr, struct cvp_internal_buf, list);
-		if (address == buf->smem->device_addr + buf->offset) {
+		smem = buf->gem? eva_gem_smem(buf->gem): buf->smem;
+		if (address == smem->device_addr + buf->offset) {
 			dprintk(CVP_SESS, "releasing persist: %#x\n",
-					buf->smem->device_addr);
+					smem->device_addr);
 			buf_found = true;
 		}
 	}
@@ -896,10 +899,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	struct iris_hfi_device *hfi_device;
 	struct msm_cvp_inst *inst = NULL;
 	struct cvp_session_queue *sq;
-#ifdef CVP_DSP_ENABLED
-	struct cvp_dsp_apps *me = &gfa_cv;
-	struct cvp_dsp_fastrpc_driver_entry *frpc_node = NULL;
-#endif
 	int i, rc = 0;
 	unsigned long flags = 0;
 	enum cvp_core_state cur_state;
@@ -975,8 +974,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 				eva_kmd_session_dump(inst);
 #endif
 
-			if (cvp_clean_session_queues(inst))
-				dprintk(CVP_ERR, "Failed to clean fences\n");
 			for (i = 0; i < ARRAY_SIZE(inst->completions); i++)
 				complete(&inst->completions[i]);
 			spin_lock_irqsave(&inst->event_handler.lock, flags);
@@ -995,16 +992,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 			if (hfi_device->error != CVP_ERR_NOC_ERROR)
 				msm_cvp_print_inst_bufs(inst, false);
 	}
-#ifdef CVP_DSP_ENABLED
-	list_for_each_entry(frpc_node, &me->fastrpc_driver_list.list, list) {
-		if (!core->trigger_ssr)
-			if (hfi_device->error != CVP_ERR_NOC_ERROR) {
-				msm_cvp_print_frpc_bufs(frpc_node, CVP_ERR, false);
-				dprintk(CVP_WARN, "%s: dsp_usage %d\n",
-					__func__, atomic_read(&frpc_node->dsp_usage));
-			}
-	}
-#endif
 	/* handle the hw error before core released to get full debug info */
 	msm_cvp_handle_hw_error(core);
 
@@ -1193,11 +1180,6 @@ static int msm_comm_session_abort(struct msm_cvp_inst *inst)
 	}
 exit:
 	return rc;
-}
-
-void msm_cvp_comm_handle_thermal_event(void)
-{
-	dprintk(CVP_WARN, "deprecated %s called\n", __func__);
 }
 
 int msm_cvp_comm_check_core_init(struct msm_cvp_core *core)
@@ -2034,7 +2016,7 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 		goto error;
 	}
 
-	rc = set_internal_buf_on_fw(inst, buf->smem);
+	rc = set_internal_buf_on_fw(inst, to_eva_gem(buf->gem)->smem);;
 	if (rc)
 		goto error;
 
@@ -2111,20 +2093,5 @@ int cvp_print_iova(struct msm_cvp_core *core)
 
 	dprintk(CVP_ERR, "core watermark 0x%x\n", core->va_watermark);
 	mutex_unlock(&core->lock);
-	return 0;
-}
-
-int cvp_print_frpc_node(u32 tag, struct cvp_dsp_fastrpc_driver_entry *frpc_node)
-{
-	if (!frpc_node) {
-		dprintk(CVP_ERR, "%s invalid frpc node %pK\n", __func__, frpc_node);
-		return -EINVAL;
-	}
-
-	dprintk(tag,
-		"%s frpc handle %#x session count %d refcount %d smem_count %d",
-		frpc_node->handle, frpc_node->session_cnt, atomic_read(&frpc_node->refcount),
-		atomic_read(&frpc_node->smem_count));
-
 	return 0;
 }

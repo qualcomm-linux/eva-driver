@@ -6,13 +6,18 @@
 #ifndef _MSM_V4L2_PRIVATE_H_
 #define _MSM_V4L2_PRIVATE_H_
 
+#include <drm/drm_ioctl.h>
 #include <media/msm_eva_private.h>
 #include "msm_cvp_debug.h"
 
-long cvp_unblocked_ioctl(struct file *filp,
-		unsigned int cmd, unsigned long arg);
-
-long cvp_compat_ioctl(struct file *filp,
-		unsigned int cmd, unsigned long arg);
+int eva_ioctl_get_session_info(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_update_power(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_send_cmd_pkt(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_receive_msg_pkt(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_flush_all(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_session_ctrl(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_set_sysprop(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_get_sysprop(struct drm_device *dev, void *data, struct drm_file *file);
+int eva_ioctl_flush_frame(struct drm_device *dev, void *data, struct drm_file *file);
 
 #endif

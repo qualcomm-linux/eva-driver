@@ -10,7 +10,6 @@
 #include "msm_cvp_common.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp_debug.h"
-#include "msm_cvp_dsp.h"
 
 struct cvp_power_level {
 	unsigned long core_sum;

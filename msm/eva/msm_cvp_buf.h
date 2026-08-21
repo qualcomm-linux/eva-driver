@@ -26,9 +26,9 @@
 	(buf->size <= smem->size - buf->offset))
 
 struct msm_cvp_inst;
+struct drm_gem_object;
 struct msm_cvp_platform_resources;
 struct msm_cvp_list;
-struct cvp_dsp_fastrpc_driver_entry;
 
 enum smem_cache_ops {
 	SMEM_CACHE_CLEAN,
@@ -93,6 +93,7 @@ struct msm_cvp_smem {
 	struct list_head list;
 	atomic_t refcount;
 	struct dma_buf *dma_buf;
+	struct drm_gem_object *gem;
 	void *kvaddr;
 	struct cvp_dma_buf_vmap vmap;
 	u32 device_addr;
@@ -104,12 +105,6 @@ struct msm_cvp_smem {
 	u32 buf_idx;
 	u32 fd;
 	struct cvp_dma_mapping_info mapping_info;
-};
-
-struct msm_cvp_wncc_buffer {
-	u32 fd;
-	u32 iova;
-	u32 size;
 };
 
 struct cvp_dmamap_cache {
@@ -156,6 +151,7 @@ struct cvp_internal_buf {
 	u64 ktid;
 	enum buffer_owner ownership;
 	struct msm_cvp_smem *smem;
+	struct drm_gem_object *gem;
 };
 
 struct msm_cvp_frame {
@@ -172,21 +168,6 @@ struct cvp_frame_bufs {
 	u32 nr;
 	struct msm_cvp_smem smem[MAX_FRAME_BUFFER_NUMS];
 };
-
-struct wncc_oob_buf {
-	u32 bitmap_idx;
-	struct eva_kmd_oob_wncc *buf;
-};
-
-#define NUM_WNCC_BUFS 8
-struct cvp_oob_pool {
-	struct mutex lock;
-	bool allocated;
-	u32 used_bitmap;
-	struct eva_kmd_oob_wncc *bufs[NUM_WNCC_BUFS];
-};
-
-extern struct cvp_oob_pool wncc_buf_pool;
 
 void print_cvp_buffer(u32 tag, const char *str,
 		struct msm_cvp_inst *inst,
@@ -216,9 +197,6 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 			struct msm_cvp_smem *smem,
 			const char *str);
-int msm_cvp_unmap_smem_frpc(struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-			struct msm_cvp_smem *smem,
-			const char *str);
 struct dma_buf *msm_cvp_smem_get_dma_buf(int fd);
 void msm_cvp_smem_put_dma_buf(void *dma_buf);
 int msm_cvp_smem_cache_operations(struct dma_buf *dbuf,
@@ -232,18 +210,6 @@ int msm_cvp_unmap_ipcc_regs(u32 iova);
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 					u32 buffer_size);
 int cvp_release_arp_buffers(struct msm_cvp_inst *inst);
-int msm_cvp_map_buf_dsp(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_unmap_buf_dsp(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_map_buf_dsp_new(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf,
-			int32_t pid,
-			uint32_t *iova);
-int msm_cvp_unmap_buf_dsp_new(struct msm_cvp_inst *inst,
-			struct eva_kmd_buffer *buf);
-int msm_cvp_proc_oob(struct msm_cvp_inst* inst,
-			struct eva_kmd_hfi_packet* in_pkt);
 void msm_cvp_cache_operations(struct msm_cvp_smem *smem,
 			u32 type, u32 offset, u32 size);
 int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
@@ -256,19 +222,8 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		struct eva_kmd_hfi_packet *in_pkt,
 		unsigned int offset, unsigned int buf_num);
 void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid);
-int msm_cvp_register_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_unregister_buffer(struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_register_dsp_buffer(struct msm_cvp_inst *inst,
-		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-		struct eva_kmd_buffer *buf);
-int msm_cvp_unregister_dsp_buffer(struct msm_cvp_inst *inst,
-		struct cvp_dsp_fastrpc_driver_entry *frpc_node,
-		struct eva_kmd_buffer *buf);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
 void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
-void msm_cvp_print_frpc_bufs(struct cvp_dsp_fastrpc_driver_entry *frpc_node, u32 tag, bool raw);
 int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
 			u32 buffer_size,
 			u32 secure_type,
@@ -278,6 +233,9 @@ void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 enum cp_context_bank msm_cvp_get_cb(u32 flags);
-
+struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst, struct dma_buf *dma_buf, u32 pkt_type);
+int msm_cvp_session_add_smem(struct msm_cvp_inst *inst, struct msm_cvp_smem *smem);
+void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
+		struct msm_cvp_inst *inst, struct eva_kmd_hfi_packet *pkt);
 
 #endif
