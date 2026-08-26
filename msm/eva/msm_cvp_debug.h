@@ -69,20 +69,6 @@ extern bool msm_cvp_cacheop_disabled;
 extern int msm_cvp_clock_voting;
 extern bool msm_cvp_syscache_disable;
 extern bool msm_cvp_probe_allowed;
-extern bool msm_cvp_dsp_disable;
-extern bool msm_cvp_mmrm_enabled;
-extern bool msm_cvp_dcvs_disable;
-extern int msm_cvp_minidump_enable;
-extern int cvp_kernel_fence_enabled;
-extern int msm_cvp_hw_wd_recovery;
-extern int msm_cvp_iova_leak_recovery;
-extern int msm_cvp_smmu_fault_recovery;
-extern int msm_cvp_session_error_recovery;
-extern int msm_cvp_hw_hang_recovery;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-extern int msm_cvp_sw_dbg_buf_dump;
-#endif
-extern int msm_cvp_max_frames_dump;
 
 #define dprintk(__level, __fmt, arg...)	\
 	do { \
@@ -121,13 +107,6 @@ extern int msm_cvp_max_frames_dump;
 		WARN_ON(value);					\
 	} while (0)
 
-
-void msm_cvp_debugfs_init_drv(struct dentry *dir);
-struct dentry *msm_cvp_debugfs_init_core(struct msm_cvp_core *core,
-		struct dentry *parent);
-struct dentry *msm_cvp_debugfs_init_inst(struct msm_cvp_inst *inst,
-		struct dentry *parent);
-void msm_cvp_debugfs_deinit_inst(struct msm_cvp_inst *inst);
 
 static inline char *get_debug_level_str(int level)
 {
@@ -171,57 +150,6 @@ static inline char *get_debug_level_str(int level)
 	default:
 		return "???";
 	}
-}
-
-static inline void show_stats(struct msm_cvp_inst *i)
-{
-	int x;
-
-	for (x = 0; x < MAX_PROFILING_POINTS; x++) {
-		if (i->debug.pdata[x].name[0] &&
-				(msm_cvp_debug & CVP_PROF)) {
-			if (i->debug.samples) {
-				dprintk(CVP_PROF, "%s averaged %d ms/sample\n",
-						i->debug.pdata[x].name,
-						i->debug.pdata[x].cumulative /
-						i->debug.samples);
-			}
-
-			dprintk(CVP_PROF, "%s Samples: %d\n",
-					i->debug.pdata[x].name,
-					i->debug.samples);
-		}
-	}
-}
-
-static inline void msm_cvp_res_handle_fatal_hw_error(
-	struct msm_cvp_platform_resources *resources,
-	bool enable_fatal)
-{
-	enable_fatal &= resources->debug_timeout;
-	MSM_CVP_ERROR(enable_fatal);
-}
-
-static inline void msm_cvp_handle_hw_error(struct msm_cvp_core *core)
-{
-	bool enable_fatal = true;
-
-	/*
-	 * In current implementation user-initiated SSR triggers
-	 * a fatal error from hardware. However, there is no way
-	 * to know if fatal error is due to SSR or not. Handle
-	 * user SSR as non-fatal.
-	 */
-	if (core->trigger_ssr) {
-		core->trigger_ssr = false;
-		enable_fatal = false;
-	}
-
-	/* CVP driver can decide FATAL handling of HW errors
-	 * based on multiple factors. This condition check will
-	 * be enhanced later.
-	 */
-	msm_cvp_res_handle_fatal_hw_error(&core->resources, enable_fatal);
 }
 
 #endif

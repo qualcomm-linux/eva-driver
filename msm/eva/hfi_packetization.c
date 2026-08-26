@@ -6,7 +6,6 @@
 
 #include "hfi_packetization.h"
 #include "msm_cvp_debug.h"
-#include "cvp_presil.h"
 
 /* Set up look-up tables to convert HAL_* to HFI_*.
  *
@@ -358,13 +357,6 @@ static int cvp_create_pkt_cmd_session_set_buffers(
 
 	pkt->buf_type.size = size;
 	pkt->size = sizeof(struct cvp_hfi_cmd_session_set_buffers_packet);
-
-#ifdef USE_PRESIL42
-	presil42_set_buf_iova(pkt, iova);
-	dprintk(CVP_DBG,
-		"%s: arp buffer is %x for HFI\n", __func__, iova);
-	return rc;
-#endif
 
 	pkt->buf_type.iova = iova;
 	return rc;

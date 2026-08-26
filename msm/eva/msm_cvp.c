@@ -49,24 +49,6 @@ void *get_sess_from_idr(struct msm_cvp_inst *inst)
 	return sess;
 }
 
-u32 get_sess_id_from_idr(void *session)
-{
-	void *ptr = NULL;
-	u32 sess_id = 0;
-	struct msm_cvp_core *core = NULL;
-
-	core = cvp_driver->cvp_core;
-	mutex_lock(&core->idr_lock);
-	idr_for_each_entry(&core->sess_idr, ptr, sess_id) {
-		if (ptr == session) {
-			mutex_unlock(&core->idr_lock);
-			return sess_id;
-		}
-	}
-	mutex_unlock(&core->idr_lock);
-	return -EINVAL;
-}
-
 int msm_cvp_get_session_info(struct msm_cvp_inst *inst, u32 *session)
 {
 	int rc = 0;
@@ -169,9 +151,7 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 		dprintk(CVP_WARN,
 			"Frames: session queue wait timeout and session_id = %#x sq %pK, sq->wq %pK\n",
 			inst->sess_id, sq, &sq->wq);
-		if (inst && inst->core && inst->core->dev_ops &&
-				inst->state != MSM_CVP_CORE_INVALID)
-			print_hfi_queue_info(inst->core->dev_ops);
+
 		rc = -ETIMEDOUT;
 		handle_session_timeout(inst, true);
 		goto exit;
@@ -1032,10 +1012,6 @@ int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 	struct iris_hfi_device *hfi;
 	struct cvp_session_prop *session_prop;
 	int i, rc = 0;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	int inst_idx = 0;
-	struct msm_cvp_inst *curr_inst = NULL;
-#endif
 	CVPKERNEL_ATRACE_BEGIN("msm_cvp_get_sysprop");
 
 	if (!inst || !inst->core || !inst->core->dev_ops) {
@@ -1103,22 +1079,6 @@ int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 			rc = 0;
 			break;
 		}
-#ifdef CVP_SW_DBG_BUF_ENABLED
-		case EVA_KMD_PROP_SW_DBG_BUF_IDX:
-		{
-			list_for_each_entry(curr_inst, &inst->core->instances, list) {
-				if (curr_inst != NULL) {
-					if (inst == curr_inst) {
-						props->prop_data[i].data = inst_idx;
-						break;
-					}
-					inst_idx++;
-				}
-			}
-
-			break;
-		}
-#endif
 		case EVA_KMD_PROP_SESSION_STATE:
 		{
 			props->prop_data[i].data = inst->session_error_code;
@@ -1215,10 +1175,6 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		struct eva_kmd_sys_property *prop_array, int i)
 {
 	struct cvp_session_prop *session_prop;
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	struct dma_buf *dma_buf;
-	struct cvp_dma_buf_vmap vmap = {0};
-#endif
 	int rc = 0;
 
 	session_prop = &inst->prop;
@@ -1261,36 +1217,6 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 								(u32 *)&(prop_array->data));
 			break;
 		}
-#ifdef CVP_SW_DBG_BUF_ENABLED
-		case EVA_KMD_PROP_SW_DBG_BUF:
-		{
-			dma_buf = msm_cvp_smem_get_dma_buf(prop_array->data);
-			if (!dma_buf) {
-				dprintk(CVP_ERR, "%s: msm_cvp_smem_get_dma_buf failed\n", __func__);
-				rc = -EINVAL;
-			} else {
-				rc = dma_buf_begin_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-				if (rc) {
-					dprintk(CVP_ERR, "Failed to begin CPU access: %d\n", rc);
-				} else {
-					rc = msm_cvp_dma_buf_vmap(dma_buf, &vmap);
-					if (rc || !vmap.vaddr) {
-						dprintk(CVP_ERR, "Failed to map buffer: %d\n", rc);
-						dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-					} else {
-						eva_cmd_msg_queue_dump(vmap.vaddr);
-						eva_kmd_debug_log_dump(vmap.vaddr);
-						eva_kmd_session_dump_to_buf(vmap.vaddr);
-
-						msm_cvp_dma_buf_vunmap(dma_buf, &vmap);
-						dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-					}
-				}
-				dma_buf_put(dma_buf);
-			}
-			break;
-		}
-#endif
 		default:
 			rc = -EFAULT;
 	}

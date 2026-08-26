@@ -237,14 +237,6 @@ int msm_cvp_update_power(struct msm_cvp_inst *inst)
 	}
 
 	clocks = &core->resources.clock_set;
-#ifndef CVP_OPP_ENABLED
-    cl = &clocks->clock_tbl[clocks->count - 1];
-	if (!cl->has_scaling) {
-		dprintk(CVP_ERR, "Cannot scale CVP clock\n");
-		rc = -EINVAL;
-		goto adjust_exit;
-	}
-#endif
 	for (bus_count = 0; bus_count < core->resources.bus_set.count; bus_count++) {
 		if (!strcmp(core->resources.bus_set.bus_tbl[bus_count].name, "eva-ddr")) {
 			bus = &core->resources.bus_set.bus_tbl[bus_count];
@@ -265,16 +257,10 @@ int msm_cvp_update_power(struct msm_cvp_inst *inst)
 
 	rc = msm_cvp_set_clocks(core);
 	if (rc) {
-#ifndef CVP_OPP_ENABLED
-		dprintk(CVP_ERR,
-			"Failed to set clock rate %u %s: %d %s\n",
-			core->curr_freq, cl->name, rc, __func__);
-#else
 		/* OPP path scales both eva0 and core0 atomically */
 		dprintk(CVP_ERR,
 			"Failed to set clock rate %u eva0 & core0: %d %s\n",
 			core->curr_freq, rc, __func__);
-#endif
 		core->curr_freq = core->orig_core_sum;
 		goto adjust_exit;
 	}

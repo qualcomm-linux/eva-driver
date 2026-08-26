@@ -439,14 +439,6 @@ struct cvp_hfi_cmd_session_flush_packet {
 	u32 flush_type;
 };
 
-struct cvp_hfi_cmd_session_get_property_packet {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 num_properties;
-	u32 rg_property_data[1];
-};
-
 struct cvp_hfi_msg_sys_session_abort_done_packet {
 	u32 size;
 	u32 packet_type;
@@ -746,14 +738,6 @@ struct cvp_hfi_buffer_mapping_type {
 	u32 index;
 	u32 device_addr;
 	u32 size;
-};
-
-struct cvp_hfi_cmd_session_sync_process_packet {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 sync_id;
-	u32 rg_data[];
 };
 
 struct cvp_hfi_msg_event_notify_packet {

@@ -16,29 +16,6 @@
 #undef TRACE_INCLUDE_FILE
 #define TRACE_INCLUDE_FILE msm_cvp_events
 
-// #define USE_PERFETTO
-
-#ifdef USE_PERFETTO
-
-#define cvp_trace trace_printk
-
-#define CVPKERNEL_ATRACE_BEGIN(name) do { \
-	if ((msm_cvp_debug & CVP_TRACE) == CVP_TRACE) { \
-		char buf[128]; \
-		snprintf(buf, 128, "B|%d|%s\n", current->tgid, name); \
-		cvp_trace(buf); \
-	} \
-} while (0)
-
-#define CVPKERNEL_ATRACE_END(name) do { \
-	if ((msm_cvp_debug & CVP_TRACE) == CVP_TRACE) { \
-		char buf[128]; \
-		snprintf(buf, 128, "E|%d\n", current->tgid); \
-		cvp_trace(buf); \
-	} \
-} while (0)
-
-#else  // #ifdef USE_PERFETTO
 
 // Since Chrome supports to parse the event “tracing_mark_write” by default
 // so we can re-use this to display your own events in Chrome
@@ -78,7 +55,6 @@ TRACE_EVENT(tracing_mark_write,
 #define CVPKERNEL_ATRACE_END(name) trace_tracing_mark_write('E', current, name, 0)
 #define CVPKERNEL_ATRACE_BEGIN(name) trace_tracing_mark_write('B', current, name, 0)
 
-#endif  // #ifdef USE_PERFETTO
 
 TRACE_EVENT(tracing_eva_frame_from_sw,
 	TP_PROTO(u64 aon_cycles, const char *name,

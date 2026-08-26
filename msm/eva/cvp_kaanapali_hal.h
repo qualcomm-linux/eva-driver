@@ -4,18 +4,17 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#ifndef __H_CVP_PAKALA_HAL_H__
-#define __H_CVP_PAKALA_HAL_H__
+#ifndef __H_CVP_KAANAPALI_HAL_H__
+#define __H_CVP_KAANAPALI_HAL_H__
 
 #include "cvp_core_hfi.h"
 #include "cvp_hfi.h"
 #include "cvp_hfi_io.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp_debug.h"
-#include "cvp_presil.h"
 #include <linux/delay.h>
 
-static const char *const mid_names_pakala[25] = {
+static const char *const mid_names_kaanapali[25] = {
 	"CVP_FW",
 	"ARP_DATA",
 	"CDM_DATA",
@@ -43,5 +42,5 @@ static const char *const mid_names_pakala[25] = {
 	"CVP_RGE_NON_PIXEL",
 };
 
-int set_pakala_hal_functions(void);
+int set_kaanapali_hal_functions(void);
 #endif

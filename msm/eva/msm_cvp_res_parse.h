@@ -24,8 +24,6 @@ int cvp_init_context_bank_devices(struct platform_device *pdev,
 void cvp_deinit_context_bank_devices(struct msm_cvp_core *core);
 
 int cvp_read_bus_resources(struct platform_device *pdev);
-int cvp_read_mem_cdsp_resources_from_dt(struct platform_device *pdev);
-int cvp_read_ipclite_mappings(struct platform_device *pdev);
 
 int msm_cvp_load_u32_table(struct platform_device *pdev,
 		struct device_node *of_node, char *table_name, int struct_size,

@@ -14,79 +14,6 @@
 #include "msm_cvp_clocks.h"
 #include <linux/types.h>
 
-static bool __mmrm_client_check_scaling_supported(
-				struct mmrm_client_desc *client)
-{
-#ifdef CVP_MMRM_ENABLED
-	return mmrm_client_check_scaling_supported(
-				client->client_type,
-				client->client_info.desc.client_domain);
-#else
-	return false;
-#endif
-}
-
-static struct mmrm_client *__mmrm_client_register(
-				struct mmrm_client_desc *client)
-{
-#ifdef CVP_MMRM_ENABLED
-	return mmrm_client_register(client);
-#else
-	return NULL;
-#endif
-}
-
-static int __mmrm_client_deregister(struct mmrm_client *client)
-{
-#ifdef CVP_MMRM_ENABLED
-	return mmrm_client_deregister(client);
-#else
-	return -ENODEV;
-#endif
-}
-
-static int __mmrm_client_set_value_in_range(struct mmrm_client *client,
-					struct mmrm_client_data *data,
-					struct mmrm_client_res_value *val)
-{
-#ifdef CVP_MMRM_ENABLED
-	return mmrm_client_set_value_in_range(client, data, val);
-#else
-	return -ENODEV;
-#endif
-}
-
-static int msm_cvp_mmrm_notifier_cb(
-	struct mmrm_client_notifier_data *notifier_data)
-{
-#ifdef CVP_MMRM_ENABLED
-	if (!notifier_data) {
-		dprintk(CVP_WARN, "%s Invalid notifier data: %pK\n",
-			__func__, notifier_data);
-		return -EINVAL;
-	}
-
-	if (notifier_data->cb_type == MMRM_CLIENT_RESOURCE_VALUE_CHANGE) {
-		struct iris_hfi_device *dev = notifier_data->pvt_data;
-
-		dprintk(CVP_PWR,
-			"%s: Clock %s throttled from %ld to %ld \n",
-			__func__, dev->mmrm_desc.client_info.desc.name,
-			notifier_data->cb_data.val_chng.old_val,
-			notifier_data->cb_data.val_chng.new_val);
-
-		/*TODO: if need further handling to notify eva client */
-	} else {
-		dprintk(CVP_WARN, "%s Invalid cb type: %d\n",
-			__func__, notifier_data->cb_type);
-		return -EINVAL;
-	}
-	return 0;
-#else
-	return -EINVAL;
-#endif
-}
-
 int msm_cvp_set_fmax(struct msm_cvp_core *core)
 {
 	struct cvp_hfi_ops *ops_tbl;
@@ -125,213 +52,8 @@ int msm_cvp_set_clocks(struct msm_cvp_core *core)
 	return rc;
 }
 
-int msm_cvp_mmrm_register(struct iris_hfi_device *device)
-{
-#ifdef CVP_MMRM_ENABLED
-	int rc = 0;
-	struct clock_info *cl = NULL;
-	char *name;
-	bool isSupport;
 
-	if (!device) {
-		dprintk(CVP_ERR, "%s invalid device\n", __func__);
-		return -EINVAL;
-	}
 
-	name = (char *)device->mmrm_desc.client_info.desc.name;
-	device->mmrm_cvp=NULL;
-	device->mmrm_desc.client_type=MMRM_CLIENT_CLOCK;
-	device->mmrm_desc.priority=MMRM_CLIENT_PRIOR_LOW;
-	device->mmrm_desc.pvt_data = device;
-	device->mmrm_desc.notifier_callback_fn = msm_cvp_mmrm_notifier_cb;
-	device->mmrm_desc.client_info.desc.client_domain=MMRM_CLIENT_DOMAIN_CVP;
-
-	iris_hfi_for_each_clock(device, cl) {
-		if (cl->has_scaling) {	/* only clk source enabled in dtsi */
-			device->mmrm_desc.client_info.desc.clk=cl->clk;
-			device->mmrm_desc.client_info.desc.client_id=cl->clk_id;
-			strscpy(name, cl->name,
-			sizeof(device->mmrm_desc.client_info.desc.name));
-		}
-	}
-
-	isSupport = __mmrm_client_check_scaling_supported(&(device->mmrm_desc));
-
-	if (!isSupport) {
-		dprintk(CVP_PWR, "%s: mmrm not supported, flag: %d\n",
-			__func__, isSupport);
-		return rc;
-	}
-
-	dprintk(CVP_PWR,
-		"%s: Register for %s, clk_id %d\n",
-		__func__, device->mmrm_desc.client_info.desc.name,
-		device->mmrm_desc.client_info.desc.client_id);
-
-	device->mmrm_cvp = __mmrm_client_register(&(device->mmrm_desc));
-	if (device->mmrm_cvp == NULL) {
-		dprintk(CVP_ERR,
-			"%s: Failed mmrm_client_register with mmrm_cvp: %pK\n",
-			__func__, device->mmrm_cvp);
-		rc = -ENOENT;
-	} else {
-		dprintk(CVP_PWR,
-			"%s: mmrm_client_register done: %pK, type:%d, uid:%ld\n",
-			__func__, device->mmrm_cvp,
-			device->mmrm_cvp->client_type,
-			device->mmrm_cvp->client_uid);
-	}
-	return rc;
-#else
-	return -EINVAL;
-#endif
-}
-
-int msm_cvp_mmrm_deregister(struct iris_hfi_device *device)
-{
-#ifdef CVP_MMRM_ENABLED
-	int rc = 0;
-	struct clock_info *cl = NULL;
-
-	if (!device) {
-		dprintk(CVP_ERR,
-			"%s invalid args: device %pK \n",
-			__func__, device);
-		return -EINVAL;
-	}
-
-	if (!device->mmrm_cvp) {	// when mmrm not supported
-		dprintk(CVP_ERR,
-			"%s device->mmrm_cvp not initialized \n",
-			__func__);
-		return rc;
-	}
-
-	/* set clk value to 0 before deregister	*/
-	iris_hfi_for_each_clock(device, cl) {
-		if ((cl->has_scaling) && (__clk_is_enabled(cl->clk))){
-			// set min freq and cur freq to 0;
-			rc = msm_cvp_mmrm_set_value_in_range(device,
-				0, 0);
-			if (rc) {
-				dprintk(CVP_ERR,
-					"%s Failed set clock %s: %d\n",
-					__func__, cl->name, rc);
-			}
-		}
-	}
-
-	rc = __mmrm_client_deregister(device->mmrm_cvp);
-	if (rc) {
-		dprintk(CVP_ERR,
-			"%s: Failed mmrm_client_deregister with rc: %d\n",
-			__func__, rc);
-	}
-
-	device->mmrm_cvp = NULL;
-	return rc;
-#else
-		return -EINVAL;
-#endif
-}
-
-int msm_cvp_mmrm_set_value_in_range(struct iris_hfi_device *device,
-	u32 freq_min, u32 freq_cur)
-{
-#ifdef CVP_MMRM_ENABLED
-	int rc = 0;
-	struct mmrm_client_res_value val;
-	struct mmrm_client_data data;
-
-	if (!device) {
-		dprintk(CVP_ERR, "%s invalid device\n", __func__);
-		return -EINVAL;
-	}
-
-	dprintk(CVP_PWR,
-		"%s: set clock rate for mmrm_cvp: %pK, type :%d, uid: %ld\n",
-		__func__, device->mmrm_cvp,
-		device->mmrm_cvp->client_type, device->mmrm_cvp->client_uid);
-
-	val.min = freq_min;
-	val.cur = freq_cur;
-	data.num_hw_blocks = 1;
-	data.flags = 0;		/* Not MMRM_CLIENT_DATA_FLAG_RESERVE_ONLY */
-
-	dprintk(CVP_PWR,
-		"%s: set clock rate to min %u cur %u: %d\n",
-		__func__, val.min, val.cur, rc);
-
-	rc = __mmrm_client_set_value_in_range(device->mmrm_cvp, &data, &val);
-	if (rc) {
-		dprintk(CVP_ERR,
-			"%s: Failed to set clock rate to min %u cur %u: %d\n",
-			__func__, val.min, val.cur, rc);
-	}
-	return rc;
-#else
-	return -EINVAL;
-#endif
-}
-
-#ifndef CVP_OPP_ENABLED
-int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u64 freq)
-{
-#ifdef CVP_MMRM_ENABLED
-	struct clock_info *cl;
-	int rc = 0;
-	int fsrc2clk = 3;
-	// ratio factor for clock source : clk
-	u32 freq_min = device->res->allowed_clks_tbl[0].clock_rate * fsrc2clk;
-
-	dprintk(CVP_PWR, "%s: entering with freq : %ld\n", __func__, freq);
-
-	iris_hfi_for_each_clock(device, cl) {
-		if (cl->has_scaling) {/* has_scaling */
-			device->clk_freq = freq;
-			if (msm_cvp_clock_voting)
-				freq = msm_cvp_clock_voting;
-
-			freq = freq * fsrc2clk;
-			dprintk(CVP_PWR,
-				"%s: clock source rate set to: %ld\n",
-				__func__, freq);
-
-			if (device->mmrm_cvp != NULL) {
-				/* min freq : 1st element value in the table */
-				rc = msm_cvp_mmrm_set_value_in_range(device,
-					freq_min, freq);
-				if (rc) {
-					dprintk(CVP_ERR,
-						"Failed set clock %s: %d\n",
-						cl->name, rc);
-					return rc;
-				}
-			}
-			else {
-				dprintk(CVP_PWR,
-					"%s: set clock with clk_set_rate\n",
-					__func__);
-				rc = clk_set_rate(cl->clk, freq);
-				if (rc) {
-					dprintk(CVP_ERR,
-						"Failed set clock %u %s: %d\n",
-						freq, cl->name, rc);
-					return rc;
-				}
-
-				dprintk(CVP_PWR, "Scaling clock %s to %u\n",
-					cl->name, freq);
-			}
-		}
-	}
-
-	return 0;
-#else
-		return -EINVAL;
-#endif
-}
-#else
 int msm_cvp_opp_set_rate(struct iris_hfi_device *device, u64 freq)
 {
 	struct dev_pm_opp *opp;
@@ -379,7 +101,6 @@ int msm_cvp_opp_set_rate(struct iris_hfi_device *device, u64 freq)
 
 	return ret;
 }
-#endif
 
 int msm_cvp_scale_clocks(struct iris_hfi_device *device)
 {
@@ -393,11 +114,8 @@ int msm_cvp_scale_clocks(struct iris_hfi_device *device)
 		allowed_clks_tbl[0].clock_rate;
 
 	dprintk(CVP_PWR, "%s: scale clock rate %d\n", __func__, rate);
-#ifndef CVP_OPP_ENABLED
-	rc = msm_cvp_set_clocks_impl(device, rate);
-#else
+
 	rc = msm_cvp_opp_set_rate(device, rate);
-#endif
 	return rc;
 }
 
@@ -426,29 +144,6 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 			return 0;
 		}
 
-#ifndef CVP_OPP_ENABLED
-		if (cl->has_scaling) {
-#ifdef CVP_MMRM_ENABLED
-			if (device->mmrm_cvp != NULL) {
-				// set min freq and cur freq to 0;
-				rc = msm_cvp_mmrm_set_value_in_range(device,
-						0, 0);
-				if (rc)
-					dprintk(CVP_ERR,
-						"%s Failed set clock %s: %d\n",
-						__func__, cl->name, rc);
-			}
-			else 
-#endif
-			{
-				dprintk(CVP_PWR,
-					"%s: set clock with clk_set_rate\n",
-					__func__);
-				clk_set_rate(cl->clk,
-						clk_round_rate(cl->clk, 0));
-			}
-		}
-#else /* CVP_OPP_ENABLED */
 		/*
 		 * For OPP-managed clocks (eva0), dev_pm_opp_set_opp handles
 		 * both eva0 and core0 together, and also votes mxc/mmcx corners.
@@ -459,7 +154,6 @@ int msm_cvp_prepare_enable_clk(struct iris_hfi_device *device,
 		if (!strcmp(cl->name, "eva0")) {
 			msm_cvp_opp_set_rate(device, 0);
 		}
-#endif /* CVP_OPP_ENABLED */
 		rc = clk_prepare_enable(cl->clk);
 		if (rc) {
 			dprintk(CVP_ERR, "Failed to enable clock %s\n",
@@ -504,27 +198,7 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 		clk_disable_unprepare(cl->clk);
 		dprintk(CVP_PWR, "Clock: %s disable and unprepare\n",
 			cl->name);
-#ifndef CVP_OPP_ENABLED
-		if (cl->has_scaling) {
-#ifdef CVP_MMRM_ENABLED
-			if (device->mmrm_cvp != NULL) {
-				// set min freq and cur freq to 0;
-				rc = msm_cvp_mmrm_set_value_in_range(device,
-					0, 0);
-				if (rc)
-					dprintk(CVP_ERR,
-						"%s Failed set clock %s: %d\n",
-						__func__, cl->name, rc);
-			} 
-			else 
-#endif
-			{
-				dprintk(CVP_PWR, "%s: set clock with clk_set_rate\n", __func__);
-				clk_set_rate(cl->clk,
-						clk_round_rate(cl->clk, 0));
-			}
-		}
-#else /* CVP_OPP_ENABLED */
+
 		/*
 		 * msm_cvp_opp_set_rate sets both scalable clocks (eva0 + core0)
 		 * atomically. core0 is disabled first (in __power_off_core),
@@ -535,7 +209,6 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 		if (!strcmp(cl->name, "eva0")) {
 			msm_cvp_opp_set_rate(device, 0);
 		}
-#endif /* CVP_OPP_ENABLED */
 		return 0;
 	}
 

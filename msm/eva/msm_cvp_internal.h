@@ -26,7 +26,6 @@
 #include <media/msm_eva_private.h>
 #include "cvp_hfi_api.h"
 #include "cvp_hfi.h"
-#include "msm_cvp_sw_dbg.h"
 
 #define MAX_DEBUGFS_NAME 50
 #define MAX_DSP_INIT_ATTEMPTS 16
@@ -390,7 +389,6 @@ struct msm_cvp_core {
 	struct msm_cvp_platform_data *platform_data;
 	struct msm_cvp_synx_ops *synx_ftbl;
 	struct list_head instances;
-	struct dentry *debugfs_root;
 	enum cvp_core_state state;
 	struct completion completions[SYS_MSG_END - SYS_MSG_START + 1];
 	enum msm_cvp_hfi_type hfi_type;
@@ -402,18 +400,14 @@ struct msm_cvp_core {
 	enum hal_ssr_trigger_type ssr_type;
 	u32 soc_version;
 	u32 fw_version;
-	u32 smmu_fault_count;
 	u32 last_fault_addr;
 	u32 ssr_count;
 	u32 smem_leak_count;
-	bool trigger_ssr;
 	unsigned long curr_freq;
 	unsigned long orig_core_sum;
 	unsigned long bw_sum;
 	atomic64_t kernel_trans_id;
 	atomic_t va_watermark;
-	struct eva_kmd_debug kmd_dbg;
-	struct eva_kmd_trace kmd_trace;
 	ktime_t last_msg_ts;
 	ktime_t last_fw_fetch_ts;
 	u32 cur_cmd_q_read_offset;
@@ -478,7 +472,6 @@ extern struct msm_cvp_drv *cvp_driver;
 void cvp_handle_cmd_response(enum hal_command_response cmd, void *data);
 int msm_cvp_trigger_ssr(struct msm_cvp_core *core,
 	enum hal_ssr_trigger_type type);
-int msm_cvp_noc_error_info(struct msm_cvp_core *core);
 
 void msm_cvp_ssr_handler(struct work_struct *work);
 void msm_cvp_iova_cleanup_handler(struct work_struct *work);

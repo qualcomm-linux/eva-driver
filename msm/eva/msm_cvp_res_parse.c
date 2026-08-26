@@ -19,9 +19,6 @@
 #include "msm_cvp_resources.h"
 #include "msm_cvp_res_parse.h"
 #include "cvp_core_hfi.h"
-#ifdef CVP_SECURE_BUF_ENABLED
-#include "soc/qcom/secure_buffer.h"
-#endif
 #include <linux/device.h>
 
 enum clock_properties {
@@ -66,12 +63,6 @@ static inline void msm_cvp_free_allowed_clocks_table(
 	res->allowed_clks_tbl = NULL;
 }
 
-static inline void msm_cvp_free_cycles_per_mb_table(
-		struct msm_cvp_platform_resources *res)
-{
-	res->clock_freq_tbl.clk_prof_entries = NULL;
-}
-
 static inline void msm_cvp_free_reg_table(
 			struct msm_cvp_platform_resources *res)
 {
@@ -96,22 +87,6 @@ static inline void msm_cvp_free_bus_vectors(
 	devm_kfree(&res->pdev->dev, res->bus_set.bus_tbl);
 	res->bus_set.bus_tbl = NULL;
 	res->bus_set.count = 0;
-}
-
-static inline void msm_cvp_free_regulator_table(
-			struct msm_cvp_platform_resources *res)
-{
-	int c = 0;
-
-	for (c = 0; c < res->regulator_set.count; ++c) {
-		struct regulator_info *rinfo =
-			&res->regulator_set.regulator_tbl[c];
-
-		rinfo->name = NULL;
-	}
-
-	res->regulator_set.regulator_tbl = NULL;
-	res->regulator_set.count = 0;
 }
 
 static inline void msm_cvp_free_pd_table(
@@ -142,10 +117,7 @@ void msm_cvp_free_platform_resources(
 			struct msm_cvp_platform_resources *res)
 {
 	msm_cvp_free_clock_table(res);
-	msm_cvp_free_regulator_table(res);
-	if (res->gdsc_framework_type) {
-		err_load_load_PD_table(res);
-	}
+	err_load_load_PD_table(res);
 	msm_cvp_free_allowed_clocks_table(res);
 	msm_cvp_free_reg_table(res);
 	msm_cvp_free_qdss_addr_table(res);
@@ -171,42 +143,6 @@ static int msm_cvp_load_ipcc_regs(struct msm_cvp_platform_resources *res, struct
 	);
 
 	return ret;
-}
-
-static int msm_cvp_ipclite_mappings(struct device *dev,
-				struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
-{
-	struct device_node *mem_node;
-	struct resource r;
-	int ret = 0;
-    
-	/* index 1 → global_sync_mem (IPC‑lite) */
-	mem_node = of_parse_phandle(dev->of_node, "memory-region", 1);
-	if (mem_node) {
-		ret =  of_address_to_resource(mem_node, 0, &r);
-		of_node_put(mem_node);
-		if (ret) {
-			dprintk(CVP_ERR, "%s: Failed to get ipclite mem region resource\n",
-					__func__);
-			return ret;
-		}
-		res->reg_mappings.ipclite_phyaddr = (u32)r.start;
-		res->reg_mappings.ipclite_size = resource_size(&r);
-	} else {
-		dprintk(CVP_ERR, "%s: Failed to get ipclite memory region\n", __func__);
-		return -EINVAL;
-	}
-    /* Get SoC‑specific IPC‑lite mapping iova start */
-    
-    res->reg_mappings.ipclite_iova = platform_data->ipclite_mappings->iova_start;
-
-    dprintk(CVP_CORE,
-        "IPC‑lite mapping: phys=0x%llx size=0x%llx iova=0x%llx\n",
-        (unsigned long long)res->reg_mappings.ipclite_phyaddr,
-        (unsigned long long)res->reg_mappings.ipclite_size,
-        (unsigned long long)res->reg_mappings.ipclite_iova);
-
-    return 0;
 }
 
 static int msm_cvp_load_regspace_mapping(struct msm_cvp_platform_resources *res,struct msm_cvp_platform_data *platform_data)
@@ -502,28 +438,6 @@ static int msm_cvp_load_allowed_clocks_table(
 	return 0;
 }
 
-static int msm_cvp_populate_mem_cdsp(struct device *dev,
-		struct msm_cvp_platform_resources *res)
-{
-	struct device_node *mem_node;
-	int ret;
-
-	mem_node = of_parse_phandle(dev->of_node, "memory-region", 0);
-	if (mem_node) {
-		ret = of_reserved_mem_device_init_by_idx(dev,
-				dev->of_node, 0);
-		of_node_put(dev->of_node);
-		if (ret) {
-			dprintk(CVP_ERR,
-				"Failed to initialize reserved mem, ret %d\n",
-				ret);
-			return ret;
-		}
-	}
-	res->mem_cdsp.dev = dev;
-
-	return 0;
-}
 static int msm_cvp_populate_bus(struct device *dev,
                 struct msm_cvp_platform_resources *res,struct msm_cvp_platform_data *platform_data)
 {
@@ -597,113 +511,6 @@ err_bus:
     return rc;
 }
 
-static int msm_cvp_load_regulator_table(
-		struct msm_cvp_platform_resources *res)
-{
-	int rc = 0;
-	struct platform_device *pdev = res->pdev;
-	struct regulator_set *regulators = &res->regulator_set;
-	struct device_node *domains_parent_node = NULL;
-	struct property *domains_property = NULL;
-	int reg_count = 0;
-
-	regulators->count = 0;
-	regulators->regulator_tbl = NULL;
-
-	domains_parent_node = pdev->dev.of_node;
-	for_each_property_of_node(domains_parent_node, domains_property) {
-		const char *search_string = "-supply";
-		char *supply;
-		bool matched = false;
-
-		/* check if current property is possibly a regulator */
-		supply = strnstr(domains_property->name, search_string,
-				strlen(domains_property->name) + 1);
-		matched = supply && (*(supply + strlen(search_string)) == '\0');
-		if (!matched)
-			continue;
-
-		reg_count++;
-	}
-
-	regulators->regulator_tbl = devm_kzalloc(&pdev->dev,
-			sizeof(*regulators->regulator_tbl) *
-			reg_count, GFP_KERNEL);
-
-	if (!regulators->regulator_tbl) {
-		rc = -ENOMEM;
-		dprintk(CVP_ERR,
-			"Failed to alloc memory for regulator table\n");
-		goto err_reg_tbl_alloc;
-	}
-
-	for_each_property_of_node(domains_parent_node, domains_property) {
-		const char *search_string = "-supply";
-		char *supply;
-		bool matched = false;
-		struct device_node *regulator_node = NULL;
-		struct regulator_info *rinfo = NULL;
-
-		/* check if current property is possibly a regulator */
-		supply = strnstr(domains_property->name, search_string,
-				strlen(domains_property->name) + 1);
-		matched = supply && (supply[strlen(search_string)] == '\0');
-		if (!matched)
-			continue;
-
-		/* make sure prop isn't being misused */
-		regulator_node = of_parse_phandle(domains_parent_node,
-				domains_property->name, 0);
-		if (IS_ERR(regulator_node)) {
-			dprintk(CVP_WARN, "%s is not a phandle\n",
-					domains_property->name);
-			continue;
-		}
-		regulators->count++;
-
-		/* populate regulator info */
-		rinfo = &regulators->regulator_tbl[regulators->count - 1];
-		rinfo->name = devm_kzalloc(&pdev->dev,
-			(supply - domains_property->name) + 1, GFP_KERNEL);
-		if (!rinfo->name) {
-			rc = -ENOMEM;
-			dprintk(CVP_ERR,
-					"Failed to alloc memory for regulator name\n");
-			goto err_reg_name_alloc;
-		}
-		strscpy(rinfo->name, domains_property->name,
-			(supply - domains_property->name) + 1);
-
-		rinfo->has_hw_power_collapse = of_property_read_bool(
-			regulator_node, "qcom,support-hw-trigger");
-
-		dprintk(CVP_CORE, "Found regulator %s: h/w collapse = %s\n",
-				rinfo->name,
-				rinfo->has_hw_power_collapse ? "yes" : "no");
-	}
-
-	if (!regulators->count)
-		dprintk(CVP_CORE, "No regulators found");
-
-	return 0;
-
-err_reg_name_alloc:
-err_reg_tbl_alloc:
-	msm_cvp_free_regulator_table(res);
-	return rc;
-}
-
-static void __deinit_power_domains(struct iris_hfi_device *devices)
-{
-	/*
-	 * Power domain and OPP resources are managed by devm_* APIs.
-	 * They are released automatically when the platform device is detached
-	 * or when probe fails.
-	 *
-	 * Keep this function as a no-op to match the resource_deinit()
-	 * framework used by the non-GenPD regulator path.
-	 */
-}
 
 static int __init_power_domains(struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
 {
@@ -894,8 +701,6 @@ static int msm_cvp_load_clock_table(
                 "Clock count mismatch: DT=%d pdata=%d\n",
                 num_clocks, platform_data->num_clock_ids);
 		dprintk(CVP_CORE, "Failed to get clock ids: %d\n", rc);
-		msm_cvp_mmrm_enabled = false;
-		dprintk(CVP_CORE, "flag msm_cvp_mmrm_enabled disabled\n");
     }
     
 	if (num_clocks != platform_data->clock_props->count_clkProps ) {
@@ -921,9 +726,6 @@ static int msm_cvp_load_clock_table(
 
 		of_property_read_string_index(pdev->dev.of_node,
 				"clock-names", c, &vc->name);
-
-		if (msm_cvp_mmrm_enabled == true)
-			vc->clk_id = platform_data->clock_ids[c];
 
 		if (platform_data->clock_props->clock_props[c] & CLOCK_PROP_HAS_SCALING) {
 			vc->has_scaling = true;
@@ -1315,21 +1117,11 @@ int cvp_read_platform_resources_from_dt(
 		dprintk(CVP_CORE, "Firmware filename from DT: %s\n", res->fw_name);
 	}
 
-	if (res->gdsc_framework_type == 0) {
-		dprintk(CVP_CORE, "Framework type to control GDSC %d\n", res->gdsc_framework_type);
-		rc = msm_cvp_load_regulator_table(res);
-		if (rc) {
-			dprintk(CVP_ERR, "Failed to load list of regulators %d\n", rc);
-			goto err_load_regulator_table;
-		}
-	} else if (res->gdsc_framework_type == 1) {
-		dprintk(CVP_CORE, "Framework type to control GDSC %d\n", res->gdsc_framework_type);
-		
-		rc = msm_cvp_load_PD_table(res,pdata);
-		if (rc) {
-			dprintk(CVP_ERR, "Failed to load list of power domains %d\n", rc);
-			goto err_load_load_PD_table;
-		}
+
+	rc = msm_cvp_load_PD_table(res,pdata);
+	if (rc) {
+		dprintk(CVP_ERR, "Failed to load list of power domains %d\n", rc);
+		goto err_load_load_PD_table;
 	}
 
 	rc = msm_cvp_load_clock_table(res,pdata);
@@ -1364,51 +1156,12 @@ return rc;
 
 err_load_reset_table:
 	msm_cvp_free_allowed_clocks_table(res);
-err_load_allowed_clocks_table:
 	msm_cvp_free_clock_table(res);
 err_load_clock_table:
-	if (!res->gdsc_framework_type)
-		msm_cvp_free_regulator_table(res);
 err_load_load_PD_table:
-	if (res->gdsc_framework_type)
-		err_load_load_PD_table(res);
-err_load_regulator_table:
+	err_load_load_PD_table(res);
 	msm_cvp_free_reg_table(res);
-err_load_reg_table:
 	return rc;
-}
-
-
-static int msm_cvp_smmu_fault_handler(struct iommu_domain *domain,
-		struct device *dev, unsigned long iova, int flags, void *token)
-{
-	struct msm_cvp_core *core = token;
-
-	if (!domain || !core) {
-		dprintk(CVP_ERR, "%s - invalid param %pK %pK\n",
-			__func__, domain, core);
-		return -EINVAL;
-	}
-
-	pr_err_ratelimited(CVP_PID_TAG "%s - faulting address: %lx fault cnt %d\n",
-			current->pid, current->tgid, "err",
-			__func__, iova, core->smmu_fault_count);
-	msm_cvp_noc_handler(core);
-
-	mutex_lock(&core->lock);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	core->kmd_trace.kmd_debug_log.smmu_debug.fauting_addr = iova;
-#endif
-	if (!core->last_fault_addr)
-		core->last_fault_addr = iova;
-	mutex_unlock(&core->lock);
-	/*
-	 * Return -EINVAL to elicit the default behaviour of smmu driver.
-	 * If we return -ENOSYS, then smmu driver assumes page fault handler
-	 * is not installed and prints a list of useful debug information like
-	 * FAR, SID etc. This information is not printed if we return 0.
-	 */
-	return -ENOSYS;
 }
 
 
@@ -1522,50 +1275,4 @@ int cvp_read_bus_resources(struct platform_device *pdev)
 	}
 
     return msm_cvp_populate_bus(&pdev->dev, &core->resources, core->platform_data);
-}
-
-int cvp_read_ipclite_mappings(struct platform_device *pdev)
-{
-	struct msm_cvp_core *core;
-
-	if (!pdev) {
-        dprintk(CVP_ERR, "Invalid platform device\n");
-        return -EINVAL;
-    }
-    
-    /*
-     * DT subnode ipclite_mappings removed.
-     * IPC-lite mapping is now provided by driver policy +
-     * reserved-memory lookup.
-    */
-    core = dev_get_drvdata(&pdev->dev);
-	if (!core) {
-		dprintk(CVP_WARN, "%s: No CVP core associated with device %s",__func__ ,dev_name(&pdev->dev));
-		return -EINVAL;
-	}
-
-	return msm_cvp_ipclite_mappings(&pdev->dev, &core->resources, core->platform_data);
-}
-
-int cvp_read_mem_cdsp_resources_from_dt(struct platform_device *pdev)
-{
-	struct msm_cvp_core *core;
-
-	if (!pdev) {
-		dprintk(CVP_ERR, "%s: invalid platform device\n", __func__);
-		return -EINVAL;
-	} else if (!pdev->dev.parent) {
-		dprintk(CVP_ERR, "Failed to find a parent for %s\n",
-				dev_name(&pdev->dev));
-		return -ENODEV;
-	}
-
-	core = dev_get_drvdata(pdev->dev.parent);
-	if (!core) {
-		dprintk(CVP_ERR, "Failed to find cookie in parent device %s",
-				dev_name(pdev->dev.parent));
-		return -EINVAL;
-	}
-
-	return msm_cvp_populate_mem_cdsp(&pdev->dev, &core->resources);
 }

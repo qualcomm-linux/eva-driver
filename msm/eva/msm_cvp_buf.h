@@ -16,11 +16,7 @@
 #include "cvp_comm_def.h"
 
 #define MAX_FRAME_BUFFER_NUMS 40
-#ifdef USE_PRESIL42
-#define IOVA_THRESHOLD 0x30000000
-#else
 #define IOVA_THRESHOLD 2147483648
-#endif
 #define IS_CVP_BUF_VALID(buf, smem) \
 	((buf->size <= smem->size) && \
 	(buf->size <= smem->size - buf->offset))
@@ -169,19 +165,9 @@ struct cvp_frame_bufs {
 	struct msm_cvp_smem smem[MAX_FRAME_BUFFER_NUMS];
 };
 
-void print_cvp_buffer(u32 tag, const char *str,
-		struct msm_cvp_inst *inst,
-		struct cvp_internal_buf *cbuf);
-void print_cvp_buffer(u32 tag, const char *str,
-		struct msm_cvp_inst *inst,
-		struct cvp_internal_buf *cbuf);
-void print_client_buffer(u32 tag, const char *str,
-		struct msm_cvp_inst *inst,
-		struct eva_kmd_buffer *cbuf);
+
 int print_smem(u32 tag, const char *str,
 		struct msm_cvp_inst *inst,
-		struct msm_cvp_smem *smem);
-int print_smem_no_instance(u32 tag, const char *str,
 		struct msm_cvp_smem *smem);
 /*Kernel DMA buffer and IOMMU mapping functions*/
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
@@ -223,12 +209,7 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		unsigned int offset, unsigned int buf_num);
 void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
-void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
-int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
-			u32 buffer_size,
-			u32 secure_type,
-			const char *buf_name);
-int cvp_release_dsp_buffers(struct cvp_internal_buf *buf);
+
 void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);

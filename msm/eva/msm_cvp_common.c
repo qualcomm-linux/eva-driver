@@ -97,32 +97,6 @@ inline const char *StringifyHalCommand(enum hal_command_response cmd)
 	}
 }
 
-static void print_pending_packets(struct msm_cvp_inst *inst)
-{
-	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef, *dummy1;
-	uint32_t printed = 0;
-
-	/* Printing pending frame packets */
-	mutex_lock(&inst->frames.lock);
-	if (!list_empty(&inst->frames.list)) {
-		dprintk(CVP_WARN, "%s: Frames: max %u oldest pending packets for sess_id: %08x",
-			__func__, msm_cvp_max_frames_dump, inst->sess_id);
-		list_for_each_entry_safe(frame, dummy1, &inst->frames.list, list) {
-			if (printed >= msm_cvp_max_frames_dump)
-				break;
-			dprintk(CVP_WARN,
-				"%s: Frames: [%u] pkt_type %08x, ktid %llx, stream_idx %u sess_id %08x\n",
-				__func__, printed, frame->pkt_type, frame->ktid, frame->stream_idx,
-				inst->sess_id);
-			printed++;
-		}
-	} else {
-		dprintk(CVP_INFO, "%s: Frames: No pending packets for sess_id: %08x\n",
-			__func__, inst->sess_id);
-	}
-	mutex_unlock(&inst->frames.lock);
-}
-
 void msm_cvp_bug_on(bool flag, bool isdelay)
 {
 	struct msm_cvp_core *core = NULL;
@@ -137,10 +111,6 @@ void msm_cvp_bug_on(bool flag, bool isdelay)
 		dprintk(CVP_ERR, "Unable to identify core\n");
 		return;
 	}
-#ifdef USE_PRESIL
-	while (flag)
-		usleep_range(1000, 2000);
-#else
 	/*
 	 * ARP buf map is enbaled only for target testing
 	 * not during PRESIL.
@@ -197,56 +167,6 @@ void msm_cvp_bug_on(bool flag, bool isdelay)
 	}
 
 	BUG_ON(flag);
-#endif
-}
-
-static void dump_hfi_queue(struct iris_hfi_device *device)
-{
-	struct cvp_hfi_queue_header *queue;
-	struct cvp_iface_q_info *qinfo;
-	int i;
-	u32 *read_ptr, read_idx;
-
-	dprintk(CVP_ERR, "HFI queues in order of cmd(rd, wr), msg and dbg:\n");
-
-	/*
-	 * mb() to ensure driver reads the updated header values from
-	 * main memory.
-	 */
-	mb();
-	mutex_lock(&device->lock);
-	for (i = 0; i <= CVP_IFACEQ_DBGQ_IDX; i++) {
-		qinfo = &device->iface_queues[i];
-		queue = (struct cvp_hfi_queue_header *)qinfo->q_hdr;
-		if (!queue) {
-			mutex_unlock(&device->lock);
-			dprintk(CVP_ERR, "HFI queue not init, fail to dump\n");
-			return;
-		}
-		dprintk(CVP_ERR, "queue details: r:w %d:%d r:t %d %d\n",
-				queue->qhdr_read_idx, queue->qhdr_write_idx,
-				queue->qhdr_rx_req, queue->qhdr_tx_req);
-		if (queue->qhdr_read_idx != queue->qhdr_write_idx) {
-			read_idx = queue->qhdr_read_idx;
-			read_ptr = (u32 *)((qinfo->q_array.align_virtual_addr) +
-				(read_idx << 2));
-			dprintk(CVP_ERR,
-				"queue payload: %x %x %x %x %x %x %x %x %x\n",
-				read_ptr[0], read_ptr[1], read_ptr[2],
-				read_ptr[3], read_ptr[4], read_ptr[5],
-				read_ptr[6], read_ptr[7], read_ptr[8]);
-		}
-
-	}
-	mutex_unlock(&device->lock);
-}
-
-void print_hfi_queue_info(struct cvp_hfi_ops *ops_tbl)
-{
-	if (ops_tbl && ops_tbl->hfi_device_data) {
-		call_hfi_op(ops_tbl, flush_debug_queue, ops_tbl->hfi_device_data);
-		dump_hfi_queue(ops_tbl->hfi_device_data);
-	}
 }
 
 static void handle_sys_init_done(enum hal_command_response cmd, void *data)
@@ -559,7 +479,6 @@ int wait_for_sess_signal_receipt(struct msm_cvp_inst *inst,
 			"Session Ctrl: Wait interrupted or timed out: %d session_id = %#x\n",
 			SESSION_MSG_INDEX(cmd), inst->sess_id);
 		if (inst->state != MSM_CVP_CORE_INVALID) {
-			print_hfi_queue_info(ops_tbl);
 			__print_sfr_msg(hfi_device);
 		}
 		if (cmd != HAL_SESSION_STOP_DONE &&
@@ -769,19 +688,12 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 	cvp_print_inst(CVP_WARN, inst);
 
 	if (inst->state != MSM_CVP_CORE_INVALID) {
-#ifdef CVP_SW_DBG_BUF_ENABLED
-		if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-			eva_kmd_session_dump(inst);
-		}
-#endif
-
 		spin_lock_irqsave(&inst->event_handler.lock, flags);
 		inst->event_handler.event = EVA_EVENT;
 		spin_unlock_irqrestore(
 			&inst->event_handler.lock, flags);
 		wake_up_all(&inst->event_handler.wq);
 	}
-	msm_cvp_bug_on(!msm_cvp_session_error_recovery, true);
 	cvp_put_inst(inst);
 }
 
@@ -851,8 +763,6 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	}
 	fw_resp_ts = (u64)ktime_to_ms(curr_time) - (u64)ktime_to_ms(core->last_msg_ts);
 
-	print_pending_packets(inst);
-
 	if (fw_resp_ts > 500 || (fw_cmd_fetch_ts > 500
 				&& core->cur_cmd_q_read_offset == core->prev_cmd_q_read_offset)) {
 		dprintk(CVP_ERR, "%s: FW hanged, cleaning up. %llu ms %llu ms",
@@ -874,17 +784,11 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 	inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
 				atomic_read(&cvp_error_count);
 	cvp_print_inst(CVP_WARN, inst);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	if (msm_cvp_sw_dbg_buf_dump & BIT(0)) {
-		eva_kmd_session_dump(inst);
-	}
-#endif
 	spin_lock_irqsave(&inst->event_handler.lock, flags);
 	inst->event_handler.event = EVA_EVENT;
 	spin_unlock_irqrestore(
 		&inst->event_handler.lock, flags);
 	wake_up_all(&inst->event_handler.wq);
-	msm_cvp_bug_on(!msm_cvp_session_error_recovery, true);
 	if (stop_required)
 		msm_cvp_session_flush_stop(inst);
 
@@ -942,22 +846,13 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 	}
 
 	__print_sfr_msg(hfi_device);
-	call_hfi_op(ops_tbl, flush_debug_queue, ops_tbl->hfi_device_data);
 
 	if ((atomic_read(&cvp_error_count)) < MAX_CVP_ERROR_COUNT)
 		atomic_inc(&cvp_error_count);
 
 	if (hfi_device->error == CVP_ERR_NOC_ERROR) {
 		dprintk(CVP_WARN, "Got NOC error");
-		msm_cvp_noc_error_info(core);
 	}
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	else {
-		list_for_each_entry(inst, &core->instances, list) {
-			msm_cvp_print_inst_bufs(inst, true);
-		}
-	}
-#endif
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
 		if (inst->state != MSM_CVP_CORE_INVALID) {
@@ -969,11 +864,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 				atomic_read(&cvp_error_count);
 			spin_unlock(&sq->lock);
 			change_cvp_inst_state(inst, MSM_CVP_CORE_INVALID);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-			if (msm_cvp_sw_dbg_buf_dump & BIT(0))
-				eva_kmd_session_dump(inst);
-#endif
-
 			for (i = 0; i < ARRAY_SIZE(inst->completions); i++)
 				complete(&inst->completions[i]);
 			spin_lock_irqsave(&inst->event_handler.lock, flags);
@@ -988,12 +878,7 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 			wake_up_all(&inst->event_handler.wq);
 		}
 
-		if (!core->trigger_ssr)
-			if (hfi_device->error != CVP_ERR_NOC_ERROR)
-				msm_cvp_print_inst_bufs(inst, false);
 	}
-	/* handle the hw error before core released to get full debug info */
-	msm_cvp_handle_hw_error(core);
 
 	dprintk(CVP_CORE, "Calling core_release\n");
 	rc = call_hfi_op(ops_tbl, core_release, ops_tbl->hfi_device_data);
@@ -1070,7 +955,6 @@ static void handle_session_close(enum hal_command_response cmd, void *data)
 
 	inst->hfi_error_code = response->status;
 	signal_session_msg_receipt(cmd, inst);
-	show_stats(inst);
 	cvp_put_inst(inst);
 }
 
@@ -1150,7 +1034,6 @@ static int msm_comm_session_abort(struct msm_cvp_inst *inst)
 	}
 
 	ops_tbl = inst->core->dev_ops;
-	print_hfi_queue_info(ops_tbl);
 	if (1)
 		return 0;
 
@@ -1172,7 +1055,6 @@ static int msm_comm_session_abort(struct msm_cvp_inst *inst)
 	if (!rc) {
 		dprintk(CVP_ERR, "%s: inst %pK session %x abort timed out\n",
 				__func__, inst, inst->sess_id);
-		print_hfi_queue_info(ops_tbl);
 		msm_cvp_comm_generate_sys_error(inst);
 		rc = -EBUSY;
 	} else {
@@ -1201,7 +1083,6 @@ int msm_cvp_comm_check_core_init(struct msm_cvp_core *core)
 		dprintk(CVP_ERR, "%s: Session Ctrl: Wait interrupted or timed out: %d\n",
 				__func__, SYS_MSG_INDEX(HAL_SYS_INIT_DONE));
 		ops_tbl = core->dev_ops;
-		print_hfi_queue_info(ops_tbl);
 		rc = -EIO;
 		goto exit;
 	} else {
@@ -1270,7 +1151,6 @@ static int msm_comm_init_core(struct msm_cvp_inst *inst)
 		goto fail_core_init;
 	}
 	core->state = CVP_CORE_INIT;
-	core->trigger_ssr = false;
 
 core_already_inited:
 	change_cvp_inst_state(inst, MSM_CVP_CORE_INIT);
@@ -1679,40 +1559,6 @@ int msm_cvp_comm_try_state(struct msm_cvp_inst *inst, int state)
 	return rc;
 }
 
-int msm_cvp_noc_error_info(struct msm_cvp_core *core)
-{
-	struct cvp_hfi_ops *ops_tbl;
-	static u32 last_fault_count = 0;
-
-	if (!core || !core->dev_ops) {
-		dprintk(CVP_WARN, "%s: Invalid parameters: %pK\n",
-			__func__, core);
-		return -EINVAL;
-	}
-
-	if (!core->smmu_fault_count ||
-			core->smmu_fault_count == last_fault_count)
-		return 0;
-
-	last_fault_count = core->smmu_fault_count;
-	dprintk(CVP_ERR, "cvp ssr count %d %d %d\n", core->ssr_count,
-			core->resources.max_ssr_allowed,
-			core->smmu_fault_count);
-	ops_tbl = core->dev_ops;
-	/*call_hfi_op(ops_tbl, noc_error_info, ops_tbl->hfi_device_data);*/
-
-	if (core->smmu_fault_count >= core->resources.max_ssr_allowed) {
-		dprintk(CVP_INFO, "msm_cvp_smmu_fault_recovery %d\n",
-				msm_cvp_smmu_fault_recovery);
-		if (msm_cvp_smmu_fault_recovery)
-			core->resources.non_fatal_pagefaults = 1;
-
-		msm_cvp_bug_on(!core->resources.non_fatal_pagefaults, false);
-	}
-
-	return 0;
-}
-
 int msm_cvp_trigger_ssr(struct msm_cvp_core *core,
 	enum hal_ssr_trigger_type type)
 {
@@ -1757,7 +1603,6 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 				dprintk(CVP_WARN,
 					"Session to abort: inst %#x ref %x\n",
 					inst, kref_read(&inst->kref));
-				print_hfi_queue_info(ops_tbl);
 				cvp_put_inst(s);
 			} else {
 				dprintk(CVP_WARN, "No active CVP session to abort\n");
@@ -1829,12 +1674,10 @@ send_again:
 		 * to know if fatal error is due to SSR or not. Handle
 		 * user SSR as non-fatal.
 		 */
-		core->trigger_ssr = true;
 		rc = call_hfi_op(ops_tbl, core_trigger_ssr,
 				ops_tbl->hfi_device_data, core->ssr_type);
 		if (rc) {
 			if (rc == -EAGAIN) {
-				core->trigger_ssr = false;
 				mutex_unlock(&core->lock);
 				usleep_range(500, 1000);
 				dprintk(CVP_WARN, "Retry ssr\n");
@@ -1842,7 +1685,6 @@ send_again:
 			}
 			dprintk(CVP_ERR, "%s: trigger_ssr failed\n",
 				__func__);
-			core->trigger_ssr = false;
 		}
 	} else {
 		dprintk(CVP_WARN, "%s: cvp core %pK not initialized\n",
@@ -1863,9 +1705,6 @@ void msm_cvp_noc_handler(struct msm_cvp_core *core)
 	}
 
 	mutex_lock(&core->lock);
-#ifdef CVP_SW_DBG_BUF_ENABLED
-	core->kmd_trace.kmd_debug_log.smmu_debug.smmu_fault_cnt = core->smmu_fault_count;
-#endif
 	hdev = core->dev_ops->hfi_device_data;
 	if (hdev) {
 		hdev->error = CVP_ERR_NOC_ERROR;
@@ -1873,15 +1712,10 @@ void msm_cvp_noc_handler(struct msm_cvp_core *core)
 	}
 	mutex_unlock(&core->lock);
 
-	if (core->smmu_fault_count > 0) {
-		core->smmu_fault_count++;
-		return;
-	}
+
 	mutex_lock(&core->lock);
-	core->smmu_fault_count++;
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
-		msm_cvp_print_inst_bufs(inst, true);
 	}
 	mutex_unlock(&core->lock);
 	CVPKERNEL_ATRACE_END("msm_cvp_noc_handler");
@@ -2088,7 +1922,6 @@ int cvp_print_iova(struct msm_cvp_core *core)
 	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		cvp_print_inst(CVP_ERR, inst);
-		msm_cvp_print_inst_bufs(inst, false);
 	}
 
 	dprintk(CVP_ERR, "core watermark 0x%x\n", core->va_watermark);

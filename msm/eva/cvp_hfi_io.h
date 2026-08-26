@@ -5,18 +5,5 @@
  */
 #include "cvp_comm_def.h"
 
-#ifdef CONFIG_EVA_PINEAPPLE
-#include "target/cvp_lanai_io.h"
-#endif
+#include "cvp_kaanapali_io.h"
 
-#ifdef CONFIG_EVA_SUN
-#include "target/cvp_pakala_io.h"
-#endif
-
-#ifdef CONFIG_EVA_CANOE
-#include "target/cvp_kaanapali_io.h"
-#endif
-
-#ifdef CONFIG_EVA_ART
-#include "target/cvp_hawi_io.h"
-#endif

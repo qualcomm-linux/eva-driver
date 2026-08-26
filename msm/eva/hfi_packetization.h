@@ -62,12 +62,6 @@ struct cvp_hfi_packetization_ops {
 	int (*session_release_buffers)(
 		void *pkt,
 		struct cvp_hal_session *session);
-	int (*session_get_buf_req)(
-		struct cvp_hfi_cmd_session_get_property_packet *pkt,
-		struct cvp_hal_session *session);
-	int (*session_sync_process)(
-		struct cvp_hfi_cmd_session_sync_process_packet *pkt,
-		struct cvp_hal_session *session);
 	int (*session_send)(
 			struct cvp_hal_session *session,
 			struct eva_kmd_hfi_packet *in_pkt);

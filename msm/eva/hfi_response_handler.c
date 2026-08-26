@@ -625,12 +625,6 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 	sq->msg_count++;
 	spin_unlock(&sq->lock);
 
-	if (get_msg_errorcode(pkt) == HFI_ERR_SESSION_HW_HANG_DETECTED) {
-		dprintk(CVP_ERR, "%s Hardware Hang Observed:\n", __func__);
-		cvp_clock_reg_print(dev);
-		msm_cvp_bug_on(!msm_cvp_hw_hang_recovery, false);
-	}
-
 	wake_up_all(&sq->wq);
 
 	info->response_type = HAL_NO_RESP;

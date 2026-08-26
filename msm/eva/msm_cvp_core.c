@@ -201,8 +201,6 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 		goto fail_init;
 	}
 
-	inst->debugfs_root =
-		msm_cvp_debugfs_init_inst(inst, core->debugfs_root);
 	strscpy(inst->proc_name, task->comm, TASK_COMM_LEN);
 
 	return inst;
@@ -350,8 +348,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		core->smem_leak_count += atomic_read(&inst->smem_count);
 
 		cvp_print_inst(CVP_ERR, inst);
-		msm_cvp_print_inst_bufs(inst, false);
-		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
 	}
 
 	/* Ensure no path has core->clk_lock and core->lock sequence */
@@ -370,7 +366,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 	mutex_destroy(&inst->sync_lock);
 	mutex_destroy(&inst->lock);
 
-	msm_cvp_debugfs_deinit_inst(inst);
 
 	__deinit_session_queue(inst);
 

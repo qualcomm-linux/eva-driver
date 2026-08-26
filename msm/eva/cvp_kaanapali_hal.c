@@ -251,21 +251,6 @@ static void __noc_lpi_kaanapali(struct iris_hfi_device *device,
 	__enter_core_noc_lpi(device, caller);
 }
 
-static void setup_dsp_uc_memmap_vpu5_kaanapali(struct iris_hfi_device *device)
-{
-	/* initialize DSP QTBL & UCREGION with CPU queues */
-#ifdef USE_PRESIL42
-	presil42_setup_dsp_uc_memmap_vpu5(device);
-	return;
-#endif
-	__write_register(device, HFI_DSP_QTBL_ADDR,
-			 (u32)device->dsp_iface_q_table.align_device_addr);
-	__write_register(device, HFI_DSP_UC_REGION_ADDR,
-			 (u32)device->dsp_iface_q_table.align_device_addr);
-	__write_register(device, HFI_DSP_UC_REGION_SIZE,
-			 device->dsp_iface_q_table.mem_data.size);
-}
-
 static void interrupt_init_iris2_kaanapali(struct iris_hfi_device *device)
 {
 	u32 mask_val = 0;
@@ -724,10 +709,8 @@ static int __enable_hw_power_collapse_kaanapali(struct iris_hfi_device *device)
 		return 0;
 	}
 
-	if (device->res->gdsc_framework_type)
-		rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core");
-	else
-		rc = __hand_off_regulators(device);
+	rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core");
+
 
 	if (rc) {
 		dprintk(CVP_WARN,
@@ -849,284 +832,18 @@ static int __set_registers_kaanapali(struct iris_hfi_device *device)
 	return 0;
 }
 
-static void __print_reg_details_errlog3_low_kaanapali(u32 val)
-{
-	u32 mid, sid;
-
-	mid = (val >> 7) & 0x1F;
-
-	sid = (val >> 2) & 0x7;
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_LOW:     %#x\n", val);
-	dprintk(CVP_ERR, "Sub-client:%s, SID: %d\n", mid_names_kaanapali[mid],
-		sid);
-}
-
-static void __dump_noc_regs_kaanapali(struct iris_hfi_device *device)
-{
-#ifndef USE_PRESIL42
-	u32 val = 0, config;
-	struct regulator_info *rinfo;
-	int rc = 0;
-
-	if (msm_cvp_fw_low_power_mode) {
-		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_SW_CTRL, "core");
-		} else {
-			iris_hfi_for_each_regulator(device, rinfo) {
-				if (strcmp(rinfo->name, "cvp-core"))
-					continue;
-				rc = __acquire_regulator(rinfo, device);
-			}
-		}
-		if (rc)
-			dprintk(
-			    CVP_WARN,
-			    "%s, Failed to acquire core gdsc control to SW\n",
-			    __func__);
-	}
-	val = __read_register(device, CVP_CC_MVS0_GDSCR);
-	dprintk(CVP_ERR, "%s, CVP_CC_MVS0_GDSCR: 0x%x", __func__, val);
-	config = __read_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG);
-	dprintk(CVP_ERR, "%s, CVP_WRAPPER_CORE_CLOCK_CONFIG: 0x%x", __func__,
-		config);
-	if (config) {
-		dprintk(CVP_PWR, "core clock config not enabled\n");
-		__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, 0);
-	}
-
-	val = __read_register(device, CVP_NOC_A_NIU_DECCTL_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_A_NIU_DECCTL_LOW: 0x%x", val);
-	val = __read_register(device, CVP_NOC_A_NIU_ENCCTL_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_A_NIU_ENCCTL_LOW: 0x%x", val);
-	val = __read_register(device, CVP_NOC_B_NIU_DECCTL_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_B_NIU_DECCTL_LOW: 0x%x", val);
-	val = __read_register(device, CVP_NOC_B_NIU_ENCCTL_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_B_NIU_ENCCTL_LOW: 0x%x", val);
-	val = __read_register(device,
-			      CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW: 0x%x",
-		val);
-	val =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_LOW: 0x%x",
-		val);
-	val =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH: 0x%x",
-		val);
-	val =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_LOW: 0x%x",
-		val);
-	val =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH: 0x%x",
-		val);
-	val =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN2_LOW: 0x%x",
-		val);
-
-	dprintk(CVP_ERR, "Dumping Core NoC registers\n");
-	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC__CORE_ERL_MAIN_SWID_LOW: 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_SWID_HIGH 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_MAINCTL_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRVLD_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRVLD_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRCLR_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG0_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG0_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG0_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG0_HIGH 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG1_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG1_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG1_HIGH_OFFS);
-	__print_reg_details_errlog1_high(val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG2_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG2_LOW 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG2_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG2_HIGH 0x%x", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG3_LOW_OFFS);
-	dprintk(CVP_ERR, "CORE ERRLOG3_LOW 0x%x, below details", val);
-	__print_reg_details_errlog3_low_kaanapali(val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG3_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_HIGH 0x%x", val);
-	__write_register(device, CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS, 0x1);
-
-	if (msm_cvp_fw_low_power_mode) {
-		if (device->res->gdsc_framework_type) {
-			rc = switch_core_gdsc_mode(device, TO_HW_CTRL, "core");
-		} else {
-			iris_hfi_for_each_regulator(device, rinfo) {
-				if (strcmp(rinfo->name, "cvp-core"))
-					continue;
-				rc = __hand_off_regulator(rinfo);
-			}
-		}
-		if (rc)
-			dprintk(
-			    CVP_WARN,
-			    "%s, Failed to hand off core gdsc control to HW\n",
-			    __func__);
-	}
-	__write_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG, config);
-#endif
-}
-
-static void __noc_error_info_iris2_kaanapali(struct iris_hfi_device *device)
-{
-	struct msm_cvp_core *core;
-	struct cvp_noc_log *noc_log;
-	u32 val = 0, regi, regiii;
-	bool log_required = false;
-	int rc;
-
-	core = cvp_driver->cvp_core;
-
-	if (core->resources.max_ssr_allowed >= 1)
-		log_required = true;
-
-	noc_log = &core->kmd_trace.kmd_debug_log.log->noc_log;
-
-	if (noc_log->used) {
-		dprintk(CVP_WARN, "Data already in NoC log, skip logging\n");
-		return;
-	}
-	noc_log->used = 1;
-	rc = 0;
-
-	__disable_hw_power_collapse(device, "core");
-
-	val = call_iris_op(device, check_core_power_on, device);
-	regi =
-	    __read_register(device, CVP_AON_WRAPPER_CVP_NOC_CORE_CLK_CONTROL);
-	regiii = __read_register(device, CVP_WRAPPER_CORE_CLOCK_CONFIG);
-	dprintk(CVP_ERR, "noc reg check: %#x %#x %#x\n", val, regi, regiii);
-
-	val = __read_register(device, CVP_NOC_ERR_SWID_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_swid_low,
-		  "CVP_NOC_ERL_MAIN_SWID_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_SWID_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_swid_high,
-		  "CVP_NOC_ERL_MAIN_SWID_HIGH", val);
-	val = __read_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_mainctl_low,
-		  "CVP_NOC_ERL_MAIN_MAINCTL_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRVLD_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errvld_low,
-		  "CVP_NOC_ERL_MAIN_ERRVLD_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRCLR_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errclr_low,
-		  "CVP_NOC_ERL_MAIN_ERRCLR_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog0_low,
-		  "CVP_NOC_ERL_MAIN_ERRLOG0_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog0_high,
-		  "CVP_NOC_ERL_MAIN_ERRLOG0_HIGH", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog1_low,
-		  "CVP_NOC_ERL_MAIN_ERRLOG1_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog1_high,
-		  "CVP_NOC_ERL_MAIN_ERRLOG1_HIGH", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog2_low,
-		  "CVP_NOC_ERL_MAIN_ERRLOG2_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog2_high,
-		  "CVP_NOC_ERL_MAIN_ERRLOG2_HIGH", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog3_low,
-		  "CVP_NOC_ERL_MAIN_ERRLOG3_LOW", val);
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_ctrl_errlog3_high,
-		  "CVP_NOC_ERL_MAIN_ERRLOG3_HIGH", val);
-
-#ifdef CONFIG_EVA_PINEAPPLE
-	/* Lanai HW bug workaround */
-	rc = call_iris_op(device, reset_control_acquire_name, device,
-			  "cvp_xo_reset");
-	if (rc) {
-		dprintk(CVP_WARN, "%s Fail acquire xo_reset\n", __func__);
-		return;
-	}
-#endif
-
-	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_swid_low,
-		  "CVP_NOC__CORE_ERL_MAIN_SWID_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_SWID_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_core_swid_high,
-		  "CVP_NOC_CORE_ERL_MAIN_SWID_HIGH", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_MAINCTL_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_mainctl_low,
-		  "CVP_NOC_CORE_ERL_MAIN_MAINCTL_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRVLD_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errvld_low,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRVLD_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errclr_low,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRCLR_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG0_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog0_low,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG0_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG0_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog0_high,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG0_HIGH", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG1_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog1_low,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG1_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG1_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog1_high,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG1_HIGH", val);
-	__print_reg_details_errlog1_high(val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG2_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog2_low,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG2_LOW", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG2_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog2_high,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG2_HIGH", val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG3_LOW_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog3_low,
-		  "CORE ERRLOG3_LOW, below details", val);
-	__print_reg_details_errlog3_low_kaanapali(val);
-	val = __read_register(device, CVP_NOC_CORE_ERR_ERRLOG3_HIGH_OFFS);
-	__err_log(log_required, &noc_log->err_core_errlog3_high,
-		  "CVP_NOC_CORE_ERL_MAIN_ERRLOG3_HIGH", val);
-	__write_register(device, CVP_NOC_CORE_ERR_ERRCLR_LOW_OFFS, 0x1);
-#ifdef CONFIG_EVA_PINEAPPLE
-	/* Lanai HW bug workaround */
-	call_iris_op(device, reset_control_release_name, device,
-		     "cvp_xo_reset");
-#endif
-#define CVP_SS_CLK_HALT 0x8
-#define CVP_SS_CLK_EN 0xC
-#define CVP_VPU_WRAPPER_CORE_CONFIG 0xB0088
-	__write_register(device, CVP_SS_CLK_HALT, 0);
-	__write_register(device, CVP_SS_CLK_EN, 0x3f);
-	__write_register(device, CVP_VPU_WRAPPER_CORE_CONFIG, 0);
-}
-
 int set_kaanapali_hal_functions(void)
 {
 	hal_ops.interrupt_init = interrupt_init_iris2_kaanapali;
-	hal_ops.setup_dsp_uc_memmap = setup_dsp_uc_memmap_vpu5_kaanapali;
 	hal_ops.power_off_controller = __power_off_controller_kaanapali;
 	hal_ops.power_off_core = __power_off_core_kaanapali;
 	hal_ops.power_on_controller = __power_on_controller_kaanapali;
 	hal_ops.power_on_core = __power_on_core_kaanapali;
-	hal_ops.noc_error_info = __noc_error_info_iris2_kaanapali;
 	hal_ops.check_ctl_power_on = __check_ctl_power_on_kaanapali;
 	hal_ops.check_core_power_on = __check_core_power_on_kaanapali;
 	hal_ops.print_sbm_regs = __print_sidebandmanager_regs_kaanapali;
 	hal_ops.enable_hw_power_collapse = __enable_hw_power_collapse_kaanapali;
 	hal_ops.set_registers = __set_registers_kaanapali;
-	hal_ops.dump_noc_regs = __dump_noc_regs_kaanapali;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_kaanapali;
 	hal_ops.pm_qos_update = iris_pm_qos_aggregate_kaanapali;
 	hal_ops.noc_lpi = __noc_lpi_kaanapali;

@@ -16,7 +16,6 @@
 #include "msm_cvp_debug.h"
 #include "msm_cvp_core.h"
 #include "cvp_core_hfi.h"
-#include "cvp_presil.h"
 #include "cvp_hfi.h"
 #include "eva_gem.h"
 
@@ -31,7 +30,6 @@ void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr)
 	#endif
 }
 
-void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log);
 
 int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 		struct msm_cvp_smem *smem)
@@ -75,164 +73,6 @@ int print_smem(u32 tag, const char *str, struct msm_cvp_inst *inst,
 		}
 	}
 	return 0;
-}
-
-int print_smem_no_instance(u32 tag, const char *str,
-		struct msm_cvp_smem *smem)
-{
-	int i;
-	char name[PKT_NAME_LEN] = "Unknown";
-
-
-	if (!(tag & msm_cvp_debug))
-		return 0;
-
-	if (!smem) {
-		dprintk(CVP_ERR, "Invalid smem 0x%llx\n", smem);
-		return -EINVAL;
-	}
-
-	if (smem->dma_buf) {
-		i = get_pkt_index_from_type(smem->pkt_type);
-		if (i > 0)
-			strscpy(name, cvp_hfi_defs[i].name, PKT_NAME_LEN);
-
-		if (!atomic_read(&smem->refcount)) {
-			dprintk(tag,
-				"UNUSED mapping %s: 0x%llx size %x iova %#x\n",
-				str, smem->dma_buf, smem->size, smem->device_addr);
-
-			dprintk(tag,
-				"pkt_type %s buf_idx %#x fd %d cached %d\n",
-				 name, smem->buf_idx, smem->fd, smem->cached);
-		} else {
-			dprintk(tag,
-				"%s: 0x%llx size %x flags %#x iova %#x\n",
-				str, smem->dma_buf, smem->size,
-				smem->flags, smem->device_addr);
-
-			dprintk(tag,
-				"ref %d pkt_type %s buf_idx %#x fd %d cached %d\n",
-				atomic_read(&smem->refcount), name, smem->buf_idx,
-				smem->fd, smem->cached);
-		}
-	}
-	return 0;
-}
-
-
-static void print_internal_buffer(u32 tag, const char *str,
-		struct msm_cvp_inst *inst, struct cvp_internal_buf *cbuf)
-{
-	struct msm_cvp_smem *smem;
-
-	if (!(tag & msm_cvp_debug) || !inst || !cbuf)
-		return;
-	
-	smem = eva_gem_smem(cbuf->gem);
-	if (!smem)
-		return;
-
-	if (smem->dma_buf) {
-		dprintk(tag,
-		"%s: %x : fd %d off %d 0x%llx %s size %d iova %#x\n",
-		str, inst->sess_id, cbuf->fd,
-		cbuf->offset, smem->dma_buf, smem->dma_buf->name,
-		cbuf->size, smem->device_addr);
-	} else {
-		dprintk(tag,
-		"%s: %x : idx %2d fd %d off %d size %d iova %#x\n",
-		str, inst->sess_id, cbuf->index, cbuf->fd,
-		cbuf->offset, cbuf->size, smem->device_addr);
-	}
-}
-
-void print_cvp_buffer(u32 tag, const char *str, struct msm_cvp_inst *inst,
-		struct cvp_internal_buf *cbuf)
-{
-	struct msm_cvp_smem *smem;
-
-	if (!inst || !cbuf) {
-		dprintk(CVP_ERR,
-			"%s Invalid params inst %pK, cbuf %pK\n",
-			str, inst, cbuf);
-		return;
-	}
-
-	smem = eva_gem_smem(cbuf->gem);
-	if (smem)
-		print_smem(tag, str, inst, smem);
-}
-
-static void _log_smem(struct inst_snapshot *snapshot, struct msm_cvp_inst *inst,
-		struct msm_cvp_smem *smem, bool logging)
-{
-
-	if (print_smem(CVP_ERR, "bufdump", inst, smem))
-		return;
-	if (!logging || !snapshot)
-		return;
-	if (snapshot && snapshot->smem_index < MAX_ENTRIES) {
-		struct smem_data *s;
-		s = &snapshot->smem_log[snapshot->smem_index];
-		snapshot->smem_index++;
-		s->size = smem->size;
-		s->cached = smem->cached;
-		s->flags = smem->flags;
-		s->device_addr = smem->device_addr;
-		s->refcount = atomic_read(&smem->refcount);
-		s->pkt_type = smem->pkt_type;
-		s->buf_idx = smem->buf_idx;
-	}
-}
-
-static void _log_buf(struct inst_snapshot *snapshot, enum smem_prop prop,
-		struct msm_cvp_inst *inst, struct cvp_internal_buf *cbuf,
-		bool logging)
-{
-	struct cvp_buf_data *buf = NULL;
-	struct msm_cvp_smem *smem;
-	u32 index;
-
-	smem = eva_gem_smem(cbuf->gem);
-	if (!smem)
-		return;
-
-	if (prop == SMEM_CDSP && smem->pkt_type == 0)
-		return;
-	print_cvp_buffer(CVP_ERR, "bufdump", inst, cbuf);
-	if (!logging)
-		return;
-	if (snapshot) {
-		if (prop == SMEM_CDSP && snapshot->dsp_index < MAX_ENTRIES) {
-			index = snapshot->dsp_index;
-			buf = &snapshot->dsp_buf_log[index];
-			snapshot->dsp_index++;
-		} else if (prop == SMEM_PERSIST &&
-				snapshot->persist_index < MAX_ENTRIES) {
-			index = snapshot->persist_index;
-			buf = &snapshot->persist_buf_log[index];
-			snapshot->persist_index++;
-		}
-		if (buf) {
-			buf->device_addr = smem->device_addr;
-			buf->size = cbuf->size;
-		}
-	}
-}
-
-void print_client_buffer(u32 tag, const char *str,
-		struct msm_cvp_inst *inst, struct eva_kmd_buffer *cbuf)
-{
-	if (!(tag & msm_cvp_debug) || !str || !inst || !cbuf)
-		return;
-
-	dprintk(tag,
-		"%s: %x : idx %2d fd %d off %d size %d type %d flags 0x%x"
-		" reserved[0] %u\n",
-		str, inst->sess_id, cbuf->index, cbuf->fd,
-		cbuf->offset, cbuf->size, cbuf->type, cbuf->flags,
-		cbuf->reserved[0]);
 }
 
 void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
@@ -789,11 +629,6 @@ static int msm_cvp_map_user_persist_buf(struct msm_cvp_inst *inst,
 	mutex_lock(&inst->persistbufs.lock);
 	list_add_tail(&pbuf->list, &inst->persistbufs.list);
 
-	print_internal_buffer(CVP_MEM, "map persist", inst, pbuf);
-
-#ifdef USE_PRESIL42
-	presil42_send_map_user_persist_buffer(smem, iova, pbuf);
-#endif
 
 	*iova = smem->device_addr + buf->offset;
 	mutex_unlock(&inst->persistbufs.lock);
@@ -874,17 +709,12 @@ static u32 msm_cvp_map_frame_buf(struct msm_cvp_inst *inst,
 	frame->bufs[nr].size = buf->size;
 	frame->bufs[nr].offset = buf->offset;
 
-	print_internal_buffer(CVP_MEM, "map cpu", inst, &frame->bufs[nr]);
 	atomic_add(buf->size, &inst->frame_usage);
 
 	frame->nr++;
 
 	type = EVA_KMD_BUFTYPE_INPUT | EVA_KMD_BUFTYPE_OUTPUT;
 	msm_cvp_cache_operations(smem, type, buf->offset, buf->size);
-
-#ifdef USE_PRESIL42
-	presil42_send_map_frame_buffer(smem, iova, buf);
-#endif
 
 	iova = smem->device_addr + buf->offset;
 
@@ -925,9 +755,6 @@ static void msm_cvp_unmap_frame_buf(struct msm_cvp_inst *inst,
 		}
 		msm_cvp_cache_operations(smem, type, buf->offset, buf->size);
 
-#ifdef USE_PRESIL42
-	presil42_unmap_frame_buf(smem, buf);
-#endif
 			if (smem->cached == true) {
 				eva_gem_put(buf->gem);
 			} else {
@@ -1103,9 +930,6 @@ int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		fd_arr[i] = buf->fd;
 		buf->fd = iova;
 
-#ifdef USE_PRESIL42
-		presil42_set_buf_fd(buf, iova, "cvp_map_user_persist");
-#endif
 	}
 	print_persist_buffer_info(CVP_MEM, "MAP user persist", 0,
 		inst, in_pkt);
@@ -1182,20 +1006,13 @@ int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 					__func__, i);
 				dprintk(CVP_ERR, "smem_leak_count %d\n", core->smem_leak_count);
 				mutex_lock(&core->lock);
-				list_for_each_entry(instance, &core->instances, list) {
-					msm_cvp_print_inst_bufs(instance, false);
-				}
 				mutex_unlock(&core->lock);
 				msm_cvp_unmap_frame_buf(inst, frame);
 				return -EINVAL;
 			}
 		}
 exit:
-#ifdef USE_PRESIL42
-		presil42_set_buf_fd(buf, iova, "cvp_map_frame");
-#else
 		buf->fd = iova;
-#endif
 	}
 
 	mutex_lock(&inst->frames.lock);
@@ -1326,87 +1143,6 @@ int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst)
 	return rc;
 }
 
-#define MAX_NUM_FRAMES_DUMP 4
-void msm_cvp_print_inst_bufs(struct msm_cvp_inst *inst, bool log)
-{
-	struct msm_cvp_smem *smem;
-	struct cvp_internal_buf *buf = (struct cvp_internal_buf *)0xdeadbeef;
-	struct msm_cvp_frame *frame = (struct msm_cvp_frame *)0xdeadbeef;
-	struct msm_cvp_core *core;
-	struct rb_node *node;
-	struct inst_snapshot *snap = NULL;
-	int i = 0, c = 0;
-
-	// DSP trace related variables
-	struct cvp_hal_session *session;
-	u32 session_id;
-
-	if (!inst) {
-		dprintk(CVP_ERR, "%s - invalid param %pK\n",
-			__func__, inst);
-		return;
-	}
-	session = (struct cvp_hal_session *)inst->session;
-	session_id = inst->sess_id;
-
-	core = cvp_driver->cvp_core;
-	if (core->kmd_trace.kmd_debug_log.log) {
-		if (log && core->kmd_trace.kmd_debug_log.log->snapshot_index < 16) {
-			snap = &core->kmd_trace.kmd_debug_log.log->snapshot[
-				core->kmd_trace.kmd_debug_log.log->snapshot_index];
-			snap->session = inst->sess_id;
-			core->kmd_trace.kmd_debug_log.log->snapshot_index++;
-		}
-	}
-
-	dprintk(CVP_ERR,
-			"---Buffer details for inst: %pK %s of type: %d---\n",
-			inst, inst->proc_name, inst->session_type);
-
-	dprintk(CVP_ERR, "dma_cache entries %d frame_usage 0x%x, watermark 0x%x smem_count %x\n",
-			inst->dma_cache.nr, atomic_read(&inst->frame_usage),
-			atomic_read(&inst->va_inst_watermark),
-			atomic_read(&inst->smem_count));
-
-	mutex_lock(&inst->dma_cache.lock);
-
-	for (node = rb_first(&inst->dma_cache.rbtree); node; node = rb_next(node)) {
-		smem = rb_entry(node, struct msm_cvp_smem, node);
-		if (smem)
-			_log_smem(snap, inst, smem, log);
-	}
-	mutex_unlock(&inst->dma_cache.lock);
-
-	i = 0;
-	dprintk(CVP_ERR, "frame buffer list\n");
-	mutex_lock(&inst->frames.lock);
-	list_for_each_entry(frame, &inst->frames.list, list) {
-		i++;
-		if (i <= MAX_NUM_FRAMES_DUMP) {
-			dprintk(CVP_ERR, "frame no %d tid %llx bufs\n",
-					i, frame->ktid);
-			for (c = 0; c < frame->nr; c++){
-				struct msm_cvp_smem *fsmem = eva_gem_smem(frame->bufs[c].gem);
-				_log_smem(snap, inst, fsmem, log);
-			}
-		}
-	}
-	if (i > MAX_NUM_FRAMES_DUMP)
-		dprintk(CVP_ERR, "Skipped %d frames' buffers\n",
-				(i - MAX_NUM_FRAMES_DUMP));
-	mutex_unlock(&inst->frames.lock);
-
-	mutex_lock(&inst->persistbufs.lock);
-	dprintk(CVP_ERR, "persist buffer list:\n");
-	list_for_each_entry(buf, &inst->persistbufs.list, list)
-		_log_buf(snap, SMEM_PERSIST, inst, buf, log);
-	mutex_unlock(&inst->persistbufs.lock);
-
-	dprintk(CVP_ERR, "last frame ktid %llx\n", inst->last_frame.ktid);
-	for (i = 0; i < inst->last_frame.nr; i++)
-		_log_smem(snap, inst, &inst->last_frame.smem[i], log);
-
-}
 
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 			u32 buffer_size)
@@ -1427,9 +1163,6 @@ struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 	if (!buffer_size)
 		return NULL;
 
-#ifdef USE_PRESIL42
-	presil42_set_smem_flags(&smem_flags);
-#endif
 	/* If PERSIST buffer requires secure mapping, uncomment
 	 * below flags setting
 	 * smem_flags |= SMEM_SECURE | SMEM_NON_PIXEL;
@@ -1556,102 +1289,6 @@ int cvp_release_arp_buffers(struct msm_cvp_inst *inst)
 		}
 	}
 	mutex_unlock(&inst->persistbufs.lock);
-	return rc;
-}
-
-int cvp_allocate_dsp_bufs(struct cvp_internal_buf *buf,
-			u32 buffer_size,
-			u32 secure_type,
-			const char *buf_name)
-{
-	u32 smem_flags = SMEM_UNCACHED;
-	int rc = 0;
-
-	if (!buf)
-		return -EINVAL;
-
-	if (!buffer_size)
-		return -EINVAL;
-
-	switch (secure_type) {
-	case 0:
-		break;
-	case 1:
-		smem_flags |= SMEM_SECURE | SMEM_PIXEL;
-		break;
-	case 2:
-		smem_flags |= SMEM_SECURE | SMEM_NON_PIXEL;
-		break;
-	default:
-		dprintk(CVP_ERR, "%s Invalid secure_type %d\n",
-			__func__, secure_type);
-		return -EINVAL;
-	}
-
-	dprintk(CVP_MEM, "%s smem_flags 0x%x\n", __func__, smem_flags);
-	buf->smem = cvp_kmem_cache_zalloc(&cvp_driver->smem_cache, GFP_KERNEL);
-	if (!buf->smem) {
-		dprintk(CVP_ERR, "%s Out of memory\n", __func__);
-		goto fail_kzalloc_smem_cache;
-	}
-
-	buf->smem->flags = smem_flags;
-	rc = msm_cvp_smem_alloc(buffer_size, 1, 0,
-			&(cvp_driver->cvp_core->resources), buf->smem, 0, buf_name);
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to allocate DSP buf\n");
-		goto err_no_mem;
-	}
-
-	buf->smem->pkt_type = buf->smem->buf_idx = 0;
-	atomic_inc(&buf->smem->refcount);
-
-	dprintk(CVP_MEM, "%s dma_buf %pK\n", __func__, buf->smem->dma_buf);
-
-	buf->size = buf->smem->size;
-	buf->type = HFI_BUFFER_INTERNAL_PERSIST_1;
-	buf->ownership = DSP;
-
-	return rc;
-
-err_no_mem:
-	cvp_kmem_cache_free(&cvp_driver->smem_cache, buf->smem);
-fail_kzalloc_smem_cache:
-	return rc;
-}
-
-int cvp_release_dsp_buffers(struct cvp_internal_buf *buf)
-{
-	struct msm_cvp_smem *smem;
-	int rc = 0;
-
-	if (!buf) {
-		dprintk(CVP_ERR, "Invalid buffer pointer = %pK\n", buf);
-		return -EINVAL;
-	}
-
-	smem = buf->smem;
-	if (!smem) {
-		dprintk(CVP_ERR, "%s invalid smem\n", __func__);
-		return -EINVAL;
-	}
-
-	if (buf->ownership == DSP) {
-		dprintk(CVP_MEM,
-			"%s: fd %x %s size %d",
-			__func__, buf->fd,
-			smem->dma_buf ? smem->dma_buf->name : "internal", buf->size);
-		if (atomic_dec_and_test(&smem->refcount)) {
-			msm_cvp_smem_free(smem);
-			cvp_kmem_cache_free(&cvp_driver->smem_cache, smem);
-		}
-	} else {
-		dprintk(CVP_ERR,
-			"%s: wrong owner %d : fd %x %s size %d",
-			__func__, buf->ownership, buf->fd,
-			smem->dma_buf ? smem->dma_buf->name : "internal", buf->size);
-	}
-
 	return rc;
 }
 

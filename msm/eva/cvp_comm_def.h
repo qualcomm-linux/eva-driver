@@ -8,9 +8,6 @@
 #define _MSM_COMM_DEF_H_
 
 #include <linux/types.h>
-#ifdef CVP_GUNYAH_ENABLED
-#include <linux/gunyah/gh_rm_drv.h>
-#endif
 
 enum op_mode {
 	OP_NORMAL,
@@ -37,49 +34,12 @@ enum queue_state {
 #define KNP_HAL_VER 2
 #define HAWI_HAL_VER 3
 
-#ifdef CONFIG_EVA_KALAMA
-#define CVP_SYNX_ENABLED 1
-#define CVP_MMRM_ENABLED 1
-#define CVP_FASTRPC_ENABLED 1
-#endif	/* End of CONFIG_EVA_KALAMA */
-
-/*SYNX MMRM and FASTRPC are removed temporarily*/
-/*Need to put them back when dependencies are available*/
-#ifdef CONFIG_EVA_PINEAPPLE
-#define CVP_SYNX_ENABLED 1
-#endif	/* End of CONFIG_EVA_PINEAPPLE */
-
-#ifdef CONFIG_EVA_SUN
-#define CVP_SYNX_ENABLED 1
-#define CVP_DSP_ENABLED 1
-#define CVP_FASTRPC_ENABLED 1
-#define CVP_MMRM_ENABLED 1
-#endif /* End of CONFIG_EVA_SUN*/
-
 #ifdef CONFIG_EVA_CANOE
-// #define CVP_FASTRPC_ENABLED 1
-// #define CVP_DSP_ENABLED 1
-// #define CVP_SYNX_ENABLED 1
-// #define CVP_MMRM_ENABLED 1
-// #define CVP_SW_DBG_BUF_ENABLED 1
-// #define CVP_QCOM_HEAP_ENABLED 1
-// #define CVP_SECURE_BUF_ENABLED 1
 #define CVP_GENPD_ENABLED 1
 #define CVP_OPP_ENABLED 1
 #endif /* End of CONFIG_EVA_CANOE*/
 
 
-#ifdef CONFIG_EVA_ART
-#define CVP_SYNX_ENABLED 1
-#define CVP_FASTRPC_ENABLED 1
-#define CVP_DSP_ENABLED 1
-#define CVP_MMRM_ENABLED 1
-#define CVP_SW_DBG_BUF_ENABLED 1
-#endif /* End of CONFIG_EVA_ART*/
-
-#ifdef CONFIG_EVA_WAIPIO
-#define CVP_MINIDUMP_ENABLED 1
-#endif
 
 #endif	/* End CONFIG_EVA_TVM */
 

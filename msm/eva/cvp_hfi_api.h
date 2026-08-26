@@ -282,8 +282,6 @@ struct cvp_hfi_ops {
 	int (*get_core_capabilities)(void *dev);
 	int (*suspend)(void *dev);
 	int (*resume)(void *dev);
-	int (*flush_debug_queue)(void *dev);
-	int (*noc_error_info)(void *dev);
 	int (*validate_session)(void *sess, const char *func);
 	int (*debug_hook)(void *device);
 };
@@ -294,11 +292,6 @@ typedef void (*msm_cvp_callback) (enum hal_command_response response,
 			void *callback);
 struct msm_cvp_fw {
 	int cookie;
-#ifdef CVP_KVM_ENABLED
-	struct device *dev;
-	struct qcom_scm_pas_context *ctx;
-	struct iommu_domain *iommu_domain;
-#endif
 };
 
 int cvp_hfi_process_msg_packet(u32 device_id,
@@ -319,7 +312,6 @@ void cvp_hfi_deinitialize(enum msm_cvp_hfi_type hfi_type,
 			struct cvp_hfi_ops *hdev);
 
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr);
-int get_pkt_fenceoverride(struct cvp_hal_session_cmd_pkt *hdr);
 int get_pkt_index_from_type(u32 pkt_type);
 const char *get_pkt_name_from_type(u32 pkt_type);
 const char *get_feature_name_from_type(u32 pkt_type);
@@ -328,13 +320,11 @@ int get_hfi_version(void);
 unsigned int get_msg_size(struct cvp_hfi_msg_session_hdr *hdr);
 unsigned int get_msg_session_id(void *msg);
 unsigned int get_msg_errorcode(void *msg);
-int get_msg_opconfigs(void *msg, unsigned int *session_id,
-		unsigned int *error_type, unsigned int *config_id);
+
 extern struct msm_cvp_hfi_defs *cvp_hfi_defs;
 extern struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX];
 extern struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
 extern struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX];
 extern struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX];
 extern struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX];
-void print_hfi_queue_info(struct cvp_hfi_ops *hdev);
 #endif /*__CVP_HFI_API_H__ */

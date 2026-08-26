@@ -57,16 +57,7 @@ struct power_domain_set {
 #endif
 };
 
-struct regulator_info {
-	struct regulator *regulator;
-	bool has_hw_power_collapse;
-	char *name;
-};
 
-struct regulator_set {
-	struct regulator_info *regulator_tbl;
-	u32 count;
-};
 
 struct clock_info {
 	const char *name;
@@ -203,7 +194,6 @@ struct msm_cvp_platform_resources {
 	struct addr_set qdss_addr_set;
 	uint32_t max_ssr_allowed;
 	struct platform_device *pdev;
-	struct regulator_set regulator_set;
 	struct clock_set clock_set;
 	struct bus_set bus_set;
 	struct reset_set reset_set;

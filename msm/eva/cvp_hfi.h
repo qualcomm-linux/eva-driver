@@ -7,17 +7,11 @@
 #ifndef __H_CVP_HFI_H__
 #define __H_CVP_HFI_H__
 
-#ifdef CONFIG_EVA_SUN
-#include "cvp_hfi_v1.h"
-#endif
 
-#ifdef CONFIG_EVA_CANOE
-#include "cvp_hfi_v2.h"
-#endif
 
-#ifdef CONFIG_EVA_ART
 #include "cvp_hfi_v2.h"
-#endif
+
+#include "cvp_hfi_v2.h"
 
 #include "msm_cvp_resources.h"
 
@@ -46,14 +40,9 @@ int __read_tcsr_register(struct iris_hfi_device *device, u32 reg);
 int __read_gcc_register(struct iris_hfi_device *device, u32 reg);
 int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest,
 	const char *name);
-int __acquire_regulator(struct regulator_info *rinfo,
-	struct iris_hfi_device *device);
-int __hand_off_regulator(struct regulator_info *rinfo);
-int __hand_off_regulators(struct iris_hfi_device *device);
+
 int __enable_gdsc(struct iris_hfi_device *device, const char *name);
 int __disable_gdsc(struct iris_hfi_device *device, const char *name);
-void __print_reg_details_errlog1_high(u32 val);
-void __err_log(bool logging, u32 *data, const char *name, u32 val);
 int __reset_control_assert_name(struct iris_hfi_device *device, const char *name);
 int __reset_control_deassert_name(struct iris_hfi_device *device, const char *name);
 int __reset_control_acquire(struct iris_hfi_device *device, const char *name);

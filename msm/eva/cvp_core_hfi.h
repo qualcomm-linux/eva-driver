@@ -20,9 +20,6 @@
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 #include <linux/version.h>
-#ifdef CVP_MMRM_ENABLED
-#include <linux/soc/qcom/msm_mmrm.h>
-#endif
 
 #define HFI_MASK_QHDR_TX_TYPE			0xFF000000
 #define HFI_MASK_QHDR_RX_TYPE			0x00FF0000
@@ -42,11 +39,6 @@
 #define CVP_IFACEQ_MAX_MSG_BUF_COUNT		50
 #define CVP_IFACEQ_MAX_DBG_BUF_COUNT		50
 #define CVP_IFACE_MAX_PARALLEL_CLNTS		16
-
-#define CVP_DSP_IFACEQ_MAX_CMD_BUF_COUNT	25
-#define CVP_DSP_IFACEQ_MAX_MSG_BUF_COUNT	25
-#define CVP_DSP_IFACEQ_MAX_DBG_BUF_COUNT	40
-#define CVP_DSP_IFACE_MAX_PARALLEL_CLNTS	8
 
 #define CVP_IFACEQ_DFLT_QHDR				0x01010000
 
@@ -107,13 +99,6 @@ struct cvp_hfi_mem_map {
 #define CVP_IFACEQ_DBG_QUEUE_SIZE	(CVP_IFACEQ_MAX_PKT_SIZE *  \
 	CVP_IFACEQ_MAX_DBG_BUF_COUNT * CVP_IFACE_MAX_PARALLEL_CLNTS)
 
-#define CVP_DSP_IFACEQ_CMD_QUEUE_SIZE	(CVP_IFACEQ_MAX_PKT_SIZE *  \
-	CVP_DSP_IFACEQ_MAX_CMD_BUF_COUNT * CVP_DSP_IFACE_MAX_PARALLEL_CLNTS)
-#define CVP_DSP_IFACEQ_MSG_QUEUE_SIZE	(CVP_IFACEQ_MAX_PKT_SIZE *  \
-	CVP_DSP_IFACEQ_MAX_MSG_BUF_COUNT * CVP_DSP_IFACE_MAX_PARALLEL_CLNTS)
-#define CVP_DSP_IFACEQ_DBG_QUEUE_SIZE	(CVP_IFACEQ_MAX_PKT_SIZE *  \
-	CVP_DSP_IFACEQ_MAX_DBG_BUF_COUNT * CVP_DSP_IFACE_MAX_PARALLEL_CLNTS)
-
 #define CVP_IFACEQ_GET_QHDR_START_ADDR(ptr, i)     \
 	(void *)((ptr + sizeof(struct cvp_hfi_queue_table_header)) + \
 		(i * sizeof(struct cvp_hfi_queue_header)))
@@ -123,9 +108,6 @@ struct cvp_hfi_mem_map {
 
 #define QUEUE_SIZE (CVP_IFACEQ_TABLE_SIZE + \
 	(CVP_IFACEQ_CMD_QUEUE_SIZE + CVP_IFACEQ_MSG_QUEUE_SIZE + CVP_IFACEQ_DBG_QUEUE_SIZE))
-#define DSP_QUEUE_SIZE (CVP_IFACEQ_TABLE_SIZE + \
-	(CVP_DSP_IFACEQ_CMD_QUEUE_SIZE + CVP_DSP_IFACEQ_MSG_QUEUE_SIZE + \
-	CVP_DSP_IFACEQ_DBG_QUEUE_SIZE))
 
 #define ALIGNED_QDSS_SIZE ALIGN(QDSS_SIZE, PAGE_SIZE)
 #define ALIGNED_SFR_SIZE ALIGN(SFR_SIZE, PAGE_SIZE)
@@ -176,8 +158,7 @@ struct cvp_iface_q_info {
 		--__thing)
 
 /* Regular set helpers */
-#define iris_hfi_for_each_regulator(__device, __rinfo) \
-	iris_hfi_for_each_thing(__device, __rinfo, regulator)
+
 
 #define iris_hfi_for_each_pwr_domain(__device, __pdinfo) \
 	iris_hfi_for_each_thing(__device, __pdinfo, pd)
@@ -185,13 +166,6 @@ struct cvp_iface_q_info {
 #define iris_hfi_for_each_pwr_domain_reverse(__device, __pdinfo) \
 	iris_hfi_for_each_thing_reverse(__device, __pdinfo, pd)
 
-#define iris_hfi_for_each_regulator_reverse(__device, __rinfo) \
-	iris_hfi_for_each_thing_reverse(__device, __rinfo, regulator)
-
-#define iris_hfi_for_each_regulator_reverse_continue(__device, __rinfo, \
-		__from) \
-	iris_hfi_for_each_thing_reverse_continue(__device, __rinfo, \
-			regulator, __from)
 
 /* Clock set helpers */
 #define iris_hfi_for_each_clock(__device, __cinfo) \
@@ -200,17 +174,9 @@ struct cvp_iface_q_info {
 #define iris_hfi_for_each_clock_reverse(__device, __cinfo) \
 	iris_hfi_for_each_thing_reverse(__device, __cinfo, clock)
 
-#define iris_hfi_for_each_clock_reverse_continue(__device, __rinfo, \
-		__from) \
-	iris_hfi_for_each_thing_reverse_continue(__device, __rinfo, \
-			clock, __from)
-
 /* reset set helpers */
 #define iris_hfi_for_each_reset_clock(__device, __resetinfo) \
 	iris_hfi_for_each_thing(__device, __resetinfo, reset)
-
-#define iris_hfi_for_each_reset_clock_reverse(__device, __resetinfo) \
-	iris_hfi_for_each_thing_reverse(__device, __resetinfo, reset)
 
 /* Bus set helpers */
 #define iris_hfi_for_each_bus(__device, __binfo) \
@@ -266,17 +232,14 @@ struct iris_hfi_device;
 
 struct cvp_hal_ops {
 	void (*interrupt_init)(struct iris_hfi_device *ptr);
-	void (*setup_dsp_uc_memmap)(struct iris_hfi_device *device);
 	int (*power_off_controller)(struct iris_hfi_device *device);
 	int (*power_off_core)(struct iris_hfi_device *device);
 	int (*power_on_controller)(struct iris_hfi_device *device);
 	int (*power_on_core)(struct iris_hfi_device *device);
-	void (*noc_error_info)(struct iris_hfi_device *device);
 	int (*check_ctl_power_on)(struct iris_hfi_device *device);
 	int (*check_core_power_on)(struct iris_hfi_device *device);
 	void (*print_sbm_regs)(struct iris_hfi_device *device);
 	int (*set_registers)(struct iris_hfi_device *device);
-	void (*dump_noc_regs)(struct iris_hfi_device *device);
 	int (*enable_hw_power_collapse)(struct iris_hfi_device *device);
 	void (*check_tensilica_in_reset)(struct iris_hfi_device *device);
 	int (*pm_qos_update)(struct iris_hfi_device *device);
@@ -295,16 +258,13 @@ struct iris_hfi_device {
 	unsigned long scaled_rate;
 	struct msm_cvp_gov_data bus_vote;
 	bool power_enabled;
-	bool reg_dumped;
 	struct mutex lock;
 	msm_cvp_callback callback;
 	struct cvp_mem_addr iface_q_table;
-	struct cvp_mem_addr dsp_iface_q_table;
 	struct cvp_mem_addr qdss;
 	struct cvp_mem_addr sfr;
 	struct cvp_mem_addr mem_addr;
 	struct cvp_iface_q_info iface_queues[CVP_IFACEQ_NUMQ];
-	struct cvp_iface_q_info dsp_iface_queues[CVP_IFACEQ_NUMQ];
 	struct cvp_hal_data *cvp_hal_data;
 	struct workqueue_struct *cvp_workq;
 	struct workqueue_struct *iris_pm_workq;
@@ -312,10 +272,6 @@ struct iris_hfi_device {
 	int reg_count;
 	struct iris_resources resources;
 	struct msm_cvp_platform_resources *res;
-#ifdef CVP_MMRM_ENABLED
-	struct mmrm_client_desc mmrm_desc;
-	struct mmrm_client *mmrm_cvp;
-#endif
 	enum iris_hfi_state state;
 	struct cvp_hfi_packetization_ops *pkt_ops;
 	enum hfi_packetization_type packetization_type;
@@ -330,7 +286,6 @@ struct iris_hfi_device {
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev);
 irqreturn_t iris_hfi_core_work_handler(int irq, void *data);
-irqreturn_t iris_hfi_isr_wd(int irq, void *dev);
 void cvp_iris_hfi_delete_device(void *device);
 
 int cvp_iris_hfi_initialize(struct cvp_hfi_ops *hdev,
@@ -339,11 +294,6 @@ int cvp_iris_hfi_initialize(struct cvp_hfi_ops *hdev,
 
 int load_cvp_fw_impl(struct iris_hfi_device *device);
 int unload_cvp_fw_impl(struct iris_hfi_device *device);
-#ifdef CVP_KVM_ENABLED
-int init_cvp_fw(struct iris_hfi_device *device);
-void uninit_cvp_fw(struct iris_hfi_device *device);
-#endif
-void cvp_clock_reg_print(struct iris_hfi_device *dev);
 struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 	unsigned int session_id);
 void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on);

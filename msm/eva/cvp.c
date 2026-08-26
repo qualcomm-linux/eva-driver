@@ -37,10 +37,7 @@
 #include "cvp_private.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp.h"
-#include "vm/cvp_vm.h"
-#include "target/cvp_kaanapali_hal.h"
-#include "target/cvp_pakala_hal.h"
-#include "target/cvp_hawi_hal.h"
+#include "cvp_kaanapali_hal.h"
 #include "cvp_comm_def.h"
 #include "eva_gem.h"
 
@@ -282,26 +279,7 @@ static ssize_t boot_store(struct device *dev,
 			return rc;
 		}
 	} else if (val == 2) {
-#ifdef USE_PRESIL
-		struct msm_cvp_inst *inst;
 
-		inst = msm_cvp_open(MSM_CVP_USER, current);
-		if (!inst) {
-			dprintk(CVP_ERR,
-			"Failed to create eva instance\n");
-			return -ENOMEM;
-		}
-		rc = msm_cvp_session_create(inst);
-		if (rc)
-			dprintk(CVP_ERR, "Failed to create eva session\n");
-
-		rc = msm_cvp_close(inst);
-		if (rc) {
-			dprintk(CVP_ERR,
-			"Failed to close eva instance\n");
-			return rc;
-		}
-#endif
 	}
 	booted = 1;
 	return count;
@@ -330,11 +308,6 @@ static const struct of_device_id msm_cvp_plat_match[] = {
 static int msm_cvp_probe_bus(struct platform_device *pdev)
 {
 	return cvp_read_bus_resources(pdev);
-}
-
-static int msm_cvp_probe_ipclite_mappings(struct platform_device *pdev)
-{
-	return cvp_read_ipclite_mappings(pdev);
 }
 
 static int msm_probe_cvp_device(struct platform_device *pdev)
@@ -371,11 +344,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_core_init;
 	}
 
-#ifdef CVP_GUNYAH_ENABLED
-	/* VM manager shall be started before HFI init */
-	vm_manager.vm_ops->vm_start(core);
-#endif
-
 	core->dev_ops = cvp_hfi_initialize(core->hfi_type,
 				&core->resources, &cvp_handle_cmd_response);
 	if (IS_ERR_OR_NULL(core->dev_ops)) {
@@ -398,21 +366,7 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	if (!cvp_driver->debugfs_root)
 		dprintk(CVP_ERR, "Failed to create debugfs for msm_cvp\n");
 	
-	msm_cvp_debugfs_init_drv(cvp_driver->debugfs_root);
-	core->debugfs_root = msm_cvp_debugfs_init_core(
-		core, cvp_driver->debugfs_root);
-
 	cvp_driver->sku_version = core->resources.sku_version;
-
-	core->kmd_trace.kmd_debug_log.log = vmalloc(sizeof(struct cvp_debug_log));
-	if (!core->kmd_trace.kmd_debug_log.log) {
-		dprintk(CVP_ERR, "%s: cvp_debug_log memory allocation failed, size 0x%x\n",
-				__func__, sizeof(struct cvp_debug_log));
-		rc = -ENOMEM;
-		goto fail_dbglog_alloc;
-	} else {
-		memset((void *)core->kmd_trace.kmd_debug_log.log, 0, sizeof(struct cvp_debug_log));
-	}
 
 	dprintk(CVP_CORE, "populating sub devices\n");
 	/*
@@ -441,28 +395,7 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_fail_sub_device_probe;
 	}
 	
-#ifdef CVP_IPCLITE_MAPPING_ENABLED
-	rc = msm_cvp_probe_ipclite_mappings(pdev);
-	dprintk(CVP_INFO, "cvp %s ipclite mappings prob return value is %d", dev_name(&pdev->dev), rc);
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to probe ipclite mappings resources\n");
-		goto err_fail_sub_device_probe;
-	}
-#endif
-
-	if (core->platform_data->hal_version == DEFAULT_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using default");
-		set_pakala_hal_functions();
-	} else if (core->platform_data->hal_version == KNP_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using knp");
-		set_kaanapali_hal_functions();
-	} else if (core->platform_data->hal_version == HAWI_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using hawi");
-		set_hawi_hal_functions();
-	} else {
-		dprintk(CVP_ERR, "Invalid hal_version %d\n", core->platform_data->hal_version);
-		rc = -EINVAL;
-	}
+	set_kaanapali_hal_functions();
 
 	rc = drm_dev_register(&core->drm_dev, 0);
 	if (rc) {
@@ -474,8 +407,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 
 err_drm_register:
 err_fail_sub_device_probe:
-	vfree(core->kmd_trace.kmd_debug_log.log);
-	core->kmd_trace.kmd_debug_log.log = NULL;
 fail_dbglog_alloc:
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
 	debugfs_remove_recursive(cvp_driver->debugfs_root);
@@ -488,10 +419,6 @@ err_core_init:
 	return rc;
 }
 
-static int msm_cvp_probe_mem_cdsp(struct platform_device *pdev)
-{
-	return cvp_read_mem_cdsp_resources_from_dt(pdev);
-}
 
 static int msm_cvp_probe(struct platform_device *pdev)
 {
@@ -538,9 +465,6 @@ static int msm_cvp_remove(struct platform_device *pdev)
 		goto exit;
 	}
 
-	if (core->kmd_trace.kmd_debug_log.log)
-		vfree(core->kmd_trace.kmd_debug_log.log);
-	
 	drm_dev_unregister(&core->drm_dev);
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
 	msm_cvp_free_platform_resources(&core->resources);

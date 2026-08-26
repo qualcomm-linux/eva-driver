@@ -8,12 +8,6 @@
 #include <linux/dma-heap.h>
 #include <linux/dma-direction.h>
 #include <linux/iommu.h>
-#ifdef CVP_QCOM_HEAP_ENABLED
-#include <linux/msm_dma_iommu_mapping.h>
-#include <soc/qcom/secure_buffer.h>
-#include <linux/mem-buf.h>
-#include <linux/qcom-dma-mapping.h>
-#endif
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/version.h>
@@ -101,14 +95,7 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, u32 align,
 		 * We do the required cache operations separately for the
 		 * required buffer size
 		 */
-#ifdef CONFIG_QCOM_DMA_MAP_ATTRS
-		attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
-		if (flags & SMEM_CAMERA)
-			attach->dma_map_attrs |= DMA_ATTR_QTI_SMMU_PROXY_MAP;
-		if (res->sys_cache_present)
-			attach->dma_map_attrs |=
-				DMA_ATTR_IOMMU_USE_UPSTREAM_HINT;
-#endif
+
 		table = __cvp_dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
 		if (IS_ERR_OR_NULL(table)) {
 			dprintk(CVP_ERR, "Failed to map table %d\n", PTR_ERR(table));
@@ -204,19 +191,13 @@ void msm_cvp_smem_put_dma_buf(void *dma_buf)
 		dprintk(CVP_ERR, "%s: NULL dma_buf\n", __func__);
 		return;
 	}
-#ifdef CVP_QCOM_HEAP_ENABLED
-	dma_heap_buffer_free((struct dma_buf *)dma_buf);
-#else
 	dma_buf_put((struct dma_buf *)dma_buf);
-#endif
 }
 
 static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_inst *inst)
 {
 	int nelems = 0;
 	int i, rc = 0;
-	int *vmid_list;
-	int *perms_list;
 
 	dma_addr_t iova = 0;
 	u32 temp = 0, checksum = 0;
@@ -226,30 +207,6 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 	struct cvp_dma_buf_vmap vmap = {0};
 
 	dma_buf = smem->dma_buf;
-/*Symbol not yet defined for canoe*/
-#ifdef CVP_QCOM_HEAP_ENABLED
-	rc = mem_buf_dma_buf_copy_vmperm(dma_buf,
-			&vmid_list, &perms_list, &nelems);
-
-	if (rc) {
-		dprintk(CVP_ERR, "%s fail to get vmid and perms %d\n",
-			__func__, rc);
-		return rc;
-	}
-#endif
-
-	for (temp = 0; temp < nelems; temp++) {
-		if (vmid_list[temp] == VMID_CP_PIXEL)
-			smem->flags |= (SMEM_SECURE | SMEM_PIXEL);
-		else if (vmid_list[temp] == VMID_CP_NON_PIXEL)
-			smem->flags |= (SMEM_SECURE | SMEM_NON_PIXEL);
-		else if (vmid_list[temp] == VMID_CP_CAMERA ||
-				/* To-do: what if the EVA driver runs in TVM */
-				vmid_list[temp] == VMID_TVM)
-			smem->flags |= (SMEM_SECURE | SMEM_CAMERA);
-		dprintk(CVP_MEM, "inst %pK VM idx %d VM_ID %d fd %d pkt_type %#x\n",
-			inst, temp, vmid_list[temp], smem->fd, smem->pkt_type);
-	}
 
 	rc = msm_dma_get_device_address(dma_buf, align, &iova, smem->flags,
 			&(cvp_driver->cvp_core->resources), &smem->mapping_info);
@@ -294,8 +251,6 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 exit:
 	smem->device_addr = 0x0;
 success:
-	kfree(vmid_list);
-	kfree(perms_list);
 	return rc;
 }
 
@@ -321,7 +276,6 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 		atomic_inc(&inst->smem_count);
 	} else {
 		cvp_print_iova(core);
-		msm_cvp_bug_on(!msm_cvp_iova_leak_recovery, false);
 	}
 
 	return rc;
@@ -523,36 +477,18 @@ int msm_cvp_smem_cache_operations(struct dma_buf *dbuf,
 	switch (cache_op) {
 	case SMEM_CACHE_CLEAN:
 	case SMEM_CACHE_CLEAN_INVALIDATE:
-#ifdef CVP_QCOM_HEAP_ENABLED
-		rc = dma_buf_begin_cpu_access_partial(dbuf, DMA_BIDIRECTIONAL,
-				offset, size);
-		if (rc)
-			break;
-		rc = dma_buf_end_cpu_access_partial(dbuf, DMA_BIDIRECTIONAL,
-				offset, size);
-#else:
 		rc = dma_buf_begin_cpu_access(dbuf, DMA_BIDIRECTIONAL);
 
 		if (rc)
 			break;
 		rc = dma_buf_end_cpu_access(dbuf, DMA_BIDIRECTIONAL);
-#endif
 		break;
 	case SMEM_CACHE_INVALIDATE:
-#ifdef CVP_QCOM_HEAP_ENABLED
-		rc = dma_buf_begin_cpu_access_partial(dbuf, DMA_TO_DEVICE,
-				offset, size);
-		if (rc)
-			break;
-		rc = dma_buf_end_cpu_access_partial(dbuf, DMA_FROM_DEVICE,
-				offset, size);
-#else
 		rc = dma_buf_begin_cpu_access(dbuf, DMA_TO_DEVICE);
 
 		if (rc)
 			break;
 		rc = dma_buf_end_cpu_access(dbuf, DMA_TO_DEVICE);
-#endif
 		break;
 	default:
 		dprintk(CVP_ERR, "%s: cache (%d) operation not supported\n",
