@@ -17,7 +17,7 @@ int msm_cvp_mmrm_deregister(struct iris_hfi_device *device);
 int msm_cvp_mmrm_set_value_in_range(struct iris_hfi_device *device,
 		u32 freq_min, u32 freq_cur);
 #ifndef CVP_OPP_ENABLED 
-int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u32 freq);
+int msm_cvp_set_clocks_impl(struct iris_hfi_device *device, u64 freq);
 #else
 int msm_cvp_opp_set_rate(struct iris_hfi_device *device, u64 freq);
 #endif

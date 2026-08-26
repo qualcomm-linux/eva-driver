@@ -42,6 +42,14 @@ KBUILD_CPPFLAGS += -DCONFIG_EVA_CANOE=1
 ccflags-y += -DCONFIG_EVA_CANOE=1 -DCVP_FIX_DDR_TYPE=1
 endif
 
+#ifeq ($(CONFIG_ARCH_GLYMUR), y)
+$(info within KBUILD file CONFIG_ARCH_GLYMUR = $(CONFIG_ARCH_GLYMUR))
+KBUILD_CPPFLAGS += -DCONFIG_EVA_GLYMUR=1 -DCVP_CONFIG_SYNX_V2=1
+ccflags-y += -DCONFIG_EVA_GLYMUR=1 -DCVP_CONFIG_SYNX_V2=1
+ccflags-y += -I$(EVA_ROOT)/../synx-kernel/msm/synx/ \
+    -I$(EVA_ROOT)/../dsp-kernel/include/ \
+    -I$(EVA_ROOT)/../synx-kernel/include/uapi/synx/media/
+#endif
 
 ifeq ($(CONFIG_EVA_LE), 1)
 ccflags-y += -DCONFIG_EVA_TVM=1 -Wno-error
@@ -68,6 +76,7 @@ msm-eva-objs := eva/cvp.o \
         eva/msm_cvp_dma_buf.o \
         eva/target/cvp_kaanapali_hal.o \
         eva/target/cvp_pakala_hal.o \
+        eva/target/cvp_glymur_hal.o \
         eva/target/cvp_hawi_hal.o \
 	eva/cvp_fw_load.o \
 	eva/cvp_power.o \
