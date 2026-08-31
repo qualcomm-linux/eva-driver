@@ -126,8 +126,6 @@ static inline void DEINIT_DMAMAP_CACHE(struct cvp_dmamap_cache *cache)
 	cache->max_capacity = 128;
 }
 
-#define INPUT_FENCE_BITMASK 0x1
-#define OUTPUT_FENCE_BITMASK 0x2
 
 /* Track source of dma_buf allocator/owner */
 enum buffer_owner {
@@ -165,10 +163,6 @@ struct cvp_frame_bufs {
 	struct msm_cvp_smem smem[MAX_FRAME_BUFFER_NUMS];
 };
 
-
-int print_smem(u32 tag, const char *str,
-		struct msm_cvp_inst *inst,
-		struct msm_cvp_smem *smem);
 /*Kernel DMA buffer and IOMMU mapping functions*/
 int msm_cvp_smem_alloc(size_t size, u32 align, int map_kernel,
 			void  *res, struct msm_cvp_smem *smem, int user_access,
@@ -196,27 +190,15 @@ int msm_cvp_unmap_ipcc_regs(u32 iova);
 struct cvp_internal_buf *cvp_allocate_arp_bufs(struct msm_cvp_inst *inst,
 					u32 buffer_size);
 int cvp_release_arp_buffers(struct msm_cvp_inst *inst);
-void msm_cvp_cache_operations(struct msm_cvp_smem *smem,
-			u32 type, u32 offset, u32 size);
-int msm_cvp_unmap_user_persist(struct msm_cvp_inst *inst,
-			struct eva_kmd_hfi_packet *in_pkt,
-			unsigned int offset, unsigned int buf_num);
-int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
-			struct eva_kmd_hfi_packet *in_pkt,
-			unsigned int offset, unsigned int buf_num, uint32_t *fd_arr);
 int msm_cvp_map_frame(struct msm_cvp_inst *inst,
 		struct eva_kmd_hfi_packet *in_pkt,
 		unsigned int offset, unsigned int buf_num);
 void msm_cvp_unmap_frame(struct msm_cvp_inst *inst, u64 ktid);
 int msm_cvp_session_deinit_buffers(struct msm_cvp_inst *inst);
 
-void cvp_buf_map_set_vaddr(struct cvp_dma_buf_vmap *vmap, void *vaddr);
 int msm_cvp_dma_buf_vmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
 void msm_cvp_dma_buf_vunmap(struct dma_buf *dmabuf, struct cvp_dma_buf_vmap *vmap);
-enum cp_context_bank msm_cvp_get_cb(u32 flags);
 struct msm_cvp_smem *msm_cvp_session_find_smem(struct msm_cvp_inst *inst, struct dma_buf *dma_buf, u32 pkt_type);
 int msm_cvp_session_add_smem(struct msm_cvp_inst *inst, struct msm_cvp_smem *smem);
-void print_persist_buffer_info(u32 tag, const char *str, u32 buffer_size,
-		struct msm_cvp_inst *inst, struct eva_kmd_hfi_packet *pkt);
 
 #endif

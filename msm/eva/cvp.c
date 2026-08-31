@@ -95,8 +95,6 @@ static __poll_t eva_poll(struct file *filp, struct poll_table_struct *p)
 	spin_lock_irqsave(&inst->event_handler.lock, flags);
 	if (inst->event_handler.event == EVA_EVENT)
 		rc |= EPOLLPRI;
-	if (inst->event_handler.event == CVP_DUMP_EVENT)
-		rc |= EPOLLIN;
 	inst->event_handler.event = CVP_NO_EVENT;
 	spin_unlock_irqrestore(&inst->event_handler.lock, flags);
 
@@ -186,119 +184,6 @@ static int msm_cvp_initialize_core(struct platform_device *pdev,
 	return rc;
 }
 
-static ssize_t link_name_show(struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
-{
-	struct msm_cvp_core *core = dev_get_drvdata(dev);
-
-	if (core)
-		if (dev == core->dev)
-			return snprintf(buf, PAGE_SIZE, "msm_cvp\n");
-		else
-			return 0;
-	else
-		return 0;
-}
-
-static DEVICE_ATTR_RO(link_name);
-
-static ssize_t pwr_collapse_delay_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	unsigned long val = 0;
-	int rc = 0;
-	struct msm_cvp_core *core = NULL;
-
-	rc = kstrtoul(buf, 0, &val);
-	if (rc)
-		return rc;
-	else if (!val)
-		return -EINVAL;
-
-	core = cvp_driver->cvp_core;
-	if (!core)
-		return -EINVAL;
-	core->resources.msm_cvp_pwr_collapse_delay = val;
-	return count;
-}
-
-static ssize_t pwr_collapse_delay_show(struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
-{
-	struct msm_cvp_core *core = NULL;
-
-	core = cvp_driver->cvp_core;
-	if (!core)
-		return -EINVAL;
-
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-		core->resources.msm_cvp_pwr_collapse_delay);
-}
-
-static DEVICE_ATTR_RW(pwr_collapse_delay);
-
-static ssize_t sku_version_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	return scnprintf(buf, PAGE_SIZE, "%d",
-			cvp_driver->sku_version);
-}
-
-static DEVICE_ATTR_RO(sku_version);
-
-static ssize_t boot_store(struct device *dev,
-			struct device_attribute *attr,
-			const char *buf, size_t count)
-{
-	int rc = 0, val = 0;
-	static int booted;
-	dprintk(CVP_INFO, "Processing boot sysfs command");
-	rc = kstrtoint(buf, 0, &val);
-	if (rc || val < 0) {
-		dprintk(CVP_WARN,
-			"Invalid boot value: %s\n", buf);
-		return -EINVAL;
-	}
-
-	if (val == 1 && booted == 0) {
-		struct msm_cvp_inst *inst;
-
-		inst = msm_cvp_open(MSM_CVP_BOOT, current);
-		if (!inst) {
-			dprintk(CVP_ERR,
-			"Failed to create cvp instance\n");
-			return -ENOMEM;
-		}
-		rc = msm_cvp_close(inst);
-		if (rc) {
-			dprintk(CVP_ERR,
-			"Failed to close cvp instance\n");
-			return rc;
-		}
-	} else if (val == 2) {
-
-	}
-	booted = 1;
-	return count;
-}
-
-static DEVICE_ATTR_WO(boot);
-
-static struct attribute *msm_cvp_core_attrs[] = {
-		&dev_attr_pwr_collapse_delay.attr,
-		&dev_attr_sku_version.attr,
-		&dev_attr_link_name.attr,
-		&dev_attr_boot.attr,
-		NULL
-};
-
-static struct attribute_group msm_cvp_core_attr_group = {
-		.attrs = msm_cvp_core_attrs,
-};
-
 static const struct of_device_id msm_cvp_plat_match[] = {
 	{.compatible = "qcom,kaanapali-eva"},
 	{.compatible = "qcom,glymur-eva"},
@@ -338,12 +223,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 		goto err_core_init;
 	}
 
-	rc = sysfs_create_group(&core->drm_dev.dev->kobj, &msm_cvp_core_attr_group);
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to create attributes\n");
-		goto err_core_init;
-	}
-
 	core->dev_ops = cvp_hfi_initialize(core->hfi_type,
 				&core->resources, &cvp_handle_cmd_response);
 	if (IS_ERR_OR_NULL(core->dev_ops)) {
@@ -366,8 +245,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	if (!cvp_driver->debugfs_root)
 		dprintk(CVP_ERR, "Failed to create debugfs for msm_cvp\n");
 	
-	cvp_driver->sku_version = core->resources.sku_version;
-
 	dprintk(CVP_CORE, "populating sub devices\n");
 	/*
 	 * Trigger probe for remaining sub-devices (e.g. qcom,msm-cvp,mem-cdsp).
@@ -409,11 +286,9 @@ err_drm_register:
 err_fail_sub_device_probe:
 fail_dbglog_alloc:
 	cvp_hfi_deinitialize(core->hfi_type, core->dev_ops);
-	debugfs_remove_recursive(cvp_driver->debugfs_root);
 	if (core->cb_devs)
 		cvp_deinit_context_bank_devices(core);
 err_hfi_initialize:
-	sysfs_remove_group(&pdev->dev.kobj, &msm_cvp_core_attr_group);
 err_core_init:
 	dev_set_drvdata(&pdev->dev, NULL);
 	return rc;
@@ -422,8 +297,6 @@ err_core_init:
 
 static int msm_cvp_probe(struct platform_device *pdev)
 {
-	if (!msm_cvp_probe_allowed)
-		return 0;
 	/*
 	 * Sub devices probe will be triggered by of_platform_populate() towards
 	 * the end of the probe function after msm-cvp device probe is
@@ -471,7 +344,6 @@ static int msm_cvp_remove(struct platform_device *pdev)
 
 	if (core->cb_devs)
 		cvp_deinit_context_bank_devices(core);
-	sysfs_remove_group(&pdev->dev.kobj, &msm_cvp_core_attr_group);
 	dev_set_drvdata(&pdev->dev, NULL);
 	idr_destroy(&core->sess_idr);
 	mutex_destroy(&core->idr_lock);
@@ -576,7 +448,6 @@ static void __exit msm_cvp_exit(void)
 	kmem_cache_destroy(cvp_driver->smem_cache.cache);
 
 	platform_driver_unregister(&msm_cvp_driver);
-	debugfs_remove_recursive(cvp_driver->debugfs_root);
 	mutex_destroy(&cvp_driver->lock);
 	kfree(cvp_driver);
 	cvp_driver = NULL;
@@ -585,9 +456,6 @@ static void __exit msm_cvp_exit(void)
 module_init(msm_cvp_init);
 module_exit(msm_cvp_exit);
 
-MODULE_SOFTDEP("pre: msm-mmrm");
-MODULE_SOFTDEP("pre: synx-driver");
-MODULE_SOFTDEP("pre: frpc-adsprpc");
 MODULE_LICENSE("GPL v2");
 #if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
 MODULE_IMPORT_NS("DMA_BUF");

@@ -146,39 +146,7 @@ enum hfi_property_sys_crtl {
 #define  HFI_DEBUG_CFG_ARP_CDM_PRINT 0x00000200 /**< Enables ARP/CDM printing for each tasklet */
 #define  HFI_DEBUG_CFG_CMD_CRC_EN    0x00000400 /**< Enables CRC validation */
 #define  HFI_DEBUG_EN_DEVICE_CRASH   0x00000800 /**< Enables device crash on hang. */
-#define  HFI_DEBUG_MSG_SYNX_LOW      0x00001000 /**< Low level messages. */
-#define  HFI_DEBUG_MSG_SYNX_MEDIUM   0x00002000 /**< Medium level messages. */
-#define  HFI_DEBUG_MSG_SYNX_HIGH     0x00004000 /**< High level messages. */
 #define  HFI_DEBUG_CACHE_LOG_EN      0x00010000 /**< Enables cache log. */
-
-#define HFI_CV_KERNEL_FPX         0x00000001 /**< Harris Corner Detector            */
-#define HFI_CV_KERNEL_SCALER      0x00000002 /**< DownScale                         */
-#define HFI_CV_KERNEL_NCC         0x00000004 /**< NCC                               */
-#define HFI_CV_KERNEL_DFS         0x00000008 /**< Depth From Stereo                 */
-#define HFI_CV_KERNEL_WARP_NCC    0x00000010 /**< Warp NCC                          */
-#define HFI_CV_KERNEL_OF          0x00000020 /**< Optical Flow/TME                  */
-#define HFI_CV_KERNEL_ORB         0x00000040 /**< ORB compute & Matching            */
-#define HFI_CV_KERNEL_PYS_HCD     0x00000080 /**< Pyramid DS & HCD                  */
-#define HFI_CV_KERNEL_BLOB        0x00000100 /**< Blob detector                     */
-#define HFI_CV_KERNEL_DESCRIPTOR  0x00000200 /**< Patch Descriptor                  */
-#define HFI_CV_KERNEL_MATCH       0x00000400 /**< Matcher                           */
-#define HFI_CV_KERNEL_PPU         0x00000800 /**< PPU                               */
-#define HFI_CV_KERNEL_LME         0x00001000 /**< Local motion Estimation ppu/mpu   */
-#define HFI_CV_KERNEL_ICA         0x00002000 /**< Image Correction & Adjustment     */
-#define HFI_CV_KERNEL_GCX         0x00004000 /**< Geometric Correction for XR    */
-#define HFI_CV_KERNEL_XRA         0x00008000 /**< XRA                               */
-#define HFI_CV_KERNEL_CSC         0x00010000 /**< CSC for XR    */
-#define HFI_CV_KERNEL_LSR         0x00020000 /**< LSR for XR    */
-#define HFI_CV_KERNEL_ITOF        0x00040000 /**< Time of Flight Sensor    */
-#define HFI_CV_KERNEL_RGE         0x00080000 /**< RGE, Reprojection and Grid-inversion Engine */
-#define HFI_CV_KERNEL_SPSTAT      0x00100000 /**< FTexture (Spatial Statistics)     */
-#define HFI_CV_KERNEL_GME         0x00200000 /**< Global motion Estimation fdu   */
-#define HFI_CV_KERNEL_STL         0x00400000 /**< stl   */
-#define HFI_CV_KERNEL_WARP        0x00800000 /**< warp   */
-#define HFI_CV_KERNEL_DCM_NONPOR  0x01000000
-#define HFI_CV_KERNEL_TME_NONPOR  0x02000000
-#define HFI_CV_KERNEL_PRE_NONPOR  0x04000000
-#define HFI_CV_KERNEL_POST_NONPOR 0x08000000
 
 #define HFI_DEBUG_MODE_QUEUE				0x00000001
 #define HFI_DEBUG_MODE_QDSS					0x00000002
@@ -403,8 +371,6 @@ enum eva_session_msg_api {
 	(HFI_MSG_SESSION_EVA_OFFSET + 0x045)
 #define  HFI_MSG_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS\
 	(HFI_MSG_SESSION_EVA_OFFSET + 0x046)
-#define  HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY\
-	(HFI_MSG_SESSION_EVA_OFFSET + 0x047)
 
 #define CVP_IFACEQ_MAX_PKT_SIZE       1024
 #define CVP_IFACEQ_MED_PKT_SIZE       768
@@ -703,13 +669,6 @@ struct cvp_hfi_msg_session_hdr_old_format {
 } __packed;
 #endif
 
-struct cvp_hfi_dumpmsg_session_hdr {
-	struct cvp_hfi_header_type header;
-	u32 error_type;
-	u32 dump_offset;
-	u32 dump_size;
-} __packed;
-
 #define HFI_MAX_HW_ACTIVATIONS_PER_FRAME (6)
 
 enum hfi_hw_thread {
@@ -734,12 +693,6 @@ struct cvp_hfi_msg_session_hdr_ext {
 	u32 fw_cycles[HFI_MAX_HW_ACTIVATIONS_PER_FRAME];
 } __packed;
 
-struct cvp_hfi_buffer_mapping_type {
-	u32 index;
-	u32 device_addr;
-	u32 size;
-};
-
 struct cvp_hfi_msg_event_notify_packet {
 	u32 size;
 	u32 packet_type;
@@ -750,35 +703,12 @@ struct cvp_hfi_msg_event_notify_packet {
 	u32 rg_ext_event_data[];
 };
 
-struct cvp_hfi_msg_session_op_cfg_packet {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 error_type;
-	struct cvp_hfi_client client_data;
-	u32 stream_idx;
-	u32 op_conf_id;
-} __packed;
-
 struct cvp_hfi_msg_sys_init_done_packet {
 	u32 size;
 	u32 packet_type;
 	u32 error_type;
 	u32 num_properties;
 	u32 rg_property_data[];
-};
-
-struct cvp_hfi_msg_sys_pc_prep_done_packet {
-	u32 size;
-	u32 packet_type;
-	u32 error_type;
-};
-
-struct cvp_hfi_msg_sys_release_resource_done_packet {
-	u32 size;
-	u32 packet_type;
-	u32 resource_handle;
-	u32 error_type;
 };
 
 struct cvp_hfi_msg_sys_session_init_done_packet {
@@ -795,16 +725,6 @@ struct cvp_hfi_msg_sys_session_end_done_packet {
 	u32 packet_type;
 	u32 session_id;
 	u32 error_type;
-};
-
-struct cvp_hfi_msg_sys_debug_packet {
-	u32 size;
-	u32 packet_type;
-	u32 msg_type;
-	u32 msg_size;
-	u32 time_stamp_hi;
-	u32 time_stamp_lo;
-	u8 rg_msg_data[];
 };
 
 struct cvp_hfi_packet_header {
@@ -837,23 +757,5 @@ enum buf_map_type {
 	MAP_FRAME = 3,
 	MAP_INVALID,
 };
-
-static inline enum buf_map_type cvp_find_map_type(int pkt_type)
-{
-	if (pkt_type == HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS ||
-			pkt_type == HFI_CMD_SESSION_CVP_SET_SNAPSHOT_BUFFERS)
-		return MAP_PERSIST;
-	else if (pkt_type == HFI_CMD_SESSION_CVP_RELEASE_PERSIST_BUFFERS ||
-			pkt_type ==
-				HFI_CMD_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS)
-		return UNMAP_PERSIST;
-	else
-		return MAP_FRAME;
-}
-
-static inline bool is_params_pkt(int pkt_type)
-{
-	return false;
-}
 
 #endif

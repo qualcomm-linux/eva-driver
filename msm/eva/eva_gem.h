@@ -70,7 +70,6 @@ int eva_gem_unmap_iova(struct eva_gem_obj *gobj);
 
 int eva_gem_vmap(struct eva_gem_obj *gobj, struct iosys_map *map);
 void eva_gem_vunmap(struct eva_gem_obj *gobj, struct iosys_map *map);
-int eva_gem_refcount_is_one(struct drm_gem_object *obj);
 void eva_gem_get(struct drm_gem_object *obj);
 
 #endif /* __EVA_GEM_H__ */

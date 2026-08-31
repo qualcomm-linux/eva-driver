@@ -43,17 +43,8 @@ extern int of_fdt_get_ddrtype(void);
 	.bank_spreading = bsp,	\
 }
 
-struct msm_cvp_hfi_defs cvp_hfi_defs_v1[MAX_PKT_IDX];
-struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v1[MAX_PKT_IDX];
 struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX];
 struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX];
-
-static struct msm_cvp_common_data default_common_data[] = {
-	{
-		.key = "qcom,auto-pil",
-		.value = 1,
-	},
-};
 
 static struct msm_cvp_common_data sm8850_common_data[] = {
 	{
@@ -84,30 +75,12 @@ static struct msm_cvp_common_data sm8850_common_data[] = {
 		.value = 32,
 	},
 	{
-		.key = "qcom,max-ssr-allowed",
-		.value = 1,	/*
-					* Maxinum number of SSR before BUG_ON
-					*/
-	},
-	{
 		.key = "qcom,power-collapse-delay",
 		.value = 3000,
 	},
 	{
 		.key = "qcom,hw-resp-timeout",
 		.value = 2000,
-	},
-	{
-		.key = "qcom,dsp-resp-timeout",
-		.value = 1000,
-	},
-	{
-		.key = "qcom,debug-timeout",
-		.value = 0,
-	},
-	{
-		.key = "qcom,dsp-enabled",
-		.value = 0,
 	},
 	{
 		.key = "CVP_GDSC_FRAMEWORK_TYPE",
@@ -168,11 +141,6 @@ static const struct cvp_reg_presets cvp_kaanapali_reg_presets = {
     .tbl   = kaanapali_reg_presets_data,
 };
 
-const struct cvp_gcc_reg_region cvp_kaanapali_gcc_reg = {
-    .base = 0x110000,
-    .size   = 0x90000,
-};
-
 static const struct cvp_ipcc_reg_region cvp_kaanapali_ipcc_reg = {
     .base = 0x400000,
     .size   = 0x100000,
@@ -185,24 +153,6 @@ static const u32 cvp_kaanapali_reset_power_states[] = {
 static const struct cvp_reset_power_set_desc cvp_kaanapali_reset_power_set_desc = {
     .count  = ARRAY_SIZE(cvp_kaanapali_reset_power_states),
     .pwr_stats = cvp_kaanapali_reset_power_states,
-};
-
-static const struct cvp_regspace_mappings cvp_kaanapali_regspace = {
-    .hwmutex = {
-        .iova = 0xFFB00000,
-        .size = 0x2000,
-        .phys = 0x1f4a000,
-    },
-    .aon = {
-        .iova = 0xFF80F000,
-        .size = 0x1000,
-        .phys = 0x0ABE0000,
-    },
-    .aon_timer = {
-        .iova = 0xFFA00000,
-        .size = 0x1000,
-        .phys = 0xc220000,
-    },
 };
 
 static const u32 kaanapali_pd_hw_pc[] = { 0x0, 0x1 };
@@ -253,10 +203,6 @@ static const char *const kaanapali_eva_opp_clk_names[] = {
  */
 static const char *const kaanapali_opp_pd_table[] = { "mxc", "mmcx" };
 
-static const struct cvp_ipclite_mappings cvp_kaanapali_ipclite_desc = {
-    .iova_start = 0xFE500000,
-};
-
 static const struct cvp_iommu_context_bank kaanapali_cvp_context_banks[] = {
     {
         .name = "eva_hlos",
@@ -292,36 +238,16 @@ static const u32 eva_kaanapali_clock_ids[] = {
         EVA_CC_MVS0_CLK,
 };
 
-static struct msm_cvp_platform_data default_data = {
-	.common_data = default_common_data,
-	.common_data_length =  ARRAY_SIZE(default_common_data),
-	.sku_version = 0,
-	.vpu_ver = VPU_VERSION_5,
-	.ubwc_config = 0x0,
-	.noc_qos = 0x0,
-	.vm_id = 1,
-	.cvp_hfi = cvp_hfi_defs_v1,
-	.cvp_hfi_msg = cvp_hfi_msg_defs_v1,
-	.hfi_ver = 1,
-	.hal_version = DEFAULT_HAL_VER,
-};
-
 static struct msm_cvp_platform_data sm8850_data = {
 	.common_data = sm8850_common_data,
 	.common_data_length = ARRAY_SIZE(sm8850_common_data),
-	.sku_version = 0,
-	.vpu_ver = VPU_VERSION_5,
 	.ubwc_config = kona_ubwc_data,	/*Reuse Kona setting*/
 	.noc_qos = &pakala_noc_qos,
-	.vm_id = 1,
 	.cvp_hfi = cvp_hfi_defs_v2,
 	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,
 	.hfi_ver = 2,
-	.hal_version = KNP_HAL_VER,
 	.pas_id = 26,
-	.gcc_regs = &cvp_kaanapali_gcc_reg,
 	.ipcc_regs = &cvp_kaanapali_ipcc_reg,
-	.regspace_mappings = &cvp_kaanapali_regspace,
 	.reg_presets = &cvp_kaanapali_reg_presets,
 	.reset_power_sets = &cvp_kaanapali_reset_power_set_desc,
 	.power_domains = &kaanapali_power_domains,
@@ -334,7 +260,6 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.opp_pd_tbl_size = ARRAY_SIZE(kaanapali_opp_pd_table),
 	.bus_descs = cvp_bus_kaanapali_descs,
 	.subcache_desc = &cvp_kaanapali_desc,
-	.ipclite_mappings = &cvp_kaanapali_ipclite_desc,
 	.cb_data = kaanapali_cvp_context_banks,
 	.cb_data_size = ARRAY_SIZE(kaanapali_cvp_context_banks),
 };
@@ -359,251 +284,12 @@ struct msm_cvp_hfi_defs *cvp_hfi_msg_defs;
  */
 
 struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX] = {
-	[HFI_CMD_SESSION_EVA_DFS_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_DFS_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_EVA_DFS_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DFS_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_DFS_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_DFS_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_EVA_DFS_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DFS_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_SGM_OF_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_SGM_OF_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SGM_OF_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_SGM_OF_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_SGM_OF_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SGM_OF_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_WARP_NCC_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_WARP_NCC_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_WARP_NCC_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_WARP_NCC_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_WARP_NCC_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_WARP_NCC_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_WARP_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_WARP_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_WARP_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_WARP_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_WARP_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_WARP_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_DMM_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_DMM_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DMM_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DMM_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_DMM_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_DMM_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DMM_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DMM_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS - HFI_CMD_SESSION_EVA_CTRL_OFFSET
-								+ CTRL_OFFSET] = {
-			.size = HFI_PERSIST_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS",
-		},
-	[HFI_CMD_SESSION_CVP_RELEASE_PERSIST_BUFFERS - HFI_CMD_SESSION_EVA_CTRL_OFFSET
-								+ CTRL_OFFSET] = {
-			.size = 0xffffffff,
-			.type = HFI_CMD_SESSION_CVP_RELEASE_PERSIST_BUFFERS,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_RELEASE_PERSIST_BUFFERS",
-		},
-	[HFI_CMD_SESSION_CVP_NCC_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_NCC_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_NCC_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_NCC_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_NCC_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_NCC_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_NCC_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_NCC_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_DC_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_DCM_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DC_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DC_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_DC_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_DCM_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DC_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DC_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_DCM_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_DCM_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DCM_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DCM_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_DCM_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_DCM_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_DCM_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_DCM_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_PYS_HCD_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = HFI_PYS_HCD_CONFIG_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_PYS_HCD_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_PYS_HCD_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_PYS_HCD_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = HFI_PYS_HCD_FRAME_CMD_SIZE,
-			.type = HFI_CMD_SESSION_CVP_PYS_HCD_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_PYS_HCD_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_SET_SNAPSHOT_BUFFERS - HFI_CMD_SESSION_EVA_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_SET_SNAPSHOT_BUFFERS,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SET_SNAPSHOT_BUFFERS",
-		},
-	[HFI_CMD_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS - HFI_CMD_SESSION_EVA_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS",
-		},
-	[HFI_CMD_SESSION_CVP_SET_SNAPSHOT_MODE - HFI_CMD_SESSION_EVA_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_SET_SNAPSHOT_MODE,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SET_SNAPSHOT_MODE",
-		},
-	[HFI_CMD_SESSION_CVP_SNAPSHOT_WRITE_DONE - HFI_CMD_SESSION_EVA_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_SNAPSHOT_WRITE_DONE,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_SNAPSHOT_WRITE_DONE",
-		},
-	[HFI_CMD_SESSION_EVA_BLOB_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_BLOB_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "EVA_BLOB_FRAME",
-		},
-	[HFI_CMD_SESSION_EVA_BLOB_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_BLOB_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "EVA_BLOB_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_MATCH_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_MATCH_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "EVA_MATCH_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_MATCH_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_MATCH_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "EVA_MATCH_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_RGE_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_RGE_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_RGE_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_RGE_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_RGE_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_RGE_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_ITOF_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_ITOF_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_ITOF_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_ITOF_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_ITOF_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_ITOF_CONFIG",
-		},
 	[HFI_CMD_SESSION_EVA_SCALER_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
 			.size = 0xFFFFFFFF,
 			.type = HFI_CMD_SESSION_EVA_SCALER_FRAME,
 			.is_config_pkt = false,
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_EVA_SCALER_FRAME",
-			.force_kernel_fence = false,
 		},
 	[HFI_CMD_SESSION_EVA_SCALER_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
 			.size = 0xFFFFFFFF,
@@ -612,363 +298,18 @@ struct msm_cvp_hfi_defs cvp_hfi_defs_v2[MAX_PKT_IDX] = {
 			.resp = HAL_NO_RESP,
 			.name = "HFI_CMD_SESSION_EVA_SCALER_CONFIG",
 		},
-	[HFI_CMD_SESSION_EVA_DESCRIPTOR_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DESCRIPTOR_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DESCRIPTOR_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_DESCRIPTOR_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET
-								+ CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DESCRIPTOR_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DESCRIPTOR_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_DLFD_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DLFD_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DLFD_FRAME",
-		},
-	[HFI_CMD_SESSION_EVA_DLFD_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DLFD_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DLFD_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_DLFL_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DLFL_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DLFL_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_DLFL_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DLFL_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DLFL_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_DME_ONLY_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DME_ONLY_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DME_ONLY_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_DME_ONLY_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_DME_ONLY_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_DME_ONLY_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_GME_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_GME_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_GME_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_GME_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_GME_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_GME_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_LME_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_LME_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_LME_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_LME_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_LME_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_CVP_LME_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_EVA_SPSTAT_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_SPSTAT_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_SPSTAT_CONFIG",
-		},
-	[HFI_CMD_SESSION_EVA_SPSTAT_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_EVA_SPSTAT_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "HFI_CMD_SESSION_EVA_SPSTAT_FRAME",
-			.force_kernel_fence = false,
-		},
-	[HFI_CMD_SESSION_CVP_FPX_CONFIG - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_FPX_CONFIG,
-			.is_config_pkt = true,
-			.resp = HAL_NO_RESP,
-			.name = "FPX_CONFIG",
-		},
-	[HFI_CMD_SESSION_CVP_FPX_FRAME - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET] = {
-			.size = 0xFFFFFFFF,
-			.type = HFI_CMD_SESSION_CVP_FPX_FRAME,
-			.is_config_pkt = false,
-			.resp = HAL_NO_RESP,
-			.name = "FPX_FRAME",
-			.force_kernel_fence = false,
-		},
-
 };
 
 /*
  * Below are for msg packet
  */
 struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX] = {
-	[HFI_MSG_SESSION_CVP_FPX - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_FPX,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_FPX",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_SET_BUFFERS - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_SET_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_SET_BUFFERS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_RELEASE_BUFFERS  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_RELEASE_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_RELEASE_BUFFERS ",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_DFS - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_DFS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_DFS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_NCC - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_NCC,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_NCC",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_SPSTAT - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_SPSTAT,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_SPSTAT",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_DME - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_DME,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_DME",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_DME_ONLY - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_DME_ONLY,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_DME_ONLY",
-		.force_kernel_fence = false,
-	},
 	[HFI_MSG_SESSION_CVP_OPERATION_CONFIG  - HFI_MSG_SESSION_EVA_OFFSET] = {
 		.size = 0xFFFFFFFF,
 		.type = HFI_MSG_SESSION_CVP_OPERATION_CONFIG,
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_CVP_OPERATION_CONFIG",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_SET_PERSIST_BUFFERS  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-							+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_SET_PERSIST_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_SET_PERSIST_BUFFERS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_RELEASE_PERSIST_BUFFERS  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-							+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_RELEASE_PERSIST_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_RELEASE_PERSIST_BUFFERS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_SGM_OF  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_SGM_OF,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_SGM_OF",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_GCE  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_GCE,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_OPERATION_CONFIG",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_WARP_NCC  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_WARP_NCC,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_WARP_NCC",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_DMM  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_DMM,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_DMM",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_SGM_DFS  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_SGM_DFS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_SGM_DFS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_SET_SNAPSHOT_BUFFERS  - HFI_MSG_SESSION_EVA_OFFSET] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_SET_SNAPSHOT_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_SET_SNAPSHOT_BUFFERS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS  - HFI_MSG_SESSION_EVA_OFFSET] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_RELEASE_SNAPSHOT_BUFFERS",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY  - HFI_MSG_SESSION_EVA_OFFSET] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_WARP  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_WARP,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_WARP",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_LME   - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_LME,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_LME",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_FLUSH  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_FLUSH,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_FLUSH",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_START_DONE  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_START_DONE,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_START_DONE",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_STOP_DONE  - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_STOP_DONE,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_STOP_DONE",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_CVP_PYS_HCD  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_PYS_HCD,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_PYS_HCD",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_DESCRIPTOR  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_DESCRIPTOR,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_DESCRIPTOR",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_MATCH  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_MATCH,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_MATCH",
-		.force_kernel_fence = false,
-	},
-	[HFI_MSG_SESSION_EVA_GME  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_EVA_GME,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_EVA_GME",
-		.force_kernel_fence = false,
 	},
 	[HFI_MSG_SESSION_EVA_SCALER  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
 		.size = 0xFFFFFFFF,
@@ -976,98 +317,63 @@ struct msm_cvp_hfi_defs cvp_hfi_msg_defs_v2[MAX_PKT_IDX] = {
 		.is_config_pkt = false,
 		.resp = HAL_NO_RESP,
 		.name = "HFI_MSG_SESSION_EVA_SCALER",
-		.force_kernel_fence = false,
 	},
-	[HFI_MSG_SESSION_CVP_FPX  - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX] = {
-		.size = 0xFFFFFFFF,
-		.type = HFI_MSG_SESSION_CVP_FPX,
-		.is_config_pkt = false,
-		.resp = HAL_NO_RESP,
-		.name = "HFI_MSG_SESSION_CVP_FPX",
-		.force_kernel_fence = false,
-	}
 };
 
 int get_pkt_index(struct cvp_hal_session_cmd_pkt *hdr)
 {
-	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
-	uint32_t hfi_ver = pdata->hfi_ver;
+	int pkt_idx;
+	u32 thirteenth_bit;
+	u32 fourteenth_bit;
 
-	if (hfi_ver == 1) {
-		if (!hdr || (hdr->packet_type < HFI_CMD_SESSION_CVP_START)
-			|| hdr->packet_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-			return -EINVAL;
-
-		if (cvp_hfi_defs[hdr->packet_type - HFI_CMD_SESSION_CVP_START].size)
-			return (hdr->packet_type - HFI_CMD_SESSION_CVP_START);
-
+	if (!hdr)
 		return -EINVAL;
-	} else {
-		int pkt_idx;
-		u32 thirteenth_bit;
-		u32 fourteenth_bit;
 
-		if (!hdr)
-			return -EINVAL;
+	thirteenth_bit = (hdr->packet_type >> 12) & 1;
+	fourteenth_bit = (hdr->packet_type >> 13) & 1;
 
-		thirteenth_bit = (hdr->packet_type >> 12) & 1;
-		fourteenth_bit = (hdr->packet_type >> 13) & 1;
+	if (thirteenth_bit && fourteenth_bit)
+		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
+	else if (!thirteenth_bit && fourteenth_bit)
+		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
+	else if (thirteenth_bit && !fourteenth_bit)
+		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
+	else
+		pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
 
-		if (thirteenth_bit && fourteenth_bit)
-			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
-		else if (!thirteenth_bit && fourteenth_bit)
-			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
-		else if (thirteenth_bit && !fourteenth_bit)
-			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
-		else
-			pkt_idx = hdr->packet_type - HFI_CMD_SESSION_EVA_OFFSET;
-
-		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-			return -EINVAL;
-
-		if (cvp_hfi_defs[pkt_idx].size)
-			return pkt_idx;
-
+	if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
 		return -EINVAL;
-	}
+
+	if (cvp_hfi_defs[pkt_idx].size)
+		return pkt_idx;
+
+	return -EINVAL;
+	
 }
 
 int get_pkt_index_from_type(u32 pkt_type)
 {
-	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
-	uint32_t hfi_ver = pdata->hfi_ver;
+	int pkt_idx;
+	u32 thirteenth_bit;
+	u32 fourteenth_bit;
 
-	if (hfi_ver == 1) {
-		if ((pkt_type < HFI_CMD_SESSION_CVP_START) ||
-			pkt_type >= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-			return -EINVAL;
+	thirteenth_bit = (pkt_type >> 12) & 1;
+	fourteenth_bit = (pkt_type >> 13) & 1;
 
-		if (cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].size)
-			return (pkt_type - HFI_CMD_SESSION_CVP_START);
-	} else {
-		int pkt_idx;
-		u32 thirteenth_bit;
-		u32 fourteenth_bit;
+	if (thirteenth_bit && fourteenth_bit)
+		pkt_idx = pkt_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
+	else if (!thirteenth_bit && fourteenth_bit)
+		pkt_idx = pkt_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
+	else if (thirteenth_bit && !fourteenth_bit)
+		pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
+	else
+		pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_OFFSET;
 
-		thirteenth_bit = (pkt_type >> 12) & 1;
-		fourteenth_bit = (pkt_type >> 13) & 1;
+	if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+		return -EINVAL;
 
-		if (thirteenth_bit && fourteenth_bit)
-			pkt_idx = pkt_type - HFI_CMD_SESSION_FRAME_OFFSET + FRAME_OFFSET;
-		else if (!thirteenth_bit && fourteenth_bit)
-			pkt_idx = pkt_type - HFI_CMD_SESSION_CONFIG_OFFSET + CONFIG_OFFSET;
-		else if (thirteenth_bit && !fourteenth_bit)
-			pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_CTRL_OFFSET + CTRL_OFFSET;
-		else
-			pkt_idx = pkt_type - HFI_CMD_SESSION_EVA_OFFSET;
-
-		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-			return -EINVAL;
-
-		if (cvp_hfi_defs[pkt_idx].size)
-			return pkt_idx;
-	}
-
+	if (cvp_hfi_defs[pkt_idx].size)
+		return pkt_idx;
 	return -EINVAL;
 }
 
@@ -1086,120 +392,43 @@ bool is_config_pkt(struct cvp_hal_session_cmd_pkt *hdr)
 
 const char *get_pkt_name_from_type(u32 pkt_type)
 {
-	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
-	uint32_t hfi_ver = pdata->hfi_ver;
+	u32 mask;
+	int pkt_idx;
 
-	if (hfi_ver == 1) {
-		if (pkt_type > HFI_CMD_SESSION_CVP_START &&
-			pkt_type <= (HFI_CMD_SESSION_CVP_START + MAX_PKT_IDX))
-			return cvp_hfi_defs[pkt_type - HFI_CMD_SESSION_CVP_START].name;
-		else if (pkt_type > HFI_MSG_SESSION_CVP_START &&
-			pkt_type <= (HFI_MSG_SESSION_CVP_START + MAX_PKT_IDX))
-			return cvp_hfi_msg_defs[pkt_type - HFI_MSG_SESSION_CVP_START].name;
-		else
+	if ((pkt_type & 0x03000000) == HFI_CMD_OFFSET) {
+		int pkt_idx = get_pkt_index_from_type(pkt_type);
+
+		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
 			return "";
-	} else {
-		u32 mask;
-		int pkt_idx;
+		else
+			return cvp_hfi_defs[pkt_idx].name;
+	} else if (((pkt_type & 0x03000000) == HFI_MSG_OFFSET)) {
+		mask = pkt_type & 0x3000;
+		pkt_idx = -EINVAL;
 
-		if ((pkt_type & 0x03000000) == HFI_CMD_OFFSET) {
-			int pkt_idx = get_pkt_index_from_type(pkt_type);
+		if (mask == 0x3000)
+			pkt_idx = pkt_type - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX;
+		else if (mask == 0x1000)
+			pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_CTRL_OFFSET
+				+ MSG_SESSION_EVA_CTRL_INDEX;
+		else if (mask == 0)
+			pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_OFFSET;
 
-			if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-				return "";
-			else
-				return cvp_hfi_defs[pkt_idx].name;
-		} else if (((pkt_type & 0x03000000) == HFI_MSG_OFFSET)) {
-			mask = pkt_type & 0x3000;
-			pkt_idx = -EINVAL;
-
-			if (mask == 0x3000)
-				pkt_idx = pkt_type - HFI_MSG_SESSION_OFFSET + MSG_SESSION_INDEX;
-			else if (mask == 0x1000)
-				pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_CTRL_OFFSET
-					+ MSG_SESSION_EVA_CTRL_INDEX;
-			else if (mask == 0)
-				pkt_idx = pkt_type - HFI_MSG_SESSION_EVA_OFFSET;
-
-			if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
-				return "";
-			else
-				return cvp_hfi_msg_defs[pkt_idx].name;
-		}
-		return "";
+		if ((pkt_idx < 0) || pkt_idx >= (MAX_PKT_IDX))
+			return "";
+		else
+			return cvp_hfi_msg_defs[pkt_idx].name;
 	}
-}
-
-const char *get_feature_name_from_type(u32 pkt_type)
-{
-	switch (pkt_type) {
-	case HFI_CV_KERNEL_FPX:
-		return "FPX";
-	case HFI_CV_KERNEL_WARP:
-		return "WARP";
-	case HFI_CV_KERNEL_DESCRIPTOR:
-		return "DESCRIPTOR";
-	case HFI_CV_KERNEL_NCC:
-		return "NCC";
-	case HFI_CV_KERNEL_DFS:
-		return "DFS";
-	case HFI_CV_KERNEL_WARP_NCC:
-		return "WARP NCC";
-	case HFI_CV_KERNEL_ORB:
-		return "ORB";
-	case HFI_CV_KERNEL_PYS_HCD:
-		return "Pyramid HCD";
-	case HFI_CV_KERNEL_ICA:
-		return "ICA";
-	case HFI_CV_KERNEL_GCX:
-		return "GSX";
-	case HFI_CV_KERNEL_XRA:
-		return "XRA";
-	case HFI_CV_KERNEL_CSC:
-		return "CSC";
-	case HFI_CV_KERNEL_LSR:
-		return "LSR";
-	case HFI_CV_KERNEL_ITOF:
-		return "ITOF";
-	case HFI_CV_KERNEL_RGE:
-		return "RGE";
-	case HFI_CV_KERNEL_LME:
-		return "LME";
-	case HFI_CV_KERNEL_SPSTAT:
-		return "Spatial Stats";
-	case HFI_CV_KERNEL_GME:
-		return "GME";
-	case HFI_CV_KERNEL_SCALER:
-		return "SCALER";
-	case HFI_CV_KERNEL_MATCH:
-		return "MATCH";
-	case HFI_CV_KERNEL_BLOB:
-		return "BLOB";
-	default:
-		return " ";
-	}
+	return "";
 }
 
 MODULE_DEVICE_TABLE(of, msm_cvp_dt_match);
-
-int cvp_of_fdt_get_ddrtype(void)
-{
-#if defined(FIXED_DDR_TYPE) || defined(CVP_FIX_DDR_TYPE)
-	/* of_fdt_get_ddrtype() is usually unavailable during pre-sil */
-	return DDR_TYPE_LPDDR5;
-#else
-	// return of_fdt_get_ddrtype();
-	return DDR_TYPE_LPDDR5;
-#endif
-}
 
 void *cvp_get_drv_data(struct device *dev)
 {
 	struct msm_cvp_platform_data *driver_data;
 	const struct of_device_id *match;
 	uint32_t ddr_type = DDR_TYPE_LPDDR5;
-
-	driver_data = &default_data;
 
 	if (!IS_ENABLED(CONFIG_OF) || !dev->of_node)
 		goto exit;
@@ -1210,22 +439,6 @@ void *cvp_get_drv_data(struct device *dev)
 		return NULL;
 
 	driver_data = (struct msm_cvp_platform_data *)match->data;
-
-	if (!strcmp(match->compatible, "qcom,waipio-cvp")) {
-		ddr_type = cvp_of_fdt_get_ddrtype();
-		if (ddr_type == -ENOENT) {
-			dprintk(CVP_ERR,
-				"Failed to get ddr type, use LPDDR5\n");
-		}
-
-		if (driver_data->ubwc_config &&
-			(ddr_type == DDR_TYPE_LPDDR4 ||
-			ddr_type == DDR_TYPE_LPDDR4X))
-			driver_data->ubwc_config->highest_bank_bit = 15;
-		dprintk(CVP_CORE, "DDR Type 0x%x hbb 0x%x\n",
-			ddr_type, driver_data->ubwc_config ?
-			driver_data->ubwc_config->highest_bank_bit : -1);
-	}
 exit:
 	return driver_data;
 }

@@ -30,9 +30,6 @@ struct cvp_hfi_packetization_ops {
 		void *resource_value);
 	int (*sys_debug_config)(struct cvp_hfi_cmd_sys_set_property_packet *pkt,
 			u32 mode);
-	int (*sys_coverage_config)(
-			struct cvp_hfi_cmd_sys_set_property_packet *pkt,
-			u32 mode);
 	int (*sys_set_idle_indicator)(
 		struct cvp_hfi_cmd_sys_set_property_packet *pkt,
 		u32 mode);

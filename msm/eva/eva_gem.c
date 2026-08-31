@@ -347,16 +347,10 @@ struct dma_buf *eva_gem_export_dma_buf(struct eva_gem_obj *gobj)
 struct drm_gem_object *eva_gem_import_smem(struct msm_cvp_inst *inst, struct drm_device *dev,
 			struct cvp_buf_type *buf, enum eva_gem_type gem_type, u32 pkt_type)
 {
-	struct msm_cvp_core *core = eva_core_from_drm(dev);
 	struct eva_gem_obj *gem_obj;
 	struct msm_cvp_smem *smem;
 	struct dma_buf *dma_buf;
-	struct list_head *ptr;
-	struct list_head *next;
-	struct cvp_internal_buf *pbuf;
 	bool found_smem = true;
-	bool is_persist = true;
-	u32 *iova;
 	int rc;
 
 	dma_buf = msm_cvp_smem_get_dma_buf(buf->fd);
@@ -376,84 +370,7 @@ struct drm_gem_object *eva_gem_import_smem(struct msm_cvp_inst *inst, struct drm
 		}
 	}
 
-	/* equal to msm_cvp_session_get_smem is persist logic */
-	if( gem_type == EVA_GEM_USER_PERSIST ) {
-		// 1. find in perisst buf firstly
-		mutex_lock(&inst->persistbufs.lock);
-		if (!inst->persistbufs.list.next) {
-			mutex_unlock(&inst->persistbufs.lock);
-			return ERR_PTR(-EINVAL);
-		}
-		list_for_each_safe(ptr, next, &inst->persistbufs.list) {
-			if (!ptr)
-				return ERR_PTR(-EINVAL);
-			pbuf = list_entry(ptr, struct cvp_internal_buf, list);
-			if (pbuf->gem == NULL)
-				continue;
-			gem_obj = to_eva_gem(pbuf->gem);
-			if (dma_buf == gem_obj->smem->dma_buf) {
-				atomic_sub(pbuf->size, &inst->persist_usage);
-				pbuf->size =
-					(pbuf->size >= buf->size) ?
-					pbuf->size : buf->size;
-				*iova = gem_obj->smem->device_addr + buf->offset;
-				atomic_add(pbuf->size, &inst->persist_usage);
-				print_persist_buffer_info(CVP_MEM, "MAP user persist",
-						pbuf->size, inst, NULL);
-				eva_gem_get(pbuf->gem);
-				dprintk(CVP_MEM,
-					"map persist Reuse fd %d, dma_buf %#llx\n",
-					pbuf->fd, gem_obj->smem->dma_buf);
-				mutex_unlock(&inst->persistbufs.lock);
-                dma_buf_put(dma_buf);
-				// gem_obj = NULL;
-				dprintk(CVP_WARN, "%s: user persist buf found", __func__);
-				return pbuf->gem;
-			}
-		}
-		mutex_unlock(&inst->persistbufs.lock);
-
-		// 2. created one if can't find in persistbufs
-		gem_obj = kzalloc(sizeof(*gem_obj), GFP_KERNEL);
-		if (!gem_obj)
-			return ERR_PTR(-ENOMEM);
-		drm_gem_private_object_init(dev, &gem_obj->base, PAGE_ALIGN(dma_buf->size));
-		gem_obj->base.funcs = &eva_gem_object_funcs;
-		gem_obj->inst = inst;
-		gem_obj->imported = true;
-		gem_obj->type = gem_type;
-		
-		smem = cvp_kmem_cache_zalloc(&cvp_driver->smem_cache, GFP_KERNEL);
-		if (!smem) {
-			dprintk(CVP_ERR, "%s: smem alloc failed", __func__);
-			return ERR_PTR(-ENOMEM);
-		}
-		
-		smem->dma_buf = dma_buf;
-		smem->pkt_type = pkt_type;
-		smem->cached = false;
-		smem->flags |= SMEM_PERSIST;
-		smem->fd = buf->fd;
-		smem->gem = &gem_obj->base;
-		gem_obj->smem = smem;
-		// atomic_inc(&smem->refcount); 
-
-		
-		rc = eva_gem_map_iova(gem_obj, &inst->core->resources);
-		if (rc) {
-			dprintk(CVP_ERR, "%s: iova map failed", __func__);
-			goto err_free_gem;
-		}
-		if (!IS_CVP_BUF_VALID(buf, smem)) {
-			rc = -EINVAL;
-			dprintk(CVP_ERR,
-			"%s: invalid buf %d %d fd %d dma 0x%llx %s %d type %#x\n",
-			__func__, buf->offset, buf->size, buf->fd,
-			dma_buf, dma_buf->name, dma_buf->size, pkt_type);
-			goto err_free_smem;
-		}
-	} 
-	else if (gem_type == EVA_GEM_FRAME) {
+	if (gem_type == EVA_GEM_FRAME) {
 		// 1. find one in dma-cache/persistbuf/frame, will automaticly add refcount
 		smem = msm_cvp_session_find_smem(inst, dma_buf, pkt_type);
 		// 2. else create one
@@ -478,8 +395,6 @@ struct drm_gem_object *eva_gem_import_smem(struct msm_cvp_inst *inst, struct drm
 			smem->gem = &gem_obj->base;
 			gem_obj->smem = smem;
 
-			if (is_params_pkt(pkt_type))
-				smem->flags |= SMEM_PERSIST;
 			// rc = msm_cvp_map_smem(inst, smem, "eva gem prime import");
 			// map iova will inc the refcount
 			rc = eva_gem_map_iova(gem_obj, &inst->core->resources);
@@ -640,7 +555,6 @@ void eva_gem_put(struct drm_gem_object *obj)
 	if (gobj->imported && gobj->type == EVA_GEM_FRAME) {
 		mutex_lock(&inst->dma_cache.lock);
 		if (atomic_dec_and_test(&gobj->smem->refcount)) {
-			print_smem(CVP_MEM, "Map dereference", inst, gobj->smem);
 			gobj->smem->buf_idx |= 0x10000000;
 		}
 		mutex_unlock(&inst->dma_cache.lock);
@@ -668,13 +582,6 @@ void eva_gem_get(struct drm_gem_object *obj)
 	} else {
 		drm_gem_object_get(obj);
 	}
-}
-
-int eva_gem_refcount_is_one(struct drm_gem_object *obj) {
-	if (kref_read(&obj->refcount) == 1)
-		return 1;
-	else
-		return 0;
 }
 
 #if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)

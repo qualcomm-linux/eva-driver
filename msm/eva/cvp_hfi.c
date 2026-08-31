@@ -97,29 +97,8 @@ static void power_off_iris2(struct iris_hfi_device *device);
 
 static int __set_ubwc_config(struct iris_hfi_device *device);
 
-static int __hwfence_regs_map(struct iris_hfi_device *device);
-static int __hwfence_regs_unmap(struct iris_hfi_device *device);
-
 static int __enable_power_domain(struct iris_hfi_device *device, const char *name);
 static int __disable_power_domain(struct iris_hfi_device *device, const char *name);
-
-static int cvp_iommu_map(struct iommu_domain* domain, unsigned long iova, phys_addr_t paddr, size_t size, int prot)
-{
-	int rc = 0;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
-	rc = iommu_map(domain, iova,
-		paddr,
-		size,
-		prot);
-#else
-	rc = iommu_map(domain, iova,
-		paddr,
-		size,
-		prot,
-		0);
-#endif
-	return rc;
-}
 
 static inline void __set_state(struct iris_hfi_device *device,
 		enum iris_hfi_state state)
@@ -146,17 +125,6 @@ unsigned long long get_aon_time(void)
         asm volatile("mrs %0, cntvct_el0" : "=r" (val));
 
         return val;
-}
-
-int get_hfi_version(void)
-{
-	struct msm_cvp_core *core;
-	struct iris_hfi_device *hfi;
-
-	core = cvp_driver->cvp_core;
-	hfi = (struct iris_hfi_device *)core->dev_ops->hfi_device_data;
-
-	return hfi->version;
 }
 
 unsigned int get_msg_size(struct cvp_hfi_msg_session_hdr *hdr)
@@ -600,38 +568,6 @@ int __read_tcsr_register(struct iris_hfi_device *device, u32 reg)
 	rmb();
 	dprintk(CVP_REG,
 		"TCSR Base addr: %pK, read from: %#x, value: %#x...\n",
-		base_addr, reg, rc);
-
-	return rc;
-}
-
-int __read_gcc_register(struct iris_hfi_device *device, u32 reg)
-{
-	int rc = 0;
-	u8 *base_addr;
-
-	if (!device) {
-		dprintk(CVP_ERR, "Invalid params: %pK\n", device);
-		return -EINVAL;
-	}
-
-	if (!device->power_enabled) {
-		dprintk(CVP_WARN,
-			"%s HFI Read register failed : Power is OFF\n",
-			__func__);
-		return -EINVAL;
-	}
-
-	base_addr = device->cvp_hal_data->gcc_reg_base;
-
-	rc = readl_relaxed(base_addr + reg);
-	/*
-	 * Memory barrier to make sure value is read correctly from the
-	 * register.
-	 */
-	rmb();
-	dprintk(CVP_REG,
-		"GCC Base addr: %pK, read from: %#x, value: %#x...\n",
 		base_addr, reg, rc);
 
 	return rc;
@@ -1125,26 +1061,6 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 
 	}
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)pkt;
-	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
-		u32 pkt_id = 0;
-		u64 aontimer = 0;
-		const char *command_name = "";
-		u32 session_id = 0;
-		u32 stream_idx = 0;
-		u64 transaction_id = 0;
-
-		session_id = cmd_hdr->header.session_id;
-		stream_idx = cmd_hdr->header.stream_idx;
-		transaction_id = cmd_hdr->header.client_data.transaction_id;
-		pkt_id  = cmd_hdr->header.packet_type;
-		command_name = get_pkt_name_from_type(pkt_id);
-		aontimer = get_aon_time();
-		dprintk(CVP_PERF,
-			"%s: msg packet %s sent to FW at aontimer %llx session_id 0x%x stream_idx 0x%x transaction_id 0x%x\n",
-			__func__, command_name, aontimer, session_id,
-			stream_idx, transaction_id);
-	}
-
 	msm_cvp_cmd_tracing_from_sw(cmd_hdr, "EVA_KMD_FWD_END");
 	return rc;
 }
@@ -1264,58 +1180,6 @@ static void __interface_queues_release(struct iris_hfi_device *device)
 #endif
 }
 
-static int __get_qdss_iommu_virtual_addr(struct iris_hfi_device *dev,
-		struct cvp_hfi_mem_map *mem_map,
-		struct iommu_domain *domain)
-{
-	int i;
-	int rc = 0;
-	dma_addr_t iova = QDSS_IOVA_START;
-	int num_entries = dev->res->qdss_addr_set.count;
-	struct addr_range *qdss_addr_tbl = dev->res->qdss_addr_set.addr_tbl;
-
-	if (!num_entries)
-		return -ENODATA;
-
-	for (i = 0; i < num_entries; i++) {
-		if (domain) {
-			rc = cvp_iommu_map(domain, iova,
-					qdss_addr_tbl[i].start,
-					qdss_addr_tbl[i].size,
-					IOMMU_READ | IOMMU_WRITE);
-			if (rc) {
-				dprintk(CVP_ERR,
-						"IOMMU QDSS mapping failed for addr %#x\n",
-						qdss_addr_tbl[i].start);
-				rc = -ENOMEM;
-				break;
-			}
-		} else {
-			iova =  qdss_addr_tbl[i].start;
-		}
-
-		mem_map[i].virtual_addr = (u32)iova;
-		mem_map[i].physical_addr = qdss_addr_tbl[i].start;
-		mem_map[i].size = qdss_addr_tbl[i].size;
-		mem_map[i].attr = 0x0;
-
-		iova += mem_map[i].size;
-	}
-
-	if (i < num_entries) {
-		dprintk(CVP_ERR,
-			"QDSS mapping failed, Freeing other entries %d\n", i);
-
-		for (--i; domain && i >= 0; i--) {
-			iommu_unmap(domain,
-				mem_map[i].virtual_addr,
-				mem_map[i].size);
-		}
-	}
-
-	return rc;
-}
-
 static void __setup_ucregion_memory_map(struct iris_hfi_device *device)
 {
 	__write_register(device, CVP_UC_REGION_ADDR,
@@ -1327,9 +1191,6 @@ static void __setup_ucregion_memory_map(struct iris_hfi_device *device)
 	if (device->sfr.align_device_addr)
 		__write_register(device, CVP_SFR_ADDR,
 				(u32)device->sfr.align_device_addr);
-	if (device->qdss.align_device_addr)
-		__write_register(device, CVP_MMAP_ADDR,
-				(u32)device->qdss.align_device_addr);
 }
 
 static void __hfi_queue_init(struct iris_hfi_device *dev)
@@ -1412,14 +1273,9 @@ static void __sfr_init(struct iris_hfi_device *dev)
 static int __interface_queues_init(struct iris_hfi_device *dev)
 {
 	int rc = 0;
-	struct cvp_hfi_mem_map_table *qdss;
-	struct cvp_hfi_mem_map *mem_map;
 	struct cvp_mem_addr *mem_addr;
-	int num_entries = dev->res->qdss_addr_set.count;
 	phys_addr_t fw_bias = 0;
 	size_t q_size;
-	unsigned long mem_map_table_base_addr;
-	struct context_bank_info *cb;
 	q_size = SHARED_QSIZE - ALIGNED_SFR_SIZE - ALIGNED_QDSS_SIZE;
 	mem_addr = &dev->mem_addr;
 	if (!is_iommu_present(dev->res))
@@ -1463,54 +1319,6 @@ hfi_queue_init:
 	}
 sfr_init:
 	__sfr_init(dev);
-
-	if (dev->qdss.align_virtual_addr)
-		goto dsp_hfi_queue_init;
-
-	if ((msm_cvp_fw_debug_mode & HFI_DEBUG_MODE_QDSS) && num_entries) {
-		rc = __smem_alloc(dev, mem_addr, ALIGNED_QDSS_SIZE, 1,
-				SMEM_UNCACHED, 0);
-		if (rc) {
-			dprintk(CVP_WARN,
-				"qdss_alloc_fail: QDSS messages logging will not work\n");
-			dev->qdss.align_device_addr = 0;
-		} else {
-			dev->qdss.align_device_addr =
-				mem_addr->align_device_addr - fw_bias;
-			dev->qdss.align_virtual_addr =
-				mem_addr->align_virtual_addr;
-			dev->qdss.mem_size = ALIGNED_QDSS_SIZE;
-			dev->qdss.mem_data = mem_addr->mem_data;
-		}
-	}
-
-
-	if (dev->qdss.align_virtual_addr) {
-		qdss =
-		(struct cvp_hfi_mem_map_table *)dev->qdss.align_virtual_addr;
-		qdss->mem_map_num_entries = num_entries;
-		mem_map_table_base_addr = dev->qdss.align_device_addr +
-			sizeof(struct cvp_hfi_mem_map_table);
-		qdss->mem_map_table_base_addr = mem_map_table_base_addr;
-
-		mem_map = (struct cvp_hfi_mem_map *)(qdss + 1);
-		cb = msm_cvp_smem_get_context_bank(dev->res, 0);
-		if (!cb) {
-			dprintk(CVP_ERR,
-				"%s: failed to get context bank\n", __func__);
-			return -EINVAL;
-		}
-
-		rc = __get_qdss_iommu_virtual_addr(dev, mem_map, cb->domain);
-		if (rc) {
-			dprintk(CVP_ERR,
-				"IOMMU mapping failed, Freeing qdss memdata\n");
-			__smem_free(dev, &dev->qdss.mem_data);
-			dev->qdss.align_virtual_addr = NULL;
-			dev->qdss.align_device_addr = 0;
-		}
-	}
-
 dsp_hfi_queue_init:
 	__setup_ucregion_memory_map(dev);
 	return 0;
@@ -1556,33 +1364,6 @@ static int __sys_set_idle_indicator(struct iris_hfi_device *device,
 		kfree(pkt);
 		return -ENOTEMPTY;
 	}
-	kfree(pkt);
-	return 0;
-}
-
-static int __sys_set_coverage(struct iris_hfi_device *device, u32 mode)
-{
-	int rc = 0;
-	struct cvp_hfi_cmd_sys_set_property_packet *pkt;
-
-	pkt = kzalloc(sizeof(struct cvp_hfi_cmd_sys_set_property_packet) + 2 * sizeof(u32),
-			GFP_KERNEL);
-
-	rc = call_hfi_pkt_op(device, sys_coverage_config,
-			pkt, mode);
-	if (rc) {
-		dprintk(CVP_WARN,
-			"Coverage mode setting to FW failed\n");
-		rc = -ENOTEMPTY;
-		goto fail_set_coverage;
-	}
-
-	if (__iface_cmdq_write(device, pkt)) {
-		dprintk(CVP_WARN, "Failed to send coverage pkt to f/w\n");
-		rc = -ENOTEMPTY;
-		goto fail_set_coverage;
-	}
-fail_set_coverage:
 	kfree(pkt);
 	return 0;
 }
@@ -1645,110 +1426,6 @@ void cvp_pm_qos_update(struct iris_hfi_device *device, bool vote_on)
 		}
 }
 
-static int __hwfence_regs_map(struct iris_hfi_device *device)
-{
-	int rc = 0;
-	struct context_bank_info *cb;
-
-	cb = msm_cvp_smem_get_context_bank(device->res, 0);
-	if (!cb) {
-		dprintk(CVP_ERR, "%s: fail to get cb\n", __func__);
-		return -EINVAL;
-	}
-
-	if (device->res->reg_mappings.ipclite_phyaddr != 0) {
-		rc = cvp_iommu_map(cb->domain,
-			device->res->reg_mappings.ipclite_iova,
-			device->res->reg_mappings.ipclite_phyaddr,
-			device->res->reg_mappings.ipclite_size,
-			IOMMU_READ | IOMMU_WRITE);
-		if (rc) {
-			dprintk(CVP_ERR, "map ipclite fail %d %#x %#x %#x\n",
-				rc, device->res->reg_mappings.ipclite_iova,
-				device->res->reg_mappings.ipclite_phyaddr,
-				device->res->reg_mappings.ipclite_size);
-			return rc;
-		}
-	}
-	if (device->res->reg_mappings.hwmutex_phyaddr != 0) {
-		rc = cvp_iommu_map(cb->domain,
-			device->res->reg_mappings.hwmutex_iova,
-			device->res->reg_mappings.hwmutex_phyaddr,
-			device->res->reg_mappings.hwmutex_size,
-			IOMMU_MMIO | IOMMU_READ | IOMMU_WRITE);
-		if (rc) {
-			dprintk(CVP_ERR, "map hwmutex fail %d %#x %#x %#x\n",
-				rc, device->res->reg_mappings.hwmutex_iova,
-				device->res->reg_mappings.hwmutex_phyaddr,
-				device->res->reg_mappings.hwmutex_size);
-			return rc;
-		}
-	}
-	if (device->res->reg_mappings.aon_phyaddr != 0) {
-		rc = cvp_iommu_map(cb->domain,
-			device->res->reg_mappings.aon_iova,
-			device->res->reg_mappings.aon_phyaddr,
-			device->res->reg_mappings.aon_size,
-			IOMMU_MMIO | IOMMU_READ | IOMMU_WRITE);
-		if (rc) {
-			dprintk(CVP_ERR, "map aon fail %d %#x %#x %#x\n",
-				rc, device->res->reg_mappings.aon_iova,
-				device->res->reg_mappings.aon_phyaddr,
-				device->res->reg_mappings.aon_size);
-			return rc;
-		}
-	}
-	if (device->res->reg_mappings.timer_phyaddr != 0) {
-		rc = cvp_iommu_map(cb->domain,
-			device->res->reg_mappings.timer_iova,
-			device->res->reg_mappings.timer_phyaddr,
-			device->res->reg_mappings.timer_size,
-			IOMMU_MMIO | IOMMU_READ | IOMMU_WRITE);
-		if (rc) {
-			dprintk(CVP_ERR, "map timer fail %d %#x %#x %#x\n",
-				rc, device->res->reg_mappings.timer_iova,
-				device->res->reg_mappings.timer_phyaddr,
-				device->res->reg_mappings.timer_size);
-			return rc;
-		}
-	}
-	return rc;
-}
-
-static int __hwfence_regs_unmap(struct iris_hfi_device *device)
-{
-	int rc = 0;
-	struct context_bank_info *cb;
-
-	cb = msm_cvp_smem_get_context_bank(device->res, 0);
-	if (!cb) {
-		dprintk(CVP_ERR, "%s: fail to get cb\n", __func__);
-		return -EINVAL;
-	}
-
-	if (device->res->reg_mappings.ipclite_iova != 0) {
-		iommu_unmap(cb->domain,
-			device->res->reg_mappings.ipclite_iova,
-			device->res->reg_mappings.ipclite_size);
-	}
-	if (device->res->reg_mappings.hwmutex_iova != 0) {
-		iommu_unmap(cb->domain,
-			device->res->reg_mappings.hwmutex_iova,
-			device->res->reg_mappings.hwmutex_size);
-	}
-	if (device->res->reg_mappings.aon_iova != 0) {
-		iommu_unmap(cb->domain,
-			device->res->reg_mappings.aon_iova,
-			device->res->reg_mappings.aon_size);
-	}
-	if (device->res->reg_mappings.timer_iova != 0) {
-		iommu_unmap(cb->domain,
-			device->res->reg_mappings.timer_iova,
-			device->res->reg_mappings.timer_size);
-	}
-	return rc;
-}
-
 static int iris_hfi_core_init(void *device)
 {
 	int rc = 0;
@@ -1779,8 +1456,6 @@ static int iris_hfi_core_init(void *device)
 
 	dev->bus_vote.data_count = 1;
 	dev->bus_vote.data->power_mode = CVP_POWER_TURBO;
-
-	__hwfence_regs_map(dev);
 
 	rc = __power_on_init(dev);
 	if (rc) {
@@ -1896,7 +1571,6 @@ err_core_init:
 	__set_state(dev, IRIS_STATE_DEINIT);
 	__unload_fw(dev);
 err_load_fw:
-	__hwfence_regs_unmap(dev);
 err_no_mem:
 	dprintk(CVP_ERR, "Core init failed\n");
 	mutex_unlock(&dev->lock);
@@ -1943,7 +1617,6 @@ static int iris_hfi_core_release(void *dev)
 	ipcc_iova = __read_register(device, CVP_MMAP_ADDR);
 	msm_cvp_unmap_ipcc_regs(ipcc_iova);
 	__unload_fw(device);
-	__hwfence_regs_unmap(device);
 
 
 	/* unlink all sessions from device */
@@ -2275,11 +1948,6 @@ static int iris_hfi_session_end(void *session)
 
 	mutex_lock(&device->lock);
 
-	if (msm_cvp_fw_coverage) {
-		if (__sys_set_coverage(sess->device, msm_cvp_fw_coverage))
-			dprintk(CVP_WARN, "Fw_coverage msg ON failed\n");
-	}
-
 	rc = __send_session_cmd(session, HFI_CMD_SYS_SESSION_END);
 
 	mutex_unlock(&device->lock);
@@ -2307,38 +1975,6 @@ static int iris_hfi_session_abort(void *sess)
 	mutex_unlock(&device->lock);
 
 	return rc;
-}
-
-static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
-{
-	unsigned long crc_value = 0;
-	unsigned int *pbuf      = NULL;
-	unsigned int idx        = 0;
-
-	if (!in_pkt) {
-		dprintk(CVP_ERR, "%s: invalid in_pkt\n", __func__);
-		return -1;
-	}
-
-	if (msm_cvp_fw_debug & HFI_DEBUG_CFG_BUF_CRC_EN) {
-		struct cvp_hfi_cmd_session_hdr *cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
-
-		pbuf                                    = (unsigned int *)in_pkt;
-
-		for (idx = 0; idx < (cmd_hdr->header.size / sizeof(unsigned int)); idx++) {
-			// 0xC is the offset for reserved2 which use to store packet crc
-			if (idx == HFI_CMD_CLIENT_DATA_RESERVE_2_OFFSET_IN_UWORD32)
-				continue;
-			crc_value += *(pbuf + idx);
-		}
-
-		cmd_hdr->header.client_data.reserved2 = (unsigned int)(crc_value & 0xFFFFFFFF);
-
-		dprintk(CVP_MEM, "%s - hfi crc 0x%x", __func__,
-			cmd_hdr->header.client_data.reserved2);
-	}
-
-	return 0;
 }
 
 static int iris_hfi_session_set_buffers(void *sess, u32 iova, u32 size)
@@ -2467,11 +2103,6 @@ static int iris_hfi_session_send(void *sess,
 		rc = -ECONNRESET;
 		goto err_send_pkt;
 	}
-
-	rc = cvp_add_hfi_crc(in_pkt);
-	if (rc)
-		dprintk(CVP_ERR, "%s: Failed to cvp_add_hfi_crc\n",
-			__func__);
 
 	rc = call_hfi_pkt_op(device, session_send,
 			session, in_pkt);
@@ -2860,7 +2491,6 @@ static void **get_session_id(struct msm_cvp_cb_info *info)
 	case HAL_SESSION_UNREGISTER_BUFFER_DONE:
 	case HAL_SESSION_PROPERTY_INFO:
 	case HAL_SESSION_EVENT_CHANGE:
-	case HAL_SESSION_DUMP_NOTIFY:
 	case HAL_SESSION_ERROR:
 		session_id = &info->response.cmd.session_id;
 		break;
@@ -2915,29 +2545,8 @@ int __response_handler(struct iris_hfi_device *device)
 	while (!__iface_msgq_read(device, raw_packet)) {
 		void **session_id = NULL;
 		struct msm_cvp_cb_info *info = &packets[packet_count++];
-		struct cvp_hfi_msg_session_hdr *hdr =
-			(struct cvp_hfi_msg_session_hdr *)raw_packet;
 		int rc = 0;
 		core->last_msg_ts = ktime_get();
-		if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
-			u32 pkt_id = 0;
-			u64 aontimer = 0;
-			const char *command_name = "";
-			u32 session_id = 0;
-			u32 stream_idx = 0;
-			u64 transaction_id = 0;
-
-			session_id = hdr->header.session_id;
-			stream_idx = hdr->header.stream_idx;
-			transaction_id = hdr->header.client_data.transaction_id;
-			pkt_id  = hdr->header.packet_type;
-			command_name = get_pkt_name_from_type(pkt_id);
-			aontimer = get_aon_time();
-			dprintk(CVP_PERF,
-				"%s: msg packet %s received from fw at aontimer %llx session_id 0x%x, stream_idx 0x%x transaction_id 0x%x\n",
-				__func__, command_name, aontimer, session_id,
-				stream_idx, transaction_id);
-		}
 		rc = cvp_hfi_process_msg_packet(0, raw_packet, info);
 		if (rc) {
 			dprintk(CVP_WARN,
@@ -3150,146 +2759,6 @@ skip_reset_init:
 	return rc;
 }
 
-int __reset_control_assert_name(struct iris_hfi_device *device,
-	const char *name)
-{
-	struct reset_info *rcinfo = NULL;
-	int rc = 0;
-	bool found = false;
-
-	iris_hfi_for_each_reset_clock(device, rcinfo) {
-		if (strcmp(rcinfo->name, name))
-			continue;
-
-		found = true;
-		rc = reset_control_assert(rcinfo->rst);
-		if (rc)
-			dprintk(CVP_ERR,
-				"%s: failed to assert reset control (%s), rc = %d\n",
-				__func__, rcinfo->name, rc);
-		else
-			dprintk(CVP_PWR, "%s: assert reset control (%s)\n",
-				__func__, rcinfo->name);
-		break;
-	}
-	if (!found) {
-		dprintk(CVP_PWR, "%s: reset control (%s) not found\n",
-			__func__, name);
-		rc = -EINVAL;
-	}
-
-	return rc;
-}
-
-int __reset_control_deassert_name(struct iris_hfi_device *device,
-	const char *name)
-{
-	struct reset_info *rcinfo = NULL;
-	int rc = 0;
-	bool found = false;
-
-	iris_hfi_for_each_reset_clock(device, rcinfo) {
-		if (strcmp(rcinfo->name, name))
-			continue;
-		found = true;
-		rc = reset_control_deassert(rcinfo->rst);
-		if (rc)
-			dprintk(CVP_ERR, 
-				"%s: deassert reset control for (%s) failed, rc %d\n",
-				__func__, rcinfo->name, rc);
-		else
-			dprintk(CVP_PWR, "%s: deassert reset control (%s)\n",
-				__func__, rcinfo->name);
-		break;
-	}
-	if (!found) {
-		dprintk(CVP_PWR, "%s: reset control (%s) not found\n",
-			__func__, name);
-		rc = -EINVAL;
-	}
-
-	return rc;
-}
-
-int __reset_control_acquire(struct iris_hfi_device *device,
-	const char *name)
-{
-	struct reset_info *rcinfo = NULL;
-	int rc = 0;
-	bool found = false;
-	int max_retries = 10;
-
-	iris_hfi_for_each_reset_clock(device, rcinfo) {
-		if (strcmp(rcinfo->name, name))
-			continue;
-		found = true;
-		if (rcinfo->state == RESET_ACQUIRED)
-			return rc;
-acquire_again:
-		rc = reset_control_acquire(rcinfo->rst);
-		if (rc) {
-			if (rc == -EBUSY) {
-				usleep_range(500, 1000);
-				max_retries--;
-				if (max_retries) {
-					goto acquire_again;
-				} else {
-					dprintk(CVP_ERR,
-						"%s acquire %s -EBUSY\n",
-					        __func__, rcinfo->name);
-					rc = -EINVAL;
-				}
-			} else {
-				dprintk(CVP_ERR,
-					"%s: acquire failed (%s) rc %d\n",
-					__func__, rcinfo->name, rc);
-				rc = -EINVAL;
-			}
-		} else {
-			dprintk(CVP_PWR, "%s: reset acquire succeed (%s)\n",
-				__func__, rcinfo->name);
-			rcinfo->state = RESET_ACQUIRED;
-		}
-		break;
-	}
-	if (!found) {
-		dprintk(CVP_PWR, "%s: reset control (%s) not found\n",
-			__func__, name);
-		rc = -EINVAL;
-	}
-
-	return rc;
-}
-
-int __reset_control_release(struct iris_hfi_device *device,
-	const char *name)
-{
-	struct reset_info *rcinfo = NULL;
-	int rc = 0;
-	bool found = false;
-
-	iris_hfi_for_each_reset_clock(device, rcinfo) {
-		if (strcmp(rcinfo->name, name))
-			continue;
-		found = true;
-		if (rcinfo->state != RESET_ACQUIRED) {
-			dprintk(CVP_WARN, "Double releasing reset clk?\n");
-			return -EINVAL;
-		}
-		reset_control_release(rcinfo->rst);
-		dprintk(CVP_PWR, "%s: reset release succeed (%s)\n",
-			__func__, rcinfo->name);
-		rcinfo->state = RESET_RELEASED;
-		break;
-	}
-	if (!found) {
-		dprintk(CVP_PWR, "%s: reset control (%s) not found\n",
-			__func__, name);
-		rc = -EINVAL;
-	}
-
-	return rc;
-}
 static void __deinit_bus(struct iris_hfi_device *device)
 {
 	struct bus_info *bus = NULL;
@@ -4099,50 +3568,6 @@ static void __unload_fw(struct iris_hfi_device *device)
 	dprintk(CVP_WARN, "Firmware unloaded\n");
 }
 
-static int iris_hfi_get_fw_info(void *dev, struct cvp_hal_fw_info *fw_info)
-{
-	int i = 0;
-	struct iris_hfi_device *device = dev;
-
-	if (!device || !fw_info) {
-		dprintk(CVP_ERR,
-			"%s Invalid parameter: device = %pK fw_info = %pK\n",
-			__func__, device, fw_info);
-		return -EINVAL;
-	}
-
-	mutex_lock(&device->lock);
-
-	while (cvp_driver->fw_version[i++] != 'V' && i < CVP_VERSION_LENGTH)
-		;
-
-	if (i == CVP_VERSION_LENGTH - 1) {
-		dprintk(CVP_WARN, "Iris version string is not proper\n");
-		fw_info->version[0] = '\0';
-		goto fail_version_string;
-	}
-
-	memcpy(&fw_info->version[0], &cvp_driver->fw_version[0],
-			CVP_VERSION_LENGTH);
-	fw_info->version[CVP_VERSION_LENGTH - 1] = '\0';
-
-fail_version_string:
-	dprintk(CVP_CORE, "F/W version retrieved : %s\n", fw_info->version);
-	fw_info->base_addr = device->cvp_hal_data->firmware_base;
-	fw_info->register_base = device->res->register_base;
-	fw_info->register_size = device->cvp_hal_data->register_size;
-	fw_info->irq = device->cvp_hal_data->irq;
-
-	mutex_unlock(&device->lock);
-	return 0;
-}
-
-static int iris_hfi_get_core_capabilities(void *dev)
-{
-	dprintk(CVP_CORE, "%s not supported yet!\n", __func__);
-	return 0;
-}
-
 static int __initialize_packetization(struct iris_hfi_device *device)
 {
 	int rc = 0;
@@ -4254,16 +3679,6 @@ static int _vm_init_reg_and_irq(struct iris_hfi_device *device,
 		dprintk(CVP_ERR,
 		"could not map DDR reg addr %pa of size %d\n",
 		TCSR_REG_BASE, TCSR_REG_SIZE);
-	}
-
-	if (res->gcc_reg_base) {
-		hal->gcc_reg_base = devm_ioremap(&res->pdev->dev,
-				res->gcc_reg_base, res->gcc_reg_size);
-		hal->gcc_reg_size = res->gcc_reg_size;
-		if (!hal->gcc_reg_base)
-			dprintk(CVP_ERR,
-				"could not map gcc reg addr %pa of size %d\n",
-				&res->gcc_reg_base, res->gcc_reg_size);
 	}
 
 	device->cvp_hal_data = hal;
@@ -4405,7 +3820,6 @@ void cvp_iris_hfi_delete_device(void *device)
 
 	free_irq(dev->cvp_hal_data->irq, dev);
 	iounmap(dev->cvp_hal_data->register_base);
-	iounmap(dev->cvp_hal_data->gcc_reg_base);
 	kfree(dev->cvp_hal_data);
 	kfree(dev->response_pkt);
 	kfree(dev->raw_packet);
@@ -4432,9 +3846,6 @@ static int iris_hfi_validate_session(void *sess, const char *func)
 	return rc;
 }
 
-
-
-
 static void iris_init_hfi_callbacks(struct cvp_hfi_ops *ops_tbl)
 {
 	ops_tbl->core_init = iris_hfi_core_init;
@@ -4452,8 +3863,6 @@ static void iris_init_hfi_callbacks(struct cvp_hfi_ops *ops_tbl)
 	ops_tbl->session_flush = iris_hfi_session_flush;
 	ops_tbl->scale_clocks = iris_hfi_scale_clocks;
 	ops_tbl->vote_bus = iris_hfi_vote_buses;
-	ops_tbl->get_fw_info = iris_hfi_get_fw_info;
-	ops_tbl->get_core_capabilities = iris_hfi_get_core_capabilities;
 	ops_tbl->suspend = iris_hfi_suspend;
 	ops_tbl->resume = iris_hfi_resume;
 	ops_tbl->validate_session = iris_hfi_validate_session;

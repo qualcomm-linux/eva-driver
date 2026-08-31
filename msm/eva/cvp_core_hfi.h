@@ -199,10 +199,8 @@ struct cvp_hal_data {
 	u32 irq_wd;
 	phys_addr_t firmware_base;
 	u8 __iomem *register_base;
-	u8 __iomem *gcc_reg_base;
 	u8 __iomem *tcsr_reg_base;
 	u32 register_size;
-	u32 gcc_reg_size;
 };
 
 struct iris_resources {
@@ -238,7 +236,6 @@ struct cvp_hal_ops {
 	int (*power_on_core)(struct iris_hfi_device *device);
 	int (*check_ctl_power_on)(struct iris_hfi_device *device);
 	int (*check_core_power_on)(struct iris_hfi_device *device);
-	void (*print_sbm_regs)(struct iris_hfi_device *device);
 	int (*set_registers)(struct iris_hfi_device *device);
 	int (*enable_hw_power_collapse)(struct iris_hfi_device *device);
 	void (*check_tensilica_in_reset)(struct iris_hfi_device *device);
@@ -261,7 +258,6 @@ struct iris_hfi_device {
 	struct mutex lock;
 	msm_cvp_callback callback;
 	struct cvp_mem_addr iface_q_table;
-	struct cvp_mem_addr qdss;
 	struct cvp_mem_addr sfr;
 	struct cvp_mem_addr mem_addr;
 	struct cvp_iface_q_info iface_queues[CVP_IFACEQ_NUMQ];

@@ -20,9 +20,6 @@
 #define CREATE_TRACE_POINTS
 #include "msm_cvp_events.h"
 
-#define TZ_SUBSYS_STATE_SID_EVA      0xCEDE1
-#define TZ_SUBSYS_STATE_SID_CAMERA     0xCEDE2
-
 static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 	struct eva_kmd_hfi_packet *in_pkt,
 	unsigned int in_offset,
@@ -56,6 +53,7 @@ int msm_cvp_get_session_info(struct msm_cvp_inst *inst, u32 *session)
 	struct msm_cvp_core *core = NULL;
 
 	CVPKERNEL_ATRACE_BEGIN("msm_cvp_get_session_info");
+	dprintk(CVP_WARN, "%s: invoked");
 
 	if (!inst || !session) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
@@ -133,12 +131,9 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 				struct eva_kmd_hfi_packet *out)
 {
 	struct cvp_session_msg *msg = NULL;
-	struct cvp_hfi_msg_session_hdr_old_format *hdr_v1;
 	struct cvp_hfi_msg_session_hdr *hdr;
-	struct msm_cvp_platform_data *pdata;
 	int rc = 0;
 
-	pdata = cvp_driver->cvp_core->platform_data;
 	CVPKERNEL_ATRACE_BEGIN("cvp_wait_process_message");
 
 	if (!inst) {
@@ -177,21 +172,13 @@ static int cvp_wait_process_message(struct msm_cvp_inst *inst,
 		goto exit;
 	}
 
-	if (pdata->hfi_ver == 1) {
-		hdr_v1 = (struct cvp_hfi_msg_session_hdr_old_format *)&msg->pkt;
-		CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
-		memcpy(out, &msg->pkt, sizeof(struct cvp_hfi_msg_session_hdr_old_format));
-		CVPKERNEL_ATRACE_END("before and after memcpy");
-		if (hdr_v1->client_data.kdata >= MAX_PKT_IDX)
-			msm_cvp_unmap_frame(inst, hdr_v1->client_data.kdata);
-	} else {
-		hdr = (struct cvp_hfi_msg_session_hdr *)&msg->pkt;
-		CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
-		memcpy(out, &msg->pkt, get_msg_size(hdr));
-		CVPKERNEL_ATRACE_END("before and after memcpy");
-		if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
-			msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
-	}
+	hdr = (struct cvp_hfi_msg_session_hdr *)&msg->pkt;
+	CVPKERNEL_ATRACE_BEGIN("before and after memcpy");
+	memcpy(out, &msg->pkt, get_msg_size(hdr));
+	CVPKERNEL_ATRACE_END("before and after memcpy");
+	if (hdr->header.client_data.kdata >= MAX_PKT_IDX)
+		msm_cvp_unmap_frame(inst, hdr->header.client_data.kdata);
+	
 	cvp_kmem_cache_free(&cvp_driver->msg_cache, msg);
 
 exit:
@@ -232,25 +219,6 @@ int msm_cvp_session_receive_hfi(struct msm_cvp_inst *inst,
 	rc = cvp_wait_process_message(inst, sq, NULL, wait_time, out_pkt);
 
 	msg_hdr = (struct cvp_hfi_msg_session_hdr *)out_pkt;
-	if ((msm_cvp_debug & CVP_PERF) == CVP_PERF) {
-		u32 pkt_id = 0;
-		u64 aontimer = 0;
-		const char *command_name = "";
-		u32 session_id = 0;
-		u32 stream_idx = 0;
-		u64 transaction_id = 0;
-
-		session_id = msg_hdr->header.session_id;
-		stream_idx = msg_hdr->header.stream_idx;
-		transaction_id = msg_hdr->header.client_data.transaction_id;
-		pkt_id  = msg_hdr->header.packet_type;
-		command_name = get_pkt_name_from_type(pkt_id);
-		aontimer = get_aon_time();
-		dprintk(CVP_PERF,
-			"%s: msg packet %s sent back to umd at aontimer %llu session_id 0x%x, stream_idx 0x%x transaction_id 0x%x\n",
-			__func__, command_name, aontimer, session_id,
-			stream_idx, transaction_id);
-	}
 	msm_cvp_msg_tracing_from_sw(msg_hdr, "EVA_KMD_REV_END");
 
 	cvp_put_inst(inst);
@@ -383,11 +351,7 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 {
 	struct cvp_hfi_ops *ops_tbl;
 	struct cvp_hfi_cmd_session_hdr *cmd_hdr;
-	int pkt_type, rc = 0, i = 0;
-	enum buf_map_type map_type;
-	uint32_t *fd_arr = NULL;
-	unsigned int offset = 0;
-	struct cvp_buf_type *buf;
+	int rc = 0;
 
 	CVPKERNEL_ATRACE_BEGIN("cvp_enqueue_pkt");
 
@@ -401,33 +365,11 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 
 	ops_tbl = inst->core->dev_ops;
 
-	pkt_type = in_pkt->pkt_data[1];
-	map_type = cvp_find_map_type(pkt_type);
-
 	cmd_hdr = (struct cvp_hfi_cmd_session_hdr *)in_pkt;
 	/* The kdata will be overriden by transaction ID if the cmd has buf */
 	cmd_hdr->header.client_data.kdata = 0;
-	dprintk(CVP_CMD, "%s: pkt_type %08x sess_id %08x trans_id %u ktid %llx\n",
-		__func__, cmd_hdr->header.packet_type,
-		cmd_hdr->header.session_id,
-		cmd_hdr->header.client_data.transaction_id,
-		cmd_hdr->header.client_data.kdata & (FENCE_BIT - 1));
 
-	if (map_type == MAP_PERSIST) {
-		fd_arr = kcalloc(in_buf_num, sizeof(uint32_t), GFP_KERNEL);
-		if (!fd_arr) {
-			dprintk(CVP_ERR, "%s: fd array allocation failed\n", __func__);
-			rc = -ENOMEM;
-			goto exit;
-		} else {
-			memset((void *)fd_arr, -1, sizeof(uint32_t) * in_buf_num);
-		}
-		rc = msm_cvp_map_user_persist(inst, in_pkt, in_offset, in_buf_num, fd_arr);
-	} else if (map_type == UNMAP_PERSIST) {
-		rc = msm_cvp_unmap_user_persist(inst, in_pkt, in_offset, in_buf_num);
-	} else {
-		rc = msm_cvp_map_frame(inst, in_pkt, in_offset, in_buf_num);
-	}
+	rc = msm_cvp_map_frame(inst, in_pkt, in_offset, in_buf_num);
 
 	if (rc)
 		goto exit;
@@ -440,31 +382,11 @@ static int cvp_enqueue_pkt(struct msm_cvp_inst* inst,
 		dprintk(CVP_ERR,"%s: Failed in call_hfi_op %d, %x\n",
 				__func__, in_pkt->pkt_data[0],
 				in_pkt->pkt_data[1]);
-		if (map_type == MAP_FRAME) {
-			msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
-		} else if (map_type == MAP_PERSIST) {
-			offset = in_offset;
-			for (i = 0; i < in_buf_num; i++) {
-				/* Update the in_pkt s.t iova is replaced back with fd */
-				buf = (struct cvp_buf_type *)&in_pkt->pkt_data[offset];
-				offset += sizeof(*buf) >> 2;
-
-				if (offset > MAX_HFI_PKT_SIZE)
-					break;
-
-				if (!buf->size || fd_arr[i] < 0)
-					continue;
-
-				buf->fd = fd_arr[i];
-			}
-			rc = msm_cvp_unmap_user_persist(inst,
-					in_pkt, in_offset, in_buf_num);
-		}
+		msm_cvp_unmap_frame(inst, cmd_hdr->header.client_data.kdata);
+		
 	}
 	CVPKERNEL_ATRACE_END("cvp_enqueue_pkt");
 exit:
-	if (map_type == MAP_PERSIST)
-		kfree(fd_arr);
 	return rc;
 }
 
@@ -478,135 +400,6 @@ static inline int div_by_1dot5(unsigned int a)
 int msm_cvp_session_delete(struct msm_cvp_inst *inst)
 {
 	return 0;
-}
-
-#ifdef CVP_TZ
-static void msm_cvp_secure_concurrency_stop(struct msm_cvp_inst *inst,
-		enum cvp_session_state sess_state)
-{
-	struct cvp_hfi_ops *ops_tbl;
-	struct msm_cvp_core *core = NULL;
-	int stop_status = 0;
-	enum cvp_session_errorcode sess_ecode;
-	unsigned long flags = 0;
-	u64 ktid;
-
-	dprintk(CVP_WARN,
-		"Tear EVA secure sess, create secure CAM sess\n");
-	core = inst->core;
-	if (sess_state != SECURE_SESSION_ERROR) {
-		ops_tbl = core->dev_ops;
-		ktid = atomic64_inc_return(&inst->core->kernel_trans_id);
-		ktid &= (FENCE_BIT - 1);
-		stop_status = call_hfi_op(ops_tbl, session_stop,
-			(void *)inst->session, ktid);
-		if (stop_status)
-			dprintk(CVP_WARN,
-				"%s: stop session failed\n",
-				__func__, stop_status);
-		else {
-			//unlock mutex while waiting for stop response
-			//As core lock is used elsewhere.
-			mutex_unlock(&core->lock);
-			stop_status = wait_for_sess_signal_receipt(
-				inst,
-				HAL_SESSION_STOP_DONE);
-			if (stop_status) {
-				dprintk(CVP_WARN,
-					"%s: wait sess_stop fail rc %d\n",
-					__func__, stop_status);
-			}
-			//lock it back again.
-			mutex_lock(&core->lock);
-		}
-		//UMD to be informed irrespective of stop status to skip cmds from stale session
-		sess_state = SECURE_SESSION_ERROR;
-		sess_ecode = EVA_SECURE_SESSION_ERROR;
-		inst->session_error_code = (sess_state << 28) |
-			(sess_ecode << 16);
-		spin_lock_irqsave(&inst->event_handler.lock,
-			flags);
-		inst->event_handler.event = EVA_EVENT;
-		spin_unlock_irqrestore(
-			&inst->event_handler.lock,
-			flags);
-		wake_up_all(&inst->event_handler.wq);
-	} else {
-		dprintk(CVP_SESS,
-			"Session already stopped\n");
-	}
-}
-#endif
-
-static int msm_cvp_secure_sess_check(struct msm_cvp_inst *inst)
-{
-	int rc = 0;
-#ifdef CVP_TZ
-	struct msm_cvp_core *core = NULL;
-	struct msm_cvp_inst *active_inst = NULL;
-	enum cvp_session_state s_state;
-
-	if (!inst || !inst->core)
-		return -EINVAL;
-
-	if (inst->prop.is_secure) {
-		if (inst->prop.type == HFI_SESSION_CV) {
-			dprintk(CVP_WARN,
-				"Secure CV, failing create session");
-			rc = -EINVAL;
-			goto exit;
-		} else {
-			core = inst->core;
-			mutex_lock(&core->lock);
-			list_for_each_entry(active_inst, &core->instances, list) {
-				if (active_inst->prop.is_secure) {
-					s_state = (0xF0000000 &
-						active_inst->session_error_code) >> 28;
-					dprintk(CVP_SESS, "%s: s_state is %d\n",
-						__func__, s_state);
-					if (s_state == SECURE_SESSION_ERROR) {
-						dprintk(CVP_SESS,
-							"Invalid secure session");
-						continue;
-					}
-
-					if (inst->prop.type == active_inst->prop.type) {
-						dprintk(CVP_SESS,
-							"Allow new sess create, type %d\n",
-							inst->prop.type);
-						break;
-					} else if (inst->prop.type == HFI_SESSION_CV &&
-						active_inst->prop.type == HFI_SESSION_DMM) {
-						dprintk(CVP_WARN,
-							"Skip EVA secure, active secure CAM sess");
-						rc = -EINVAL;
-						break;
-					} else if (inst->prop.type == HFI_SESSION_DMM &&
-						active_inst->prop.type == HFI_SESSION_CV) {
-						msm_cvp_secure_concurrency_stop(active_inst,
-										s_state);
-					}
-				}
-			}
-			mutex_unlock(&core->lock);
-
-			if (rc == 0) {
-				dprintk(CVP_CORE, "Calling TZ SID begin with secure flag %d",
-					inst->prop.is_secure);
-				if (inst->prop.type == HFI_SESSION_CV) {
-					dprintk(CVP_CORE, "Calling TZ SID for OF");
-					__tzbsp_set_cvp_state(TZ_SUBSYS_STATE_SID_EVA);
-				} else if (inst->prop.type == HFI_SESSION_DMM) {
-					dprintk(CVP_CORE, "Calling TZ SID for DMM ");
-					__tzbsp_set_cvp_state(TZ_SUBSYS_STATE_SID_CAMERA);
-				}
-				dprintk(CVP_CORE, "Calling TZ SID end ");
-			}
-		}
-	}
-exit:
-#endif
-	return rc;
 }
 
 int msm_cvp_session_create(struct msm_cvp_inst *inst)
@@ -637,13 +430,6 @@ int msm_cvp_session_create(struct msm_cvp_inst *inst)
 	rc = msm_cvp_comm_try_state(inst, MSM_CVP_OPEN_DONE);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to move instance to open done state\n");
-		goto fail_create;
-	}
-
-	rc = msm_cvp_secure_sess_check(inst);
-	if (rc) {
-		dprintk(CVP_WARN,
-			"%s: Failed to create session\n", __func__);
 		goto fail_create;
 	}
 
@@ -841,7 +627,6 @@ exit:
 	return rc;
 }
 
-
 int msm_cvp_session_stop(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
@@ -942,29 +727,6 @@ exit:
 	return rc;
 }
 
-int msm_cvp_session_queue_stop(struct msm_cvp_inst *inst)
-{
-	struct cvp_session_queue *sq;
-
-	sq = &inst->session_queue;
-
-	spin_lock(&sq->lock);
-
-	if (sq->state == QUEUE_STOP) {
-		spin_unlock(&sq->lock);
-		return 0;
-	}
-
-	sq->state = QUEUE_STOP;
-
-	dprintk(CVP_SESS, "Stop session queue: %pK session_id = %#x\n",
-			inst, inst->sess_id);
-	spin_unlock(&sq->lock);
-
-	wake_up_all(&inst->session_queue.wq);
-
-	return 0;
-}
 
 int msm_cvp_session_ctrl(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
@@ -1035,48 +797,6 @@ int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 		case EVA_KMD_PROP_HFI_VERSION:
 		{
 			props->prop_data[i].data = hfi->version;
-			break;
-		}
-		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
-		{
-			props->prop_data[i].data =
-				session_prop->dump_offset;
-			break;
-		}
-		case EVA_KMD_PROP_SESSION_DUMPSIZE:
-		{
-			props->prop_data[i].data =
-				session_prop->dump_size;
-			break;
-		}
-		case EVA_KMD_PROP_SESSION_ERROR:
-		{
-			struct msm_cvp_smem *sfr_smem = &hfi->sfr.mem_data;
-			if (!sfr_smem->dma_buf) {
-				mutex_lock(&hfi->lock);
-				if (!sfr_smem->dma_buf) {
-					struct dma_buf *dbuf = eva_gem_export_dma_buf(
-							to_eva_gem(sfr_smem->gem));
-
-					if (IS_ERR(dbuf)) {
-						mutex_unlock(&hfi->lock);
-						rc = PTR_ERR(dbuf);
-						break;
-					}
-					sfr_smem->dma_buf = dbuf;
-				}
-				mutex_unlock(&hfi->lock);
-			}
-			get_dma_buf(sfr_smem->dma_buf);
-			rc = dma_buf_fd(sfr_smem->dma_buf, O_RDONLY | O_CLOEXEC);
-			if (rc < 0) {
-				dprintk(CVP_WARN, "Failed get dma_buf fd %d\n", rc);
-				dma_buf_put(sfr_smem->dma_buf);
-				break;
-			}
-
-			props->prop_data[i].data = rc;
-			rc = 0;
 			break;
 		}
 		case EVA_KMD_PROP_SESSION_STATE:
@@ -1178,7 +898,6 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 	int rc = 0;
 
 	session_prop = &inst->prop;
-
 	switch (prop_array->prop_type) {
 		case EVA_KMD_PROP_SESSION_TYPE:
 			session_prop->type = prop_array->data;
@@ -1192,19 +911,10 @@ int msm_cvp_set_sysprop_sess(struct msm_cvp_inst *inst,
 		case EVA_KMD_PROP_SESSION_SECURITY:
 			session_prop->is_secure = prop_array->data;
 			break;
-		case EVA_KMD_PROP_SESSION_DSPMASK:
-			session_prop->dsp_mask = prop_array->data;
-			break;
 		case EVA_KMD_PROP_SESSION_LATENCY:
 			inst->pm_qos_latency = prop_array->data;
 			dprintk(CVP_INFO, "inst %pK - New latency value from user %d\n",
 				inst, inst->pm_qos_latency);
-			break;
-		case EVA_KMD_PROP_SESSION_DUMPOFFSET:
-			session_prop->dump_offset = prop_array->data;
-			break;
-		case EVA_KMD_PROP_SESSION_DUMPSIZE:
-			session_prop->dump_size = prop_array->data;
 			break;
 		case EVA_KMD_PROP_PKT_CONCURRENCY:
 			session_prop->pkt_concurrency = prop_array->data;
@@ -1329,48 +1039,6 @@ static int msm_cvp_set_sysprop_pwr_op(struct msm_cvp_inst *inst,
 	return rc;
 }
 
-static int msm_cvp_set_sysprop_pwr_fps(struct msm_cvp_inst *inst,
-		struct eva_kmd_sys_property *prop_array)
-{
-	struct cvp_session_prop *session_prop;
-	int rc = 0;
-
-	session_prop = &inst->prop;
-
-	switch (prop_array->prop_type) {
-		case EVA_KMD_PROP_PWR_FPS_FDU:
-			session_prop->fps[HFI_HW_FDU] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_MPU:
-			session_prop->fps[HFI_HW_MPU] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_OD:
-			session_prop->fps[HFI_HW_OD] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_ICA:
-			session_prop->fps[HFI_HW_ICA] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_VADL:
-			session_prop->fps[HFI_HW_VADL] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_TOF:
-			session_prop->fps[HFI_HW_TOF] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_RGE:
-			session_prop->fps[HFI_HW_RGE] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_XRA:
-			session_prop->fps[HFI_HW_XRA] = prop_array->data;
-			break;
-		case EVA_KMD_PROP_PWR_FPS_LSR:
-			session_prop->fps[HFI_HW_LSR] = prop_array->data;
-			break;
-		default:
-			rc = -EFAULT;
-	}
-	return rc;
-}
-
 int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 		struct eva_kmd_arg *arg)
 {
@@ -1395,12 +1063,10 @@ int msm_cvp_set_sysprop(struct msm_cvp_inst *inst,
 		if (msm_cvp_set_sysprop_sess(inst, &prop_array[i], i)) {
 			if (msm_cvp_set_sysprop_pwr_hw(inst, &prop_array[i])) {
 				if (msm_cvp_set_sysprop_pwr_op(inst, &prop_array[i])) {
-					if (msm_cvp_set_sysprop_pwr_fps(inst, &prop_array[i])) {
-						dprintk(CVP_ERR,
-							"unrecognized sys property to set %d\n",
-							prop_array[i].prop_type);
-						rc = -EFAULT;
-					}
+					dprintk(CVP_ERR,
+						"unrecognized sys property to set %d\n",
+						prop_array[i].prop_type);
+					rc = -EFAULT;
 				}
 			}
 		}

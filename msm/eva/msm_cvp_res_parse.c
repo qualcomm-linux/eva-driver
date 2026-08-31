@@ -75,12 +75,6 @@ static inline void err_load_load_PD_table(
 	res->pd_set.pd_tbl = NULL;
 }
 
-static inline void msm_cvp_free_qdss_addr_table(
-			struct msm_cvp_platform_resources *res)
-{
-	res->qdss_addr_set.addr_tbl = NULL;
-}
-
 static inline void msm_cvp_free_bus_vectors(
 			struct msm_cvp_platform_resources *res)
 {
@@ -120,7 +114,6 @@ void msm_cvp_free_platform_resources(
 	err_load_load_PD_table(res);
 	msm_cvp_free_allowed_clocks_table(res);
 	msm_cvp_free_reg_table(res);
-	msm_cvp_free_qdss_addr_table(res);
 	msm_cvp_free_bus_vectors(res);
 }
 
@@ -143,54 +136,6 @@ static int msm_cvp_load_ipcc_regs(struct msm_cvp_platform_resources *res, struct
 	);
 
 	return ret;
-}
-
-static int msm_cvp_load_regspace_mapping(struct msm_cvp_platform_resources *res,struct msm_cvp_platform_data *platform_data)
-{
-	int ret = 0;
-
-    res->reg_mappings.hwmutex_iova     = platform_data->regspace_mappings->hwmutex.iova;
-    res->reg_mappings.hwmutex_size     = platform_data->regspace_mappings->hwmutex.size;
-    res->reg_mappings.hwmutex_phyaddr  = platform_data->regspace_mappings->hwmutex.phys;
-
-    res->reg_mappings.aon_iova         = platform_data->regspace_mappings->aon.iova;
-    res->reg_mappings.aon_size         = platform_data->regspace_mappings->aon.size;
-    res->reg_mappings.aon_phyaddr      = platform_data->regspace_mappings->aon.phys;
-    
-    res->reg_mappings.timer_iova       = platform_data->regspace_mappings->aon_timer.iova;
-    res->reg_mappings.timer_size       = platform_data->regspace_mappings->aon_timer.size;
-    res->reg_mappings.timer_phyaddr    = platform_data->regspace_mappings->aon_timer.phys;
-
-	dprintk(CVP_CORE,
-	"reg mappings %#x %#x %#x %#x %#x %#X %#x %#x %#x %#x %#x %#x\n",
-	res->reg_mappings.ipclite_iova, res->reg_mappings.ipclite_size,
-	res->reg_mappings.ipclite_phyaddr, res->reg_mappings.hwmutex_iova,
-	res->reg_mappings.hwmutex_size, res->reg_mappings.hwmutex_phyaddr,
-	res->reg_mappings.aon_iova, res->reg_mappings.aon_size,
-	res->reg_mappings.aon_phyaddr,  res->reg_mappings.timer_iova,
-	res->reg_mappings.timer_size, res->reg_mappings.timer_phyaddr);
-
-	return ret;
-}
-
-static int msm_cvp_load_gcc_regs(struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
-{
-    
-    int ret = 0;
-    /*
-     * GCC register region is driver-owned in upstream.
-     * DT property qcom,gcc-reg has been removed.
-     */
-
-    res->gcc_reg_base = platform_data->gcc_regs->base;
-    res->gcc_reg_size   = platform_data->gcc_regs->size;
-
-    dprintk(CVP_CORE,
-        "GCC reg region: offset=0x%x size=0x%x\n",
-        res->gcc_reg_base,
-        res->gcc_reg_size);
-
-    return ret;
 }
 
 static int msm_cvp_load_reg_table(struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
@@ -248,59 +193,6 @@ err_free:
     return rc;
 
 }
-static int msm_cvp_load_qdss_table(struct msm_cvp_platform_resources *res)
-{
-	struct addr_set *qdss_addr_set;
-	struct platform_device *pdev = res->pdev;
-	int i;
-	int rc = 0;
-
-	if (!of_find_property(pdev->dev.of_node, "qcom,qdss-presets", NULL)) {
-		/*
-		 * qcom,qdss-presets is an optional property. It likely won't be
-		 * present if we don't have any register settings to program
-		 */
-		dprintk(CVP_CORE, "qcom,qdss-presets not found\n");
-		return rc;
-	}
-
-	qdss_addr_set = &res->qdss_addr_set;
-	qdss_addr_set->count = get_u32_array_num_elements(pdev->dev.of_node,
-					"qcom,qdss-presets");
-	qdss_addr_set->count /= sizeof(*qdss_addr_set->addr_tbl) / sizeof(u32);
-
-	if (!qdss_addr_set->count) {
-		dprintk(CVP_CORE, "no elements in qdss reg set\n");
-		return rc;
-	}
-
-	qdss_addr_set->addr_tbl = devm_kzalloc(&pdev->dev,
-			qdss_addr_set->count * sizeof(*qdss_addr_set->addr_tbl),
-			GFP_KERNEL);
-	if (!qdss_addr_set->addr_tbl) {
-		dprintk(CVP_ERR, "%s Failed to alloc register table\n",
-			__func__);
-		rc = -ENOMEM;
-		goto err_qdss_addr_tbl;
-	}
-
-	rc = of_property_read_u32_array(pdev->dev.of_node, "qcom,qdss-presets",
-		(u32 *)qdss_addr_set->addr_tbl, qdss_addr_set->count * 2);
-	if (rc) {
-		dprintk(CVP_ERR, "Failed to read qdss address table\n");
-		msm_cvp_free_qdss_addr_table(res);
-		rc = -EINVAL;
-		goto err_qdss_addr_tbl;
-	}
-
-	for (i = 0; i < qdss_addr_set->count; i++) {
-		dprintk(CVP_CORE, "qdss addr = %x, value = %x\n",
-				qdss_addr_set->addr_tbl[i].start,
-				qdss_addr_set->addr_tbl[i].size);
-	}
-err_qdss_addr_tbl:
-	return rc;
-}
 
 static int msm_cvp_load_subcache_info(struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
 {
@@ -339,62 +231,6 @@ err_load_subcache_table_fail:
 	return rc;
 }
 
-/**
- * msm_cvp_load_u32_table() - load dtsi table entries
- * @pdev: A pointer to the platform device.
- * @of_node:      A pointer to the device node.
- * @table_name:   A pointer to the dtsi table entry name.
- * @struct_size:  The size of the structure which is nothing but
- *                a single entry in the dtsi table.
- * @table:        A pointer to the table pointer which needs to be
- *                filled by the dtsi table entries.
- * @num_elements: Number of elements pointer which needs to be filled
- *                with the number of elements in the table.
- *
- * This is a generic implementation to load single or multiple array
- * table from dtsi. The array elements should be of size equal to u32.
- *
- * Return:        Return '0' for success else appropriate error value.
- */
-int msm_cvp_load_u32_table(struct platform_device *pdev,
-		struct device_node *of_node, char *table_name, int struct_size,
-		u32 **table, u32 *num_elements)
-{
-	int rc = 0, num_elemts = 0;
-	u32 *ptbl = NULL;
-
-	if (!of_find_property(of_node, table_name, NULL)) {
-		dprintk(CVP_CORE, "%s not found\n", table_name);
-		return 0;
-	}
-
-	num_elemts = get_u32_array_num_elements(of_node, table_name);
-	if (!num_elemts) {
-		dprintk(CVP_ERR, "no elements in %s\n", table_name);
-		return 0;
-	}
-	num_elemts /= struct_size / sizeof(u32);
-
-	ptbl = devm_kzalloc(&pdev->dev, num_elemts * struct_size, GFP_KERNEL);
-	if (!ptbl) {
-		dprintk(CVP_ERR, "Failed to alloc table %s\n", table_name);
-		return -ENOMEM;
-	}
-
-	if (of_property_read_u32_array(of_node, table_name, ptbl,
-			num_elemts * struct_size / sizeof(u32))) {
-		dprintk(CVP_ERR, "Failed to read %s\n", table_name);
-		return -EINVAL;
-	}
-
-	*table = ptbl;
-	if (num_elements)
-		*num_elements = num_elemts;
-
-	return rc;
-}
-EXPORT_SYMBOL(msm_cvp_load_u32_table);
-
 /* A comparator to compare loads (needed later on) */
 static int cmp(const void *a, const void *b)
 {
@@ -405,7 +241,6 @@ static int cmp(const void *a, const void *b)
 static int msm_cvp_load_allowed_clocks_table(
 		struct msm_cvp_platform_resources *res, struct msm_cvp_platform_data *platform_data)
 {
-	int rc = 0;
 	u32 i;
 	struct platform_device *pdev = res->pdev;
 	
@@ -757,7 +592,7 @@ static int msm_cvp_load_reset_table(
 {
 	struct platform_device *pdev = res->pdev;
 	struct reset_set *rst = &res->reset_set;
-	int num_clocks = 0, c = 0, ret = 0;
+	int num_clocks = 0, c = 0;
 
 	num_clocks = of_property_count_strings(pdev->dev.of_node,
 				"reset-names");
@@ -948,19 +783,9 @@ int cvp_read_platform_resources_from_drv_data(
 	platform_data = core->platform_data;
 	res = &core->resources;
 
-	res->sku_version = platform_data->sku_version;
-
-	res->dsp_enabled = find_key_value(platform_data,
-			"qcom,dsp-enabled");
-
-	res->max_ssr_allowed = find_key_value(platform_data,
-			"qcom,max-ssr-allowed");
 
 	res->sw_power_collapsible = find_key_value(platform_data,
 			"qcom,sw-power-collapse");
-
-	res->debug_timeout = find_key_value(platform_data,
-			"qcom,debug-timeout");
 
 	res->pm_qos.latency_us = find_key_value(platform_data,
 			"qcom,pm-qos-latency-us");
@@ -974,9 +799,6 @@ int cvp_read_platform_resources_from_drv_data(
 	for (i = 0; i < res->pm_qos.silver_count; i++)
 		res->pm_qos.silver_cores[i] = i;
 
-	res->max_secure_inst_count = find_key_value(platform_data,
-			"qcom,max-secure-instances");
-
 	res->max_supported_inst_count = find_key_value(platform_data,
 			"qcom,max-supported-instances");
 
@@ -986,8 +808,6 @@ int cvp_read_platform_resources_from_drv_data(
 			"qcom,power-collapse-delay");
 	res->msm_cvp_hw_rsp_timeout = find_key_value(platform_data,
 			"qcom,hw-resp-timeout");
-	res->msm_cvp_dsp_rsp_timeout = find_key_value(platform_data,
-			"qcom,dsp-resp-timeout");
 	res->non_fatal_pagefaults = find_key_value(platform_data,
 			"qcom,domain-attr-non-fatal-faults");
 
@@ -1003,14 +823,9 @@ int cvp_read_platform_resources_from_drv_data(
 	res->gdsc_framework_type = find_key_value(platform_data,
 			"CVP_GDSC_FRAMEWORK_TYPE");			
 
-	res->vpu_ver = platform_data->vpu_ver;
 	res->ubwc_config = platform_data->ubwc_config;
 	res->fatal_ssr = false;
 
-	rc = msm_cvp_load_gcc_regs(res,platform_data);
-	if (rc)
-        dprintk(CVP_ERR, "Failed to load gcc reg space mapping: %d\n", rc);
-		
 	rc = msm_cvp_load_ipcc_regs(res,platform_data);
 	if (rc)
 		dprintk(CVP_ERR, "Failed to load IPCC regs: %d\n", rc);	
@@ -1024,8 +839,6 @@ int cvp_read_platform_resources_from_drv_data(
 		dprintk(CVP_ERR, "Failed to load reg table: %d\n", rc);
 		return rc;
 	}
-	rc = msm_cvp_load_regspace_mapping(res,platform_data);
-	
 	rc = msm_cvp_load_allowed_clocks_table(res,platform_data);
 	if (rc) {
 		dprintk(CVP_ERR,
@@ -1079,10 +892,6 @@ int cvp_read_platform_resources_from_dt(
 
 	dprintk(CVP_CORE, "%s: res->irq_wd:%d \n",
 		__func__, res->irq_wd);
-
-	rc = msm_cvp_load_qdss_table(res);
-	if (rc)
-		dprintk(CVP_WARN, "Failed to load qdss reg table: %d\n", rc);
 
 
 	rc = of_property_read_u32(pdev->dev.of_node, "soc_ver", &core->soc_version);

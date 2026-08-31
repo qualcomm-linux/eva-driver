@@ -212,7 +212,6 @@ int msm_cvp_update_power(struct msm_cvp_inst *inst)
 	struct msm_cvp_inst *s;
 	struct bus_info *bus = NULL;
 	struct clock_set *clocks;
-	struct clock_info *cl;
 	int bus_count = 0;
 	unsigned int max_bw = 0, min_bw = 0;
 

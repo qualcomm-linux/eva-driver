@@ -30,6 +30,7 @@ int eva_ioctl_update_power(struct drm_device *dev, void *data,
 {
 	struct msm_cvp_inst *inst = file->driver_priv;
 	int rc;
+	dprintk(CVP_WARN, "%s: ioctl invoked", __func__);
 
 	rc = session_state_check_init(inst);
 	if (rc)

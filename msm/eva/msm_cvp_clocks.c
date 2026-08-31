@@ -180,7 +180,6 @@ int msm_cvp_disable_unprepare_clk(struct iris_hfi_device *device,
 		const char *name)
 {
 	struct clock_info *cl;
-	int rc = 0;
 
 	if (!device) {
 		dprintk(CVP_ERR, "Invalid params: %pK\n", device);

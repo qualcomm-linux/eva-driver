@@ -25,10 +25,6 @@ bool msm_cvp_auto_pil = true;
 int msm_cvp_fw_debug = 0x10018;
 int msm_cvp_fw_debug_mode = 1;
 bool msm_cvp_fw_coverage = !true;
-bool msm_cvp_cacheop_enabled = true;
-bool msm_cvp_cacheop_disabled = true;
-bool msm_cvp_probe_allowed = true;
-int msm_cvp_clock_voting = !1;
 
 static void put_inst_helper(struct kref *kref)
 {

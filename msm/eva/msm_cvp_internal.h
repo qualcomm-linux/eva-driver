@@ -88,17 +88,6 @@ struct msm_cvp_common_data {
 	int value;
 };
 
-enum sku_version {
-	SKU_VERSION_0 = 0,
-	SKU_VERSION_1,
-	SKU_VERSION_2,
-};
-
-enum vpu_version {
-	VPU_VERSION_4 = 1,
-	VPU_VERSION_5,
-};
-
 enum cvp_session_state {
 	SESSION_NORMAL = 0x00,
 	SESSION_ERROR,
@@ -143,19 +132,13 @@ struct msm_cvp_qos_setting {
 struct msm_cvp_platform_data {
 	struct msm_cvp_common_data *common_data;
 	unsigned int common_data_length;
-	unsigned int sku_version;
-	uint32_t vpu_ver;
-	unsigned int vm_id;	/* pvm: 1; tvm: 2 */
 	struct msm_cvp_ubwc_config_data *ubwc_config;
 	struct msm_cvp_qos_setting *noc_qos;
 	struct msm_cvp_hfi_defs *cvp_hfi;
 	struct msm_cvp_hfi_defs *cvp_hfi_msg;
 	uint32_t hfi_ver;
-	uint32_t hal_version;
 	uint32_t pas_id;
-	const struct cvp_gcc_reg_region *gcc_regs;
 	const struct cvp_ipcc_reg_region *ipcc_regs;
-	const struct cvp_regspace_mappings *regspace_mappings;
 	const struct cvp_reg_presets *reg_presets;
 	const struct cvp_reset_power_set_desc *reset_power_sets;
 	const struct cvp_power_domains *power_domains;
@@ -168,18 +151,11 @@ struct msm_cvp_platform_data {
 	u32 opp_pd_tbl_size;                 /* Number of OPP voltage rail domains */
 	const struct cvp_bus_desc *bus_descs;
 	const struct cvp_subcache_desc *subcache_desc;
-	const struct cvp_ipclite_mappings *ipclite_mappings;
 	const struct cvp_iommu_context_bank *cb_data;
 	uint32_t cb_data_size;
 };
 
 /* Upstream Properties start*/
-
-struct cvp_gcc_reg_region {
-    u32 base;
-    u32 size;
-};
-
 struct cvp_ipcc_reg_region {
     u32 base;
     u32 size;
@@ -211,19 +187,6 @@ struct cvp_reset_power_set_desc {
     const u32 *pwr_stats;   // reset-power-status from downstream DT
 };
 
-/* DEVICE mapping aon_mappings, hwmutex_mappings, aon_timer_mappings */
-struct cvp_regspace_data {
-    u32 iova;
-    u32 size;
-    u32 phys;
-};
-
-struct cvp_regspace_mappings {
-    struct cvp_regspace_data hwmutex;
-    struct cvp_regspace_data aon;
-    struct cvp_regspace_data aon_timer;
-};
-
 /* Supply (power domain index and gdsc_has_hw_pc )*/
 struct cvp_power_domains {
     u32 pd_count;     // Power domains count from DT
@@ -241,11 +204,6 @@ struct cvp_clock_props {
 struct cvp_allowed_clock_rates {
     const u32 *clk_rates;
     u32 count;
-};
-
-/* ipclite_mappings */
-struct cvp_ipclite_mappings {
-    u64 iova_start;
 };
 
 struct cvp_iommu_context_bank {
@@ -268,7 +226,6 @@ struct msm_cvp_drv {
 	struct msm_cvp_core *cvp_core;
 	struct dentry *debugfs_root;
 	int thermal_level;
-	u32 sku_version;
 	struct cvp_kmem_cache msg_cache;
 	struct cvp_kmem_cache frame_cache;
 	struct cvp_kmem_cache buf_cache;
@@ -387,7 +344,6 @@ struct msm_cvp_core {
 	struct device *dev;
 	struct cvp_hfi_ops *dev_ops;
 	struct msm_cvp_platform_data *platform_data;
-	struct msm_cvp_synx_ops *synx_ftbl;
 	struct list_head instances;
 	enum cvp_core_state state;
 	struct completion completions[SYS_MSG_END - SYS_MSG_START + 1];
@@ -427,14 +383,12 @@ struct msm_cvp_core {
 
 struct msm_cvp_inst {
 	struct list_head list;
-	struct list_head dsp_list;
 	struct mutex sync_lock, lock;
 	struct msm_cvp_core *core;
 	enum session_type session_type;
 	struct task_struct *task;
 	atomic_t smem_count;
 	struct cvp_session_queue session_queue;
-	struct cvp_session_queue session_queue_fence;
 	struct cvp_session_event event_handler;
 	void *session;
 	void *arp_kvaddr;

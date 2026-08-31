@@ -196,14 +196,12 @@ void msm_cvp_smem_put_dma_buf(void *dma_buf)
 
 static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_inst *inst)
 {
-	int nelems = 0;
 	int i, rc = 0;
 
 	dma_addr_t iova = 0;
-	u32 temp = 0, checksum = 0;
+	u32 temp = 0;
 	u32 align = PAGE_SIZE;
 	struct dma_buf *dma_buf;
-	bool is_config_pkt = false;
 	struct cvp_dma_buf_vmap vmap = {0};
 
 	dma_buf = smem->dma_buf;
@@ -224,29 +222,6 @@ static int msm_cvp_map_smem_helper(struct msm_cvp_smem *smem, struct msm_cvp_ins
 	smem->size = dma_buf->size;
 	smem->device_addr = (u32)iova;
 	i = get_pkt_index_from_type(smem->pkt_type);
-	if (i > 0 && smem->pkt_type != HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS
-		&& smem->pkt_type != HFI_CMD_SESSION_CVP_SET_MODEL_BUFFERS
-		&& smem->pkt_type != HFI_CMD_SESSION_EVA_DLFL_CONFIG)
-
-		/* User persist buffer has no feature config info */
-		is_config_pkt = cvp_hfi_defs[i].is_config_pkt;
-
-	if (i > 0 && cvp_hfi_defs[i].checksum_enabled) {
-		dma_buf_begin_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-		msm_cvp_dma_buf_vmap(dma_buf, &vmap);
-		smem->kvaddr = vmap.vaddr;
-		if (!smem->kvaddr) {
-			dprintk(CVP_WARN, "%s Fail map into kernel\n",
-					__func__);
-			dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-		} else {
-			for (i = 0; i < 256; i++)
-				checksum += *(u32 *)(smem->kvaddr + i*sizeof(u32));
-			dprintk(CVP_MEM, "Map checksum %#x fd=%d\n",
-				checksum, smem->fd);
-		}
-	}
-
 	goto success;
 exit:
 	smem->device_addr = 0x0;
@@ -272,7 +247,6 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 	rc = msm_cvp_map_smem_helper(smem, inst);
 
 	if (!rc) {
-		print_smem(CVP_MEM, str, inst, smem);
 		atomic_inc(&inst->smem_count);
 	} else {
 		cvp_print_iova(core);
@@ -284,28 +258,11 @@ int msm_cvp_map_smem(struct msm_cvp_inst *inst,
 static int msm_cvp_unmap_smem_helper(struct msm_cvp_smem *smem)
 {
 	int i, rc = 0;
-	u32 checksum = 0;
 	struct dma_buf *dma_buf;
 	struct cvp_dma_buf_vmap vmap = {0};
 
 	dma_buf = smem->dma_buf;
 	i = get_pkt_index_from_type(smem->pkt_type);
-	if (i > 0 && cvp_hfi_defs[i].checksum_enabled) {
-		if (!smem->kvaddr) {
-			dprintk(CVP_WARN, "%s DS buf Fail map into kernel\n",
-					__func__);
-			dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-		} else {
-			for (i = 0; i < 256; i++)
-				checksum += *(u32 *)(smem->kvaddr + i*sizeof(u32));
-			dprintk(CVP_MEM, "Unmap checksum %#x fd=%d\n",
-				checksum, smem->fd);
-			vmap.vaddr = smem->kvaddr;
-			msm_cvp_dma_buf_vunmap(dma_buf, &vmap);
-			smem->kvaddr = 0;
-			dma_buf_end_cpu_access(dma_buf, DMA_BIDIRECTIONAL);
-		}
-	}
 	rc = msm_dma_put_device_address(smem->flags, &smem->mapping_info);
 	if (rc) {
 		dprintk(CVP_ERR, "Failed to put device address: %d\n", rc);
@@ -329,7 +286,6 @@ int msm_cvp_unmap_smem(struct msm_cvp_inst *inst,
 		return rc;
 	}
 
-	print_smem(CVP_MEM, str, inst, smem);
 	rc = msm_cvp_unmap_smem_helper(smem);
 
 	if (!rc)

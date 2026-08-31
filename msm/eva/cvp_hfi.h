@@ -37,16 +37,11 @@ void __write_register(struct iris_hfi_device *device,
 	u32 reg, u32 value);
 int __read_register(struct iris_hfi_device *device, u32 reg);
 int __read_tcsr_register(struct iris_hfi_device *device, u32 reg);
-int __read_gcc_register(struct iris_hfi_device *device, u32 reg);
 int switch_core_gdsc_mode(struct iris_hfi_device *device, enum core_gdsc_dest dest,
 	const char *name);
 
 int __enable_gdsc(struct iris_hfi_device *device, const char *name);
 int __disable_gdsc(struct iris_hfi_device *device, const char *name);
-int __reset_control_assert_name(struct iris_hfi_device *device, const char *name);
-int __reset_control_deassert_name(struct iris_hfi_device *device, const char *name);
-int __reset_control_acquire(struct iris_hfi_device *device, const char *name);
-int __reset_control_release(struct iris_hfi_device *device, const char *name);
 int __disable_hw_power_collapse(struct iris_hfi_device *device, const char *name);
 void __print_sfr_msg(struct iris_hfi_device *device);
 

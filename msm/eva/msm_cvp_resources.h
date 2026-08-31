@@ -156,34 +156,15 @@ struct cvp_pm_qos {
 	struct dev_pm_qos_request *pm_qos_hdls;
 };
 
-struct cvp_fw_reg_mappings {
-	phys_addr_t ipclite_iova;
-	phys_addr_t ipclite_phyaddr;
-	uint32_t ipclite_size;
-	phys_addr_t hwmutex_iova;
-	phys_addr_t hwmutex_phyaddr;
-	uint32_t hwmutex_size;
-	phys_addr_t aon_iova;
-	phys_addr_t aon_phyaddr;
-	uint32_t aon_size;
-	phys_addr_t timer_iova;
-	phys_addr_t timer_phyaddr;
-	uint32_t timer_size;
-};
-
 struct msm_cvp_platform_resources {
 	phys_addr_t firmware_base;
 	phys_addr_t register_base;
 	phys_addr_t ipcc_reg_base;
-	phys_addr_t gcc_reg_base;
 	uint32_t register_size;
 	uint32_t ipcc_reg_size;
-	uint32_t gcc_reg_size;
 	uint32_t ipcc_reg_base_iova;
-	struct cvp_fw_reg_mappings reg_mappings;
 	uint32_t irq;
 	uint32_t irq_wd;
-	uint32_t sku_version;
 	struct allowed_clock_rates_table *allowed_clks_tbl;
 	u32 allowed_clks_tbl_size;
 	struct clock_freq_table clock_freq_tbl;
@@ -191,26 +172,20 @@ struct msm_cvp_platform_resources {
 	bool sys_cache_res_set;
 	struct subcache_set subcache_set;
 	struct reg_set reg_set;
-	struct addr_set qdss_addr_set;
-	uint32_t max_ssr_allowed;
 	struct platform_device *pdev;
 	struct clock_set clock_set;
 	struct bus_set bus_set;
 	struct reset_set reset_set;
 	bool use_non_secure_pil;
 	bool sw_power_collapsible;
-	bool dsp_enabled;
 	struct list_head context_banks;
 	bool thermal_mitigable;
 	const char *fw_name;
 	const char *hfi_version;
-	bool debug_timeout;
 	struct cvp_pm_qos pm_qos;
 	uint32_t max_inst_count;
-	uint32_t max_secure_inst_count;
 	uint32_t max_supported_inst_count;
 	int msm_cvp_hw_rsp_timeout;
-	int msm_cvp_dsp_rsp_timeout;
 	int qos_noc_urgency_low_a_bitmask;
 	int qos_noc_urgency_low_b_bitmask;
 	uint32_t rcg_vnoc_clk_en_low;
@@ -218,7 +193,6 @@ struct msm_cvp_platform_resources {
 	bool non_fatal_pagefaults;
 	bool fatal_ssr;
 	struct msm_cvp_mem_cdsp mem_cdsp;
-	uint32_t vpu_ver;
 	uint32_t fw_cycles;
 	struct msm_cvp_ubwc_config_data *ubwc_config;
 	uint32_t gdsc_framework_type;
@@ -231,6 +205,5 @@ static inline bool is_iommu_present(struct msm_cvp_platform_resources *res)
 	return !list_empty(&res->context_banks);
 }
 
-int cvp_of_fdt_get_ddrtype(void);
 #endif
 

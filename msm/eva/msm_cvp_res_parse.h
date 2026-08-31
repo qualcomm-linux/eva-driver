@@ -25,8 +25,4 @@ void cvp_deinit_context_bank_devices(struct msm_cvp_core *core);
 
 int cvp_read_bus_resources(struct platform_device *pdev);
 
-int msm_cvp_load_u32_table(struct platform_device *pdev,
-		struct device_node *of_node, char *table_name, int struct_size,
-		u32 **table, u32 *num_elements);
-
 #endif

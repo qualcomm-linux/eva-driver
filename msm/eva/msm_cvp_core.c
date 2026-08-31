@@ -40,25 +40,14 @@ void cvp_kmem_cache_free(struct cvp_kmem_cache *k, void *obj)
 	kmem_cache_free(k->cache, obj);
 }
 
-int msm_cvp_poll(void *instance, struct file *filp,
-		struct poll_table_struct *wait)
-{
-	return 0;
-}
-EXPORT_SYMBOL(msm_cvp_poll);
-
 static bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *instance_count)
 {
-	u32 secure_instance_count = 0;
 	struct msm_cvp_inst *inst = NULL;
 	bool overload = false;
 
 	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		(*instance_count)++;
-		/* This flag is not updated yet for the current instance */
-		if (inst->flags & CVP_SECURE)
-			secure_instance_count++;
 	}
 	mutex_unlock(&core->lock);
 
@@ -68,11 +57,7 @@ static bool msm_cvp_check_for_inst_overload(struct msm_cvp_core *core, u32 *inst
 		overload = true;
 		dprintk(CVP_WARN, "Reached %d generic CV session limit\n",
 				core->resources.max_supported_inst_count);
-	} else if (secure_instance_count >= core->resources.max_secure_inst_count) {
-		overload = true;
-		dprintk(CVP_WARN, "Reached %d secure CV session limit\n",
-				core->resources.max_secure_inst_count);
-	}
+	} 
 
 	return overload;
 }
@@ -137,11 +122,6 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 	core->resources.max_inst_count = core->resources.max_supported_inst_count;
 	if (msm_cvp_check_for_inst_overload(core, &instance_count)) {
 		dprintk(CVP_ERR, "Instance num reached Max, rejecting session");
-		mutex_lock(&core->lock);
-		list_for_each_entry(inst, &core->instances, list)
-			cvp_print_inst(CVP_ERR, inst);
-		mutex_unlock(&core->lock);
-
 		return NULL;
 	}
 
@@ -269,7 +249,6 @@ static int msm_cvp_cleanup_instance(struct msm_cvp_inst *inst)
 		goto exit;
 	}
 
-	sqf = &inst->session_queue_fence;
 	sq = &inst->session_queue;
 
 	rc = msm_cvp_session_flush_stop(inst);
@@ -285,7 +264,6 @@ wait_frame:
 	if (!empty && max_retries > 0) {
 		mutex_unlock(&inst->frames.lock);
 		usleep_range(1000, 2000);
-		msm_cvp_clean_sess_queue(inst, sqf);
 		msm_cvp_clean_sess_queue(inst, sq);
 		max_retries--;
 		goto wait_frame;
@@ -346,8 +324,6 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 		dprintk(CVP_WARN, "Session closed with %d unmapped smems\n",
 			atomic_read(&inst->smem_count));
 		core->smem_leak_count += atomic_read(&inst->smem_count);
-
-		cvp_print_inst(CVP_ERR, inst);
 	}
 
 	/* Ensure no path has core->clk_lock and core->lock sequence */

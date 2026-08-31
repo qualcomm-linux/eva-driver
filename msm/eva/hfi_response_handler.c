@@ -505,57 +505,6 @@ retry:
 
 }
 
-static int hfi_process_session_dump_notify(u32 device_id,
-		void *hdr, struct msm_cvp_cb_info *info)
-{
-	struct msm_cvp_inst *inst = NULL;
-	struct msm_cvp_core *core;
-	struct cvp_session_prop *session_prop;
-	unsigned int session_id;
-	struct msm_cvp_cb_cmd_done cmd_done = {0};
-	struct cvp_hfi_dumpmsg_session_hdr *pkt =
-			(struct cvp_hfi_dumpmsg_session_hdr *)hdr;
-
-	if (!pkt) {
-		dprintk(CVP_ERR, "%s: invalid param\n", __func__);
-		return -EINVAL;
-	} else if (pkt->header.size != sizeof(struct cvp_hfi_dumpmsg_session_hdr)) {
-		dprintk(CVP_ERR, "%s: bad_pkt_size %d, expected pkt_size %d\n",
-			__func__, pkt->header.size, sizeof(struct cvp_hfi_dumpmsg_session_hdr));
-		if (pkt->header.size > sizeof(struct cvp_hfi_dumpmsg_session_hdr))
-			return -E2BIG;
-		else
-			return -EINVAL;
-	}
-
-	session_id = get_msg_session_id(pkt);
-	core = cvp_driver->cvp_core;
-	inst = cvp_get_inst_from_id(core, session_id);
-	if (!inst) {
-		dprintk(CVP_ERR, "%s: invalid session\n", __func__);
-		return -EINVAL;
-	}
-	session_prop = &inst->prop;
-	session_prop->dump_offset = pkt->dump_offset;
-	session_prop->dump_size = pkt->dump_size;
-
-	dprintk(CVP_SESS, "RECEIVED: SESSION_DUMP[%x]\n", session_id);
-
-	cmd_done.device_id = device_id;
-	cmd_done.session_id = (void *)(uintptr_t)pkt->header.session_id;
-	cmd_done.status = hfi_map_err_status(pkt->error_type);
-	if (cmd_done.status)
-		dprintk(CVP_ERR, "%s: status %#x hfi type %#x err %#x\n",
-			__func__, cmd_done.status, pkt->header.packet_type, pkt->error_type);
-	cmd_done.size = 0;
-
-	info->response_type = HAL_SESSION_DUMP_NOTIFY;
-	info->response.cmd = cmd_done;
-
-	cvp_put_inst(inst);
-	return 0;
-}
-
 static int hfi_process_session_cvp_msg(u32 device_id,
 		void *hdr, struct msm_cvp_cb_info *info)
 {
@@ -594,12 +543,8 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 		return -EINVAL;
 	}
 
-	if (pdata->hfi_ver == 1) {
-		pkt_old = (struct cvp_hfi_msg_session_hdr_old_format *)hdr;
-		sq = &inst->session_queue;
-	} else {
-		sq = &inst->session_queue;
-	}
+
+	sq = &inst->session_queue;
 
 	sess_msg = cvp_kmem_cache_zalloc(&cvp_driver->msg_cache, GFP_KERNEL);
 	if (sess_msg == NULL) {
@@ -758,9 +703,6 @@ int cvp_hfi_process_msg_packet(u32 device_id, void *hdr,
 		break;
 	case HFI_MSG_SESSION_EVA_STOP_DONE:
 		pkt_func = (pkt_func_def)hfi_process_session_stop_done;
-		break;
-	case HFI_MSG_EVENT_NOTIFY_SNAPSHOT_READY:
-		pkt_func = (pkt_func_def)hfi_process_session_dump_notify;
 		break;
 	default:
 		dprintk(CVP_HFI, "Use default msg handler: %#x\n",

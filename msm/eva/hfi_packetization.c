@@ -66,27 +66,6 @@ static int cvp_create_pkt_cmd_sys_debug_config(
 	return 0;
 }
 
-static int cvp_create_pkt_cmd_sys_coverage_config(
-	struct cvp_hfi_cmd_sys_set_property_packet *pkt,
-	u32 mode)
-{
-	if (!pkt) {
-		dprintk(CVP_ERR, "In %s(), No input packet\n", __func__);
-		return -EINVAL;
-	}
-
-	/* 2 * sizeof(u32) is for pkt->rg_property_data[0] and pkt->rg_property_data[1] */
-	pkt->size = sizeof(struct cvp_hfi_cmd_sys_set_property_packet) + 2 * sizeof(u32);
-	pkt->packet_type = HFI_CMD_SYS_SET_PROPERTY;
-	pkt->num_properties = 1;
-	pkt->rg_property_data[0] = HFI_PROPERTY_SYS_CONFIG_COVERAGE;
-	pkt->rg_property_data[1] = mode;
-	dprintk(CVP_PKT, "Firmware coverage mode %d\n",
-			pkt->rg_property_data[1]);
-
-	return 0;
-}
-
 static int cvp_create_pkt_cmd_sys_set_idle_indicator(
 	struct cvp_hfi_cmd_sys_set_property_packet *pkt,
 	u32 mode)
@@ -222,7 +201,6 @@ inline int cvp_create_pkt_cmd_sys_session_init(
 	pkt->session_kmask = inst->prop.kernel_mask;
 	pkt->session_prio = inst->prop.priority;
 	pkt->is_secure = inst->prop.is_secure;
-	pkt->dsp_ac_mask = inst->prop.dsp_mask;
 
 	return rc;
 }
@@ -492,7 +470,6 @@ static struct cvp_hfi_packetization_ops hfi_default = {
 	.sys_power_control = cvp_create_pkt_cmd_sys_power_control,
 	.sys_set_resource = cvp_create_pkt_cmd_sys_set_resource,
 	.sys_debug_config = cvp_create_pkt_cmd_sys_debug_config,
-	.sys_coverage_config = cvp_create_pkt_cmd_sys_coverage_config,
 	.sys_set_idle_indicator = cvp_create_pkt_cmd_sys_set_idle_indicator,
 	.sys_release_resource = cvp_create_pkt_cmd_sys_release_resource,
 	.sys_image_version = cvp_create_pkt_cmd_sys_image_version,

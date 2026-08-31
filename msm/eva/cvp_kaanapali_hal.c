@@ -120,7 +120,6 @@ static void __enter_cpu_noc_lpi(struct iris_hfi_device *device,
 			__func__, caller, lpi_status, wfi_status, pc_ready);
 
 		/* Added for debug info purpose, not part of HPG */
-		call_iris_op(device, print_sbm_regs, device);
 	} else
 		dprintk(CVP_INFO,
 			"%s, CPU Noc is in LPI: lpi_status %x (count %d)\n",
@@ -175,8 +174,6 @@ static void __enter_core_noc_lpi(struct iris_hfi_device *device,
 			"%s - %d, CORE Noc is not in LPI: lpi_status %x\n",
 			__func__, caller, lpi_status);
 
-		/* Added for debug info purpose, not part of HPG */
-		call_iris_op(device, print_sbm_regs, device);
 	} else
 		dprintk(CVP_INFO,
 		"%s, CORE Noc is in LPI: lpi_status %x (count %d)\n",
@@ -235,9 +232,6 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device,
 		dprintk(CVP_WARN,
 			"%s - %d, CVP_VIDEO_CTL Noc is not in LPI: lpi_status %x\n",
 			__func__, caller, lpi_status);
-
-		/* Added for debug info purpose, not part of HPG */
-		call_iris_op(device, print_sbm_regs, device);
 	} else
 		dprintk(CVP_INFO, "%s, CVP_VIDEO_CTL Noc is in LPI: lpi_status %x (count %d)\n",
 			__func__, lpi_status, count);
@@ -415,7 +409,6 @@ static int __power_off_core_kaanapali(struct iris_hfi_device *device)
 			dprintk(CVP_WARN,
 				"Core off with NOC RESET ACK non-zero %x\n",
 				value);
-			call_iris_op(device, print_sbm_regs, device);
 		}
 		__disable_gdsc(device, "core");
 		msm_cvp_disable_unprepare_clk(device, "core0");
@@ -596,107 +589,7 @@ static int __power_off_controller_kaanapali(struct iris_hfi_device *device)
 	 */
 	rc = msm_cvp_disable_unprepare_clk(device, "core_iface");
 	rc = msm_cvp_disable_unprepare_clk(device, "eva_iface");
-
-	/****************** TODO RESET ****************************************
-	 * Section 3.8.1
-	 *
-	 *
-	rc = call_iris_op(device, reset_control_assert_name, device,
-	"cvp_axi_reset"); if (rc) dprintk(CVP_ERR, "%s: assert cvp_axi_reset
-	failed\n", __func__);
-
-	rc = call_iris_op(device, reset_control_assert_name, device,
-	"core"); if (rc) dprintk(CVP_ERR, "%s: assert cvp_core_reset
-	failed\n", __func__); usleep_range(1000, 1050);
-
-	rc = call_iris_op(device, reset_control_deassert_name, device,
-	"cvp_axi_reset"); if (rc) dprintk(CVP_ERR, "%s: de-assert cvp_axi_reset
-	failed\n", __func__);
-
-	rc = call_iris_op(device, reset_control_deassert_name, device,
-	"core"); if (rc) dprintk(CVP_ERR, "%s: de-assert
-	cvp_core_reset failed\n", __func__);
-
-	***********************************************************************/
-	
 	return 0;
-}
-
-static void __print_sidebandmanager_regs_kaanapali(struct iris_hfi_device *device)
-{
-	u32 sbm_ln0_low, axi_cbcr, val;
-	u32 main_sbm_ln0_low = 0xdeadbeef, main_sbm_ln0_high = 0xdeadbeef;
-	u32 main_sbm_ln1_high = 0xdeadbeef, cpu_cs_x2rpmh;
-
-	sbm_ln0_low = __read_register(device, CVP_NOC_SBM_SENSELN0_LOW);
-
-	cpu_cs_x2rpmh = __read_register(device, CVP_CPU_CS_X2RPMh);
-
-	__write_register(device, CVP_CPU_CS_X2RPMh,
-			 (cpu_cs_x2rpmh | CVP_CPU_CS_X2RPMh_SWOVERRIDE_BMSK));
-	usleep_range(500, 1000);
-	val = __read_register(device, CVP_CPU_CS_X2RPMh);
-	dprintk(CVP_REG, "CVP_CPU_CS_X2RPMh %#x\n", val);
-	val = __read_register(device, CVP_CPU_CS_X2RPMh_STATUS);
-	dprintk(CVP_REG, "CVP_CPU_CS_X2RPMh_STATUS %#x\n", val);
-
-	cpu_cs_x2rpmh = __read_register(device, CVP_CPU_CS_X2RPMh);
-	if (!(cpu_cs_x2rpmh & CVP_CPU_CS_X2RPMh_SWOVERRIDE_BMSK)) {
-		dprintk(CVP_WARN, "failed set CVP_CPU_CS_X2RPMH mask %x\n",
-			cpu_cs_x2rpmh);
-		goto exit;
-	}
-
-	axi_cbcr = __read_gcc_register(device, CVP_GCC_EVA_AXI0_CBCR);
-	if (axi_cbcr & 0x80000000) {
-		dprintk(CVP_WARN, "failed to turn on AXI clock %x\n", axi_cbcr);
-		goto exit;
-	}
-
-	/* Added by Thomas to debug CPU NoC hang */
-	val = __read_register(device, CVP_NOC_ERR_ERRVLD_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRVLD_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_SBM_FAULTINSTATUS0_LOW);
-	dprintk(CVP_ERR, "CVP_NOC_SBM_FAULTINSTATUS0_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG0_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG0_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG0_HIGH %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG1_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG1_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG1_HIGH %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG2_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG2_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG2_HIGH %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_LOW_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG3_LOW %#x\n", val);
-
-	val = __read_register(device, CVP_NOC_ERR_ERRLOG3_HIGH_OFFS);
-	dprintk(CVP_ERR, "CVP_NOC_ERL_MAIN_ERRLOG3_HIGH %#x\n", val);
-
-	main_sbm_ln0_low =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_LOW);
-	main_sbm_ln0_high =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN0_HIGH);
-	main_sbm_ln1_high =
-	    __read_register(device, CVP_NOC_MAIN_SIDEBANDMANAGER_SENSELN1_HIGH);
-
-exit:
-	cpu_cs_x2rpmh = cpu_cs_x2rpmh & (~CVP_CPU_CS_X2RPMh_SWOVERRIDE_BMSK);
-	__write_register(device, CVP_CPU_CS_X2RPMh, cpu_cs_x2rpmh);
-	dprintk(CVP_WARN, "Sidebandmanager regs %x %x %x %x %x\n", sbm_ln0_low,
-		main_sbm_ln0_low, main_sbm_ln0_high, main_sbm_ln1_high,
-		cpu_cs_x2rpmh);
 }
 
 static int __enable_hw_power_collapse_kaanapali(struct iris_hfi_device *device)
@@ -841,7 +734,6 @@ int set_kaanapali_hal_functions(void)
 	hal_ops.power_on_core = __power_on_core_kaanapali;
 	hal_ops.check_ctl_power_on = __check_ctl_power_on_kaanapali;
 	hal_ops.check_core_power_on = __check_core_power_on_kaanapali;
-	hal_ops.print_sbm_regs = __print_sidebandmanager_regs_kaanapali;
 	hal_ops.enable_hw_power_collapse = __enable_hw_power_collapse_kaanapali;
 	hal_ops.set_registers = __set_registers_kaanapali;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_kaanapali;

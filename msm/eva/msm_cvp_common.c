@@ -25,7 +25,6 @@
 )
 
 atomic_t cvp_error_count;
-bool trigger_smmu_fault;
 
 #define STRINGIFY(VAL) #VAL
 
@@ -86,8 +85,6 @@ inline const char *StringifyHalCommand(enum hal_command_response cmd)
 		return STRINGIFY(HAL_SESSION_RELEASE_RESOURCE_DONE);
 	case HAL_SESSION_PROPERTY_INFO:
 		return STRINGIFY(HAL_SESSION_PROPERTY_INFO);
-	case HAL_SESSION_DUMP_NOTIFY:
-		return STRINGIFY(HAL_SESSION_DUMP_NOTIFY);
 	case HAL_SESSION_ERROR:
 		return STRINGIFY(HAL_SESSION_ERROR);
 	case HAL_RESPONSE_UNUSED:
@@ -206,18 +203,8 @@ static void handle_sys_init_done(enum hal_command_response cmd, void *data)
 		core->resources.max_supported_inst_count) :
 		core->resources.max_supported_inst_count;
 
-	core->resources.max_secure_inst_count =
-		core->resources.max_secure_inst_count ?
-		core->resources.max_secure_inst_count :
-		core->resources.max_inst_count;
-
 	memcpy(core->capabilities, sys_init_msg->capabilities,
 		sys_init_msg->codec_count * sizeof(struct msm_cvp_capability));
-
-	dprintk(CVP_CORE,
-		"%s: max_inst_count %d, max_secure_inst_count %d\n",
-		__func__, core->resources.max_inst_count,
-		core->resources.max_secure_inst_count);
 
 	complete(&(core->completions[index]));
 }
@@ -544,7 +531,6 @@ static void handle_session_init_done(enum hal_command_response cmd, void *data)
 				__func__, response->session_id);
 		list_for_each_entry(inst, &core->instances, list) {
 			if (kref_get_unless_zero(&inst->kref)) {
-				cvp_print_inst(CVP_WARN, inst);
 				cvp_put_inst(inst);
 			}
 		}
@@ -569,33 +555,6 @@ static void handle_session_init_done(enum hal_command_response cmd, void *data)
 static void handle_event_change(enum hal_command_response cmd, void *data)
 {
 	dprintk(CVP_WARN, "%s is not supported on CVP!\n", __func__);
-}
-
-static void handle_session_dump_notify(enum hal_command_response cmd,
-	void *data)
-{
-	struct msm_cvp_cb_cmd_done *response = data;
-	struct msm_cvp_inst *inst;
-	unsigned long flags = 0;
-
-	if (!response) {
-		dprintk(CVP_ERR,
-			"Failed to get valid response during dump notify\n");
-		return;
-	}
-
-	inst = cvp_get_inst(cvp_driver->cvp_core, response->session_id);
-	if (!inst) {
-		dprintk(CVP_WARN, "%s:Got a response for an inactive session\n",
-				__func__);
-		return;
-	}
-	spin_lock_irqsave(&inst->event_handler.lock, flags);
-	inst->event_handler.event = CVP_DUMP_EVENT;
-	spin_unlock_irqrestore(&inst->event_handler.lock, flags);
-	wake_up_all(&inst->event_handler.wq);
-	dprintk(CVP_ERR,"Event_handler woken up\n");
-	cvp_put_inst(inst);
 }
 
 static void handle_release_res_done(enum hal_command_response cmd, void *data)
@@ -685,7 +644,6 @@ void handle_session_error(enum hal_command_response cmd, void *data)
 
 	inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
 				atomic_read(&cvp_error_count);
-	cvp_print_inst(CVP_WARN, inst);
 
 	if (inst->state != MSM_CVP_CORE_INVALID) {
 		spin_lock_irqsave(&inst->event_handler.lock, flags);
@@ -783,7 +741,6 @@ void handle_session_timeout(struct msm_cvp_inst *inst, bool stop_required)
 
 	inst->session_error_code = (s_state << 28) | (s_ecode << 16) |
 				atomic_read(&cvp_error_count);
-	cvp_print_inst(CVP_WARN, inst);
 	spin_lock_irqsave(&inst->event_handler.lock, flags);
 	inst->event_handler.event = EVA_EVENT;
 	spin_unlock_irqrestore(
@@ -854,7 +811,6 @@ void handle_sys_error(enum hal_command_response cmd, void *data)
 		dprintk(CVP_WARN, "Got NOC error");
 	}
 	list_for_each_entry(inst, &core->instances, list) {
-		cvp_print_inst(CVP_ERR, inst);
 		if (inst->state != MSM_CVP_CORE_INVALID) {
 			sq = &inst->session_queue;
 			spin_lock(&sq->lock);
@@ -942,10 +898,6 @@ static void handle_session_close(enum hal_command_response cmd, void *data)
 	if (!inst) {
 		dprintk(CVP_WARN, "%s: response for an inactive session %#x\n",
 				__func__, response->session_id);
-
-		list_for_each_entry_safe(inst, temp, &core->instances, list)
-			cvp_print_inst(CVP_WARN, inst);
-
 		return;
 	}
 
@@ -998,9 +950,6 @@ void cvp_handle_cmd_response(enum hal_command_response cmd, void *data)
 		break;
 	case HAL_SESSION_RELEASE_BUFFER_DONE:
 		handle_session_release_buf_done(cmd, data);
-		break;
-        case HAL_SESSION_DUMP_NOTIFY:
-		handle_session_dump_notify(cmd, data);
 		break;
 	default:
 		dprintk(CVP_HFI, "response unhandled: %d\n", cmd);
@@ -1654,7 +1603,6 @@ void msm_cvp_ssr_handler(struct work_struct *work)
 		return;
 	}
 	if (core->ssr_type == SSR_CORE_SMMU_FAULT) {
-		trigger_smmu_fault = false;
 		dprintk(CVP_ERR, "smmu fault triggered\n");
 		return;
 	}
@@ -1709,13 +1657,6 @@ void msm_cvp_noc_handler(struct msm_cvp_core *core)
 	if (hdev) {
 		hdev->error = CVP_ERR_NOC_ERROR;
 		call_hfi_op(core->dev_ops, debug_hook, hdev);
-	}
-	mutex_unlock(&core->lock);
-
-
-	mutex_lock(&core->lock);
-	list_for_each_entry(inst, &core->instances, list) {
-		cvp_print_inst(CVP_ERR, inst);
 	}
 	mutex_unlock(&core->lock);
 	CVPKERNEL_ATRACE_END("msm_cvp_noc_handler");
@@ -1819,31 +1760,29 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 	}
 	/* by default, ARP KVADDR initializing with NULL */
 	inst->arp_kvaddr = NULL;
-	if (hfi_ver == 1)
-		buf = cvp_allocate_arp_bufs(inst, ARP_BUF_SIZE);
-	else {
-		session_prop = &inst->prop;
 
-		if (!session_prop) {
-			dprintk(CVP_WARN, "Incorrect Props in inst %pK sess %x\n",
-			inst, inst->sess_id);
-			return -EINVAL;
-		}
+	session_prop = &inst->prop;
 
-		pkt_concurrency = session_prop->pkt_concurrency;
-
-		if (pkt_concurrency == 0)
-			pkt_concurrency = 8;
-
-		if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
-			dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
-			inst, inst->sess_id, pkt_concurrency);
-			return -EINVAL;
-		}
-
-		buf = cvp_allocate_arp_bufs(inst,
-				ALIGN(ARP_CHUNK_SIZE, PAGE_SIZE) * pkt_concurrency);
+	if (!session_prop) {
+		dprintk(CVP_WARN, "Incorrect Props in inst %pK sess %x\n",
+		inst, inst->sess_id);
+		return -EINVAL;
 	}
+
+	pkt_concurrency = session_prop->pkt_concurrency;
+
+	if (pkt_concurrency == 0)
+		pkt_concurrency = 8;
+
+	if ((pkt_concurrency == 0) || (pkt_concurrency > 16)) {
+		dprintk(CVP_WARN, "Incorrect concurrency in inst %pK sess %x: %d\n",
+		inst, inst->sess_id, pkt_concurrency);
+		return -EINVAL;
+	}
+
+	buf = cvp_allocate_arp_bufs(inst,
+			ALIGN(ARP_CHUNK_SIZE, PAGE_SIZE) * pkt_concurrency);
+	
 
 	if (!buf) {
 		rc = -ENOMEM;
@@ -1892,38 +1831,11 @@ bool is_cvp_inst_valid(struct msm_cvp_inst *inst)
 	return false;
 }
 
-int cvp_print_inst(u32 tag, struct msm_cvp_inst *inst)
-{
-	struct cvp_session_prop *session_prop;
-	if (!inst) {
-		dprintk(CVP_ERR, "%s invalid inst %pK\n", __func__, inst);
-		return -EINVAL;
-	}
-	session_prop = &inst->prop;
-
-	dprintk(tag,
-		"%s inst stype %d %pK id = %#x ptype %#x prio %#x secure %#x kmask %#x",
-		inst->proc_name, inst->session_type, inst, inst->sess_id,
-		inst->prop.type, inst->prop.priority, inst->prop.is_secure,
-		inst->prop.kernel_mask);
-	dprintk(tag,
-		"dmask %#x, kref %#x state %#x session_error_code 0x%x\n",
-		inst->prop.dsp_mask, kref_read(&inst->kref), inst->state,
-		inst->session_error_code);
-	dprintk(tag, "session name %s", session_prop->session_name);
-
-	return 0;
-}
-
 int cvp_print_iova(struct msm_cvp_core *core)
 {
 	struct msm_cvp_inst *inst = NULL;
 
 	mutex_lock(&core->lock);
-	list_for_each_entry(inst, &core->instances, list) {
-		cvp_print_inst(CVP_ERR, inst);
-	}
-
 	dprintk(CVP_ERR, "core watermark 0x%x\n", core->va_watermark);
 	mutex_unlock(&core->lock);
 	return 0;

@@ -31,7 +31,5 @@ enum session_type {
 struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task);
 int msm_cvp_close(void *instance);
 int msm_cvp_suspend(void);
-int msm_cvp_poll(void *instance, struct file *filp,
-		struct poll_table_struct *pt);
 
 #endif
