@@ -3259,6 +3259,10 @@ static void iris_hfi_pm_handler(struct work_struct *work)
 	 * It is ok to check this variable outside the lock since
 	 * it is being updated in this context only
 	 */
+
+	 dprintk(CVP_PWR, "%s: enable the power collapse for validating control path and data path\n", __func__);
+	  return;
+	
 	if (device->skip_pc_count >= CVP_MAX_PC_SKIP_COUNT) {
 		dprintk(CVP_WARN, "Failed to PC for %d times\n",
 				device->skip_pc_count);
