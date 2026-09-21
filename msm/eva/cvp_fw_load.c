@@ -232,7 +232,7 @@ int init_cvp_fw(struct iris_hfi_device *device)
 	struct device_node *np;
 	int ret;
 
-	np = of_get_child_by_name(device->res->pdev->dev.of_node, "cvp-firmware");
+	np = of_get_child_by_name(device->res->pdev->dev.of_node, "eva-firmware");
 	if (!np)
 		return 0;
 
