@@ -36,6 +36,7 @@
 #include "vm/cvp_vm.h"
 #include "target/cvp_kaanapali_hal.h"
 #include "target/cvp_pakala_hal.h"
+#include "target/cvp_glymur_hal.h"
 #include "target/cvp_hawi_hal.h"
 #include "cvp_comm_def.h"
 
@@ -468,6 +469,8 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	} else if (core->platform_data->hal_version == KNP_HAL_VER) {
 		dprintk(CVP_DBG, "%s: using knp");
 		set_kaanapali_hal_functions();
+	} else if (core->platform_data->hal_version == GLYMUR_HAL_VER) {
+        set_glymur_hal_functions();
 	} else if (core->platform_data->hal_version == HAWI_HAL_VER) {
 		dprintk(CVP_DBG, "%s: using hawi");
 		set_hawi_hal_functions();

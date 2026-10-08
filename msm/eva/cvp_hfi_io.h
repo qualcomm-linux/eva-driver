@@ -20,3 +20,7 @@
 #ifdef CONFIG_EVA_ART
 #include "target/cvp_hawi_io.h"
 #endif
+
+#ifdef CONFIG_EVA_GLYMUR
+#include "target/cvp_glymur_io.h"
+#endif
