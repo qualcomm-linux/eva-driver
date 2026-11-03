@@ -5,8 +5,14 @@
  */
 
 #include "cvp_glymur_hal.h"
+#include "cvp_glymur_io.h"
+#include "cvp_hfi_io.h"
 
 extern struct cvp_hal_ops hal_ops;
+
+const struct cvp_hfi_io_registers cvp_glymur_io_registers = {
+	CVP_HFI_IO_REGISTERS_INIT,
+};
 
 void __check_tensilica_in_reset_glymur(struct iris_hfi_device *device)
 {

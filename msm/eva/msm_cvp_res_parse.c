@@ -6,6 +6,7 @@
 
 #include <linux/iommu.h>
 #include <linux/interconnect.h>
+#include <linux/namei.h>
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
@@ -1234,7 +1235,17 @@ int cvp_read_platform_resources_from_drv_data(
 	return rc;
 }
 
+static bool cvp_kvm_is_available(void)
+{
+	struct path path;
+	int rc;
 
+	rc = kern_path("/dev/kvm", LOOKUP_FOLLOW, &path);
+	if (!rc)
+		path_put(&path);
+
+	return !rc;
+}
 
 int cvp_read_platform_resources_from_dt(
 		struct msm_cvp_core *core)
@@ -1348,6 +1359,10 @@ int cvp_read_platform_resources_from_dt(
 
 	res->use_non_secure_pil = of_property_read_bool(pdev->dev.of_node,
 			"qcom,use-non-secure-pil");
+	res->cvp_kvm_enable = cvp_kvm_is_available();
+	dprintk(CVP_CORE, "%s: KVM path %s (/dev/kvm %s)\n", __func__,
+		res->cvp_kvm_enable ? "enabled" : "disabled",
+		res->cvp_kvm_enable ? "present" : "absent");
 
 	if (res->use_non_secure_pil || !is_iommu_present(res)) {
 		of_property_read_u32(pdev->dev.of_node, "qcom,fw-bias",

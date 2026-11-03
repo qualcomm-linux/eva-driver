@@ -47,7 +47,6 @@
 #include "msm_cvp_events.h"
 #include "cvp_comm_def.h"
 #include "cvp_presil.h"
-#include "target/cvp_kaanapali_hal.h"
 #include "msm_cvp.h"
 
 // ysi - added for debug
@@ -77,6 +76,22 @@ const struct msm_cvp_gov_data CVP_DEFAULT_BUS_VOTE = {
 };
 const int cvp_max_packets = 32;
 static enum cvp_irq_state cur_irq_state = CVP_IRQ_CLEAR;
+
+static const struct cvp_hfi_io_registers *cvp_get_io_registers(void)
+{
+	struct msm_cvp_core *core;
+
+	if (!cvp_driver || !cvp_driver->cvp_core)
+		return NULL;
+
+	core = cvp_driver->cvp_core;
+	if (!core->platform_data)
+		return NULL;
+
+	return core->platform_data->io_registers;
+}
+
+#define CVP_IO_REG(field) (cvp_get_io_registers()->field)
 
 static void iris_hfi_pm_handler(struct work_struct *work);
 static DECLARE_DELAYED_WORK(iris_hfi_pm_work, iris_hfi_pm_handler);
@@ -930,7 +945,7 @@ int __read_register(struct iris_hfi_device *device, u32 reg)
  */
 static void __set_threshold_registers(struct iris_hfi_device *device)
 {
-	u32 version = __read_register(device, CVP_WRAPPER_HW_VERSION);
+	u32 version = __read_register(device, CVP_IO_REG(wrapper_hw_version));
 
 	version &= ~GENMASK(15, 0);
 	if (version != (0x3 << 28 | 0x43 << 16))
@@ -1187,17 +1202,17 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	ctrl_init_val |= BIT(3);
 #endif
 	/* RUMI: CVP_CTRL_INIT in MPTest has bit 0 and 3 set */
-	__write_register(device, CVP_CTRL_INIT, ctrl_init_val);
-	while (!(ctrl_status & CVP_CTRL_INIT_STATUS__M) && count < max_tries) {
-		ctrl_status = __read_register(device, CVP_CTRL_STATUS);
-		if ((ctrl_status & CVP_CTRL_ERROR_STATUS__M) == 0x4) {
+	__write_register(device, CVP_IO_REG(ctrl_init), ctrl_init_val);
+	while (!(ctrl_status & CVP_IO_REG(ctrl_init_status_mask)) && count < max_tries) {
+		ctrl_status = __read_register(device, CVP_IO_REG(ctrl_status));
+		if ((ctrl_status & CVP_IO_REG(ctrl_error_status_mask)) == 0x4) {
 			dprintk(CVP_ERR, "invalid setting for UC_REGION\n");
 			rc = -ENODATA;
 			break;
 		}
 
 #ifdef USE_PRESIL
-		if (!__read_register(device, CVP_CTRL_INIT))
+		if (!__read_register(device, CVP_IO_REG(ctrl_init)))
 			break;
 		usleep_range(5000, 10000);
 #else
@@ -1207,8 +1222,8 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 		count++;
 	}
 
-	if (!(ctrl_status & CVP_CTRL_INIT_STATUS__M)) {
-		ctrl_init_val = __read_register(device, CVP_CTRL_INIT);
+	if (!(ctrl_status & CVP_IO_REG(ctrl_init_status_mask))) {
+		ctrl_init_val = __read_register(device, CVP_IO_REG(ctrl_init));
 		dprintk(CVP_ERR,
 			"Failed to boot FW status: %x %x %s\n",
 			ctrl_status, ctrl_init_val,
@@ -1226,8 +1241,8 @@ static inline int __boot_firmware(struct iris_hfi_device *device)
 	if (call_iris_op(device, enable_hw_power_collapse, device))
 		dprintk(CVP_ERR, "Failed to enabled inter-frame PC\n");
 	/* Enable interrupt before sending commands to tensilica */
-	__write_register(device, CVP_CPU_CS_H2XSOFTINTEN, 0x1);
-	__write_register(device, CVP_CPU_CS_X2RPMh, 0x0);
+	__write_register(device, CVP_IO_REG(cpu_cs_h2xsoftinten), 0x1);
+	__write_register(device, CVP_IO_REG(cpu_cs_x2rpmh), 0x0);
 
 	CVPKERNEL_ATRACE_END("__boot_firmware");
 
@@ -1295,15 +1310,15 @@ static void cvp_dump_csr(struct iris_hfi_device *dev)
 	if (!dev->power_enabled || dev->reg_dumped)
 		return;
 
-	reg = __read_register(dev, CVP_WRAPPER_CPU_STATUS);
+	reg = __read_register(dev, CVP_IO_REG(wrapper_cpu_status));
 	dprintk(CVP_ERR, "CVP_WRAPPER_CPU_STATUS: %x\n", reg);
-	reg = __read_register(dev, CVP_CPU_CS_SCIACMDARG0);
+	reg = __read_register(dev, CVP_IO_REG(cpu_cs_sciacmdarg0));
 	dprintk(CVP_ERR, "CVP_CPU_CS_SCIACMDARG0: %x\n", reg);
-	reg = __read_register(dev, CVP_WRAPPER_INTR_STATUS);
+	reg = __read_register(dev, CVP_IO_REG(wrapper_intr_status));
 	dprintk(CVP_ERR, "CVP_WRAPPER_INTR_STATUS: %x\n", reg);
-	reg = __read_register(dev, CVP_CPU_CS_H2ASOFTINT);
+	reg = __read_register(dev, CVP_IO_REG(cpu_cs_h2asoftint));
 	dprintk(CVP_ERR, "CVP_CPU_CS_H2ASOFTINT: %x\n", reg);
-	reg = __read_register(dev, CVP_CPU_CS_A2HSOFTINT);
+	reg = __read_register(dev, CVP_IO_REG(cpu_cs_a2hsoftint));
 	dprintk(CVP_ERR, "CVP_CPU_CS_A2HSOFTINT: %x\n", reg);
 #ifndef USE_PRESIL42
 	if (!call_iris_op(dev, check_ctl_power_on, dev)) {
@@ -1313,9 +1328,9 @@ static void cvp_dump_csr(struct iris_hfi_device *dev)
 		return;
 	}
 #endif
-	reg = __read_register(dev, CVP_WRAPPER_CPU_CLOCK_CONFIG);
+	reg = __read_register(dev, CVP_IO_REG(wrapper_cpu_clock_config));
 	dprintk(CVP_ERR, "CVP_WRAPPER_CPU_CLOCK_CONFIG: %x\n", reg);
-	reg = __read_register(dev, CVP_WRAPPER_CORE_CLOCK_CONFIG);
+	reg = __read_register(dev, CVP_IO_REG(wrapper_core_clock_config));
 	dprintk(CVP_ERR, "CVP_WRAPPER_CORE_CLOCK_CONFIG: %x\n", reg);
 
 	call_iris_op(dev, dump_noc_regs, dev);
@@ -1459,7 +1474,7 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 	rc = __iface_cmdq_write_relaxed(device, pkt, &needs_interrupt);
 
 #ifdef USE_PRESIL42
-	__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+	__write_register(device, CVP_IO_REG(cpu_cs_h2asoftint), 1);
 	return rc;
 #endif
 
@@ -1468,7 +1483,7 @@ static int __iface_cmdq_write(struct iris_hfi_device *device, void *pkt)
 		rc = 0;
 		if (call_iris_op(device, check_ctl_power_on, device))
 			dprintk(CVP_ERR, "%s power off, don't access reg\n", __func__);
-		__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+		__write_register(device, CVP_IO_REG(cpu_cs_h2asoftint), 1);
 
 		q_info = &device->iface_queues[CVP_IFACEQ_CMDQ_IDX];
 		if (core && q_info) {
@@ -1544,7 +1559,7 @@ static int __iface_msgq_read(struct iris_hfi_device *device, void *pkt)
 		if (tx_req_is_set) {
 			if (call_iris_op(device, check_ctl_power_on, device))
 				dprintk(CVP_ERR, "%s power off, don't access reg\n", __func__);
-			__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+			__write_register(device, CVP_IO_REG(cpu_cs_h2asoftint), 1);
 		}
 		rc = 0;
 	} else
@@ -1581,7 +1596,7 @@ static int __iface_dbgq_read(struct iris_hfi_device *device, void *pkt)
 		if (tx_req_is_set) {
 			if (call_iris_op(device, check_ctl_power_on, device))
 				dprintk(CVP_ERR, "%s power off, don't access reg\n", __func__);
-			__write_register(device, CVP_CPU_CS_H2ASOFTINT, 1);
+			__write_register(device, CVP_IO_REG(cpu_cs_h2asoftint), 1);
 		}
 		rc = 0;
 	} else
@@ -1865,17 +1880,17 @@ static void __setup_ucregion_memory_map(struct iris_hfi_device *device)
 	presil42_setup_ucregion_memory_map(device);
 	return;
 #endif
-	__write_register(device, CVP_UC_REGION_ADDR,
+	__write_register(device, CVP_IO_REG(uc_region_addr),
 			(u32)device->iface_q_table.align_device_addr);
-	__write_register(device, CVP_UC_REGION_SIZE, SHARED_QSIZE);
-	__write_register(device, CVP_QTBL_ADDR,
+	__write_register(device, CVP_IO_REG(uc_region_size), SHARED_QSIZE);
+	__write_register(device, CVP_IO_REG(qtbl_addr),
 			(u32)device->iface_q_table.align_device_addr);
-	__write_register(device, CVP_QTBL_INFO, 0x01);
+	__write_register(device, CVP_IO_REG(qtbl_info), 0x01);
 	if (device->sfr.align_device_addr)
-		__write_register(device, CVP_SFR_ADDR,
+		__write_register(device, CVP_IO_REG(sfr_addr),
 				(u32)device->sfr.align_device_addr);
 	if (device->qdss.align_device_addr)
-		__write_register(device, CVP_MMAP_ADDR,
+		__write_register(device, CVP_IO_REG(mmap_addr),
 				(u32)device->qdss.align_device_addr);
 #ifdef CVP_DSP_ENABLED
 	call_iris_op(device, setup_dsp_uc_memmap, device);
@@ -2205,6 +2220,8 @@ static int __sys_set_power_control(struct iris_hfi_device *device,
 
 	pkt = kzalloc(sizeof(struct cvp_hfi_cmd_sys_set_property_packet) + sizeof(u32) +
 		sizeof(struct cvp_hfi_enable), GFP_KERNEL);
+	if (!pkt)
+		return -ENOMEM;
 
 	call_hfi_pkt_op(device, sys_power_control, pkt, enable);
 	if (__iface_cmdq_write(device, pkt)) {
@@ -2356,6 +2373,7 @@ static int iris_hfi_core_init(void *device)
 #endif
 	struct cvp_hfi_cmd_sys_init_packet pkt;
 	struct cvp_hfi_cmd_sys_get_property_packet *pversion_pkt;
+
 	struct iris_hfi_device *dev;
 	CVPKERNEL_ATRACE_BEGIN("iris_hfi_core_init");
 
@@ -2430,7 +2448,7 @@ static int iris_hfi_core_init(void *device)
 	rc = msm_cvp_map_ipcc_regs(&ipcc_iova);
 	if (!rc) {
 		dprintk(CVP_CORE, "IPCC iova 0x%x\n", ipcc_iova);
-		__write_register(dev, CVP_MMAP_ADDR, ipcc_iova);
+		__write_register(dev, CVP_IO_REG(mmap_addr), ipcc_iova);
 	}
 #endif
 	rc = __load_fw(dev);
@@ -2446,7 +2464,8 @@ static int iris_hfi_core_init(void *device)
 		goto err_core_init;
 	}
 
-	dev->version = __read_register(dev, CVP_VERSION_INFO);
+	if (cvp_get_io_registers() != &cvp_nordau_io_registers)
+		dev->version = __read_register(dev, CVP_IO_REG(version_info));
 
 	rc =  call_hfi_pkt_op(dev, sys_init, &pkt, 0);
 	if (rc) {
@@ -2454,18 +2473,27 @@ static int iris_hfi_core_init(void *device)
 		goto err_core_init;
 	}
 
+	if (cvp_get_io_registers() == &cvp_nordau_io_registers) {
+		WRITE_ONCE(dev->hfi_version_valid, false);
+		reinit_completion(&dev->hfi_version_completion);
+	}
 	if (__iface_cmdq_write(dev, &pkt)) {
 		rc = -ENOTEMPTY;
 		goto err_core_init;
 	}
+
 	pversion_pkt = kzalloc(sizeof(struct cvp_hfi_cmd_sys_get_property_packet) + sizeof(u32),
 							GFP_KERNEL);
-	rc = call_hfi_pkt_op(dev, sys_image_version, pversion_pkt);
-	if (rc || __iface_cmdq_write(dev, pversion_pkt))
-		dprintk(CVP_WARN, "Failed to send image version pkt to f/w\n");
+	if (!pversion_pkt) {
+		dprintk(CVP_WARN, "Failed to allocate image version packet\n");
+	} else {
+		rc = call_hfi_pkt_op(dev, sys_image_version, pversion_pkt);
+		if (rc || __iface_cmdq_write(dev, pversion_pkt))
+			dprintk(CVP_WARN,
+				"Failed to send image version packet to firmware\n");
 
-	kfree(pversion_pkt);
-
+		kfree(pversion_pkt);
+	}
 	__sys_set_debug(device, msm_cvp_fw_debug);
 
 	__enable_subcaches(device);
@@ -2578,7 +2606,7 @@ static int iris_hfi_core_release(void *dev)
 	__dsp_shutdown(device);
 
 	__disable_subcaches(device);
-	ipcc_iova = __read_register(device, CVP_MMAP_ADDR);
+	ipcc_iova = __read_register(device, CVP_IO_REG(mmap_addr));
 	msm_cvp_unmap_ipcc_regs(ipcc_iova);
 	__unload_fw(device);
 	__hwfence_regs_unmap(device);
@@ -2618,8 +2646,9 @@ static void __core_clear_interrupt(struct iris_hfi_device *device)
 	return;
 #endif
 
-	intr_status = __read_register(device, CVP_WRAPPER_INTR_STATUS);
-	mask = (CVP_WRAPPER_INTR_MASK_A2HCPU_BMSK | CVP_FATAL_INTR_BMSK);
+	intr_status = __read_register(device, CVP_IO_REG(wrapper_intr_status));
+	mask = (CVP_IO_REG(wrapper_intr_mask_a2hcpu) |
+		CVP_IO_REG(fatal_intr_mask));
 
 	if (intr_status & mask) {
 		device->intr_status |= intr_status;
@@ -2631,7 +2660,7 @@ static void __core_clear_interrupt(struct iris_hfi_device *device)
 		device->spur_count++;
 	}
 
-	__write_register(device, CVP_CPU_CS_A2HSOFTINTCLR, 1);
+	__write_register(device, CVP_IO_REG(cpu_cs_a2hsoftintclr), 1);
 }
 
 static int iris_hfi_core_trigger_ssr(void *device,
@@ -2750,21 +2779,23 @@ static int iris_debug_hook(void *device)
 		return -ENODEV;
 	}
 	// dprintk(CVP_WARN, "Stop NOC transactions from EVA Core\n");
-	val = __read_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW);
-	__write_register(dev, CVP_VIDEO_B_NOC_A_QOSGEN_MAINCTL_LOW, val | BIT(2));
-	val = __read_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW);
-	__write_register(dev, CVP_VIDEO_B_NOC_B_QOSGEN_MAINCTL_LOW, val | BIT(2));
-	val = __read_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW);
-	__write_register(dev, CVP_VIDEO_B_NOC_C_QOSGEN_MAINCTL_LOW, val | BIT(2));
+	val = __read_register(dev, CVP_IO_REG(video_b_noc_a_qosgen_mainctl_low));
+	__write_register(dev, CVP_IO_REG(video_b_noc_a_qosgen_mainctl_low), val | BIT(2));
+	val = __read_register(dev, CVP_IO_REG(video_b_noc_b_qosgen_mainctl_low));
+	__write_register(dev, CVP_IO_REG(video_b_noc_b_qosgen_mainctl_low), val | BIT(2));
+	val = __read_register(dev, CVP_IO_REG(video_b_noc_c_qosgen_mainctl_low));
+	__write_register(dev, CVP_IO_REG(video_b_noc_c_qosgen_mainctl_low), val | BIT(2));
 
-	val = __read_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW);
-	__write_register(dev, CVP_NOC_MAIN_SIDEBANDMANAGER_FAULTINEN0_LOW, val | BIT(0));
+	val = __read_register(dev,
+		CVP_IO_REG(noc_main_sidebandmanager_faultinen0_low));
+	__write_register(dev, CVP_IO_REG(noc_main_sidebandmanager_faultinen0_low),
+		val | BIT(0));
 
 	/* Masking Core and CPU NOC interrupts */
-	mask_val = __read_register(dev, CVP_WRAPPER_INTR_MASK);
-	mask_val |= (CVP_FATAL_INTR_BMSK);
+	mask_val = __read_register(dev, CVP_IO_REG(wrapper_intr_mask));
+	mask_val |= CVP_IO_REG(fatal_intr_mask);
 	dprintk(CVP_WARN, "Masking Core and CPU NOC interrupts\n");
-	__write_register(dev, CVP_WRAPPER_INTR_MASK, mask_val);
+	__write_register(dev, CVP_IO_REG(wrapper_intr_mask), mask_val);
 	return 0;
 }
 
@@ -2994,7 +3025,7 @@ static int cvp_add_hfi_crc(struct eva_kmd_hfi_packet *in_pkt)
 
 static int iris_hfi_session_set_buffers(void *sess, u32 iova, u32 size)
 {
-	struct cvp_hfi_cmd_session_set_buffers_packet pkt;
+	struct cvp_hfi_cmd_session_set_buffers_packet pkt = { 0 };
 	int rc = 0;
 	struct cvp_hal_session *session = sess;
 	struct iris_hfi_device *device;
@@ -3254,7 +3285,7 @@ static void iris_hfi_pm_handler(struct work_struct *work)
 
 	dprintk(CVP_PWR,
 		"Entering %s\n", __func__);
-	
+
 	/*
 	 * It is ok to check this variable outside the lock since
 	 * it is being updated in this context only
@@ -3338,13 +3369,13 @@ static int __power_collapse(struct iris_hfi_device *device, bool force)
 
 	__flush_debug_queue(device, device->raw_packet);
 
-	pc_ready = __read_register(device, CVP_CTRL_STATUS) &
-		CVP_CTRL_STATUS_PC_READY;
+	pc_ready = __read_register(device, CVP_IO_REG(ctrl_status)) &
+		CVP_IO_REG(ctrl_status_pc_ready);
 	if (!pc_ready) {
 		wfi_status = __read_register(device,
-				CVP_WRAPPER_CPU_STATUS);
+				CVP_IO_REG(wrapper_cpu_status));
 		idle_status = __read_register(device,
-				CVP_CTRL_STATUS);
+				CVP_IO_REG(ctrl_status));
 		if (!(wfi_status & BIT(0))) {
 			dprintk(CVP_WARN,
 				"Skipping PC as wfi_status (%#x) bit not set\n",
@@ -3366,11 +3397,11 @@ static int __power_collapse(struct iris_hfi_device *device, bool force)
 
 		while (count < max_tries) {
 			wfi_status = __read_register(device,
-					CVP_WRAPPER_CPU_STATUS);
+					CVP_IO_REG(wrapper_cpu_status));
 			pc_ready = __read_register(device,
-					CVP_CTRL_STATUS);
+					CVP_IO_REG(ctrl_status));
 			if ((wfi_status & BIT(0)) && (pc_ready &
-				CVP_CTRL_STATUS_PC_READY))
+				CVP_IO_REG(ctrl_status_pc_ready)))
 				break;
 			usleep_range(150, 250);
 			count++;
@@ -3383,7 +3414,7 @@ static int __power_collapse(struct iris_hfi_device *device, bool force)
 			goto skip_power_off;
 		}
 	} else {
-		wfi_status = __read_register(device, CVP_WRAPPER_CPU_STATUS);
+		wfi_status = __read_register(device, CVP_IO_REG(wrapper_cpu_status));
 		if (!(wfi_status & BIT(0))) {
 			dprintk(CVP_WARN,
 				"Skip PC as wfi_status (%#x) bit not set\n",
@@ -3657,8 +3688,8 @@ int __response_handler(struct iris_hfi_device *device)
 		return 0;
 	}
 
-	if (device->intr_status & CVP_FATAL_INTR_BMSK) {
-		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CPU_NOC_BMSK) {
+	if (device->intr_status & CVP_IO_REG(fatal_intr_mask)) {
+		if (device->intr_status & CVP_IO_REG(wrapper_intr_mask_cpu_noc)) {
 			pr_err_ratelimited(CVP_PID_TAG "Received Xtensa NOC error\n",
 					current->pid, current->tgid, "err");
 #ifdef CVP_SW_DBG_BUF_ENABLED
@@ -3668,7 +3699,7 @@ int __response_handler(struct iris_hfi_device *device)
 #endif
 		}
 
-		if (device->intr_status & CVP_WRAPPER_INTR_MASK_CORE_NOC_BMSK) {
+		if (device->intr_status & CVP_IO_REG(wrapper_intr_mask_core_noc)) {
 			pr_err_ratelimited(CVP_PID_TAG "Received CVP core NOC error\n",
 					current->pid, current->tgid, "err");
 #ifdef CVP_SW_DBG_BUF_ENABLED
@@ -3851,7 +3882,7 @@ err_no_work:
 	}
 
 	/* We need re-enable the irq which was disabled in ISR handler */
-	if (!(intr_status & CVP_WRAPPER_INTR_STATUS_A2HWD_BMSK))
+	if (!(intr_status & CVP_IO_REG(wrapper_intr_status_a2hwd)))
 		enable_irq(device->cvp_hal_data->irq);
 	cur_irq_state = CVP_IRQ_CLEAR;
 	CVPKERNEL_ATRACE_END("iris_hfi_core_work_handler");
@@ -3898,7 +3929,7 @@ static void iris_hfi_wd_work_handler(struct work_struct *work)
 		call_iris_op(device, print_sbm_regs, device);
 		response.device_id = 0;
 		dprintk(CVP_WARN, "Halt Tensilica\n");
-		__write_register(device, CVP_WRAPPER_TZ_CPU_CLOCK_CONFIG, 0x1);
+		__write_register(device, CVP_IO_REG(wrapper_tz_cpu_clock_config), 0x1);
 		handle_sys_error(cmd, (void *) &response);
 		enable_irq(device->cvp_hal_data->irq_wd);
 	}
@@ -4866,8 +4897,8 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	core = cvp_driver->cvp_core;
 #ifndef USE_PRESIL42
 	/* Thomas input to debug CPU NoC hang */
-	__write_register(device, CVP_NOC_SBM_FAULTINEN0_LOW, 0x1);
-	__write_register(device, CVP_NOC_ERR_MAINCTL_LOW_OFFS, 0x3);
+	__write_register(device, CVP_IO_REG(noc_sbm_faultinen0_low), 0x1);
+	__write_register(device, CVP_IO_REG(noc_err_mainctl_low), 0x3);
 
 	/* Send TCSR SOC VERSION to FW: TCSR_SOC_HW_VERSION */
 	/*
@@ -4876,8 +4907,8 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	 * 15:8		MAJOR_VERSION
 	 * 7:0		MINOR_VERSION
 	 */
-	reg = __read_tcsr_register(device, TCSR_SOW_HW_VERSION);
-	__write_register(device, CVP_CPU_CS_SCIBCMDARG3, reg);
+	reg = __read_tcsr_register(device, CVP_IO_REG(tcsr_soc_hw_version));
+	__write_register(device, CVP_IO_REG(cpu_cs_scibcmdarg3), reg);
 
 	core->soc_hw_version = reg;
 	dprintk(CVP_CORE, "SOC ver 0x%x, family 0x%x, device 0x%x, major 0x%x, minor 0x%x",
@@ -4886,11 +4917,11 @@ static int __iris_power_on(struct iris_hfi_device *device)
 #endif
 	/* Remove below 2 register writes after HW_VERSION has valid version */
 	if (core) {
-		__write_register(device, CVP_WRAPPER_SPARE_0, core->soc_version);
+		__write_register(device, CVP_IO_REG(wrapper_spare_0), core->soc_version);
 
 		if (core->soc_version == 0x20000)
 			/* Enable HW ECO, specifically for Pakala EVA */
-			__write_register(device, CVP_CC_SPARE1, 1);
+			__write_register(device, CVP_IO_REG(cc_spare1), 1);
 	}
 
 	call_iris_op(device, noc_lpi, device, IRIS_POWER_ON);
@@ -4928,7 +4959,7 @@ static int __iris_power_on(struct iris_hfi_device *device)
 	enable_irq(device->cvp_hal_data->irq);
 #endif
 	__write_register(device,
-		CVP_WRAPPER_DEBUG_BRIDGE_LPI_CONTROL, 0x7);
+		CVP_IO_REG(wrapper_debug_bridge_lpi_control), 0x7);
 	pr_info_ratelimited(CVP_PID_TAG "cvp (eva) powered on\n",
 		current->pid, current->tgid, "pwr");
 	CVPKERNEL_ATRACE_END("iris_power_on");
@@ -4982,7 +5013,7 @@ static void power_off_iris2(struct iris_hfi_device *device)
 	if (!device->power_enabled || !device->res->sw_power_collapsible)
 		return;
 
-	if (!(device->intr_status & CVP_WRAPPER_INTR_STATUS_A2HWD_BMSK))
+	if (!(device->intr_status & CVP_IO_REG(wrapper_intr_status_a2hwd)))
 		disable_irq_nosync(device->cvp_hal_data->irq);
 	device->intr_status = 0;
 
@@ -5110,24 +5141,30 @@ static int __load_fw(struct iris_hfi_device *device)
 {
 	int rc = 0;
 
+	dprintk(CVP_INFO, "%s: selected %s firmware flow\n", __func__,
+		device->res->cvp_kvm_enable ? "KVM" : "non-KVM");
+
 	if ((!device->res->use_non_secure_pil && !device->res->firmware_base)
 		|| device->res->use_non_secure_pil) {
-#ifdef CVP_KVM_ENABLED
-		rc = init_cvp_fw(device);
-		if (rc)
-			goto fail_init_fw;
-#endif
+		if (device->res->cvp_kvm_enable) {
+			rc = init_cvp_fw(device);
+			if (rc)
+				goto fail_init_fw;
+		}
 		rc = load_cvp_fw_impl(device);
 		if (rc)
 			goto fail_load_fw;
+	} else {
+		dprintk(CVP_INFO,
+			"%s: host firmware load skipped; using preloaded firmware\n",
+			__func__);
 	}
 	return rc;
 
 fail_load_fw:
-#ifdef CVP_KVM_ENABLED
-	uninit_cvp_fw(device);
+	if (device->res->cvp_kvm_enable)
+		uninit_cvp_fw(device);
 fail_init_fw:
-#endif
 	power_off_iris2(device);
 	return rc;
 }
@@ -5142,9 +5179,8 @@ static void __unload_fw(struct iris_hfi_device *device)
 		flush_workqueue(device->iris_pm_workq);
 
 	unload_cvp_fw_impl(device);
-#ifdef CVP_KVM_ENABLED
-	uninit_cvp_fw(device);
-#endif
+	if (device->res->cvp_kvm_enable)
+		uninit_cvp_fw(device);
 	__interface_queues_release(device);
 	power_off_iris2(device);
 	__deinit_resources(device);
@@ -5353,11 +5389,11 @@ static int _vm_init_reg_and_irq(struct iris_hfi_device *device,
 	}
 
 	hal->tcsr_reg_base = devm_ioremap(&res->pdev->dev,
-			TCSR_REG_BASE, TCSR_REG_SIZE);
+			CVP_IO_REG(tcsr_reg_base), CVP_IO_REG(tcsr_reg_size));
 	if (!hal->tcsr_reg_base) {
 		dprintk(CVP_ERR,
 		"could not map DDR reg addr %pa of size %d\n",
-		TCSR_REG_BASE, TCSR_REG_SIZE);
+		CVP_IO_REG(tcsr_reg_base), CVP_IO_REG(tcsr_reg_size));
 	}
 
 	if (res->gcc_reg_base) {
@@ -5410,6 +5446,10 @@ static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *r
 
 	if (!res || !callback) {
 		dprintk(CVP_ERR, "Invalid Parameters\n");
+		return NULL;
+	}
+	if (!cvp_get_io_registers()) {
+		dprintk(CVP_ERR, "No HFI IO register table for matched platform\n");
 		return NULL;
 	}
 
@@ -5468,6 +5508,7 @@ static struct iris_hfi_device *__add_device(struct msm_cvp_platform_resources *r
 	}
 
 	mutex_init(&hdevice->lock);
+	init_completion(&hdevice->hfi_version_completion);
 	INIT_LIST_HEAD(&hdevice->sess_head);
 
 	return hdevice;
@@ -5613,31 +5654,31 @@ void cvp_clock_reg_print(struct iris_hfi_device *dev)
 
 	dprintk(CVP_ERR, "%s Clock Controller Debug Prints:\n", __func__);
 
-	reg = __read_register(dev, CVP_CC_MVS0C_GDSCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0c_gdscr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0C_GDSCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_MVS0C_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0c_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0C_CBCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_MVS0_GDSCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0_gdscr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0_GDSCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_MVS0_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0_CBCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_AHB_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_ahb_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_AHB_CBCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_SLEEP_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_sleep_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_SLEEP_CBCR: %x\n", reg);
 
-	reg = __read_register(dev, CVP_CC_MVS0_FREERUN_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0_freerun_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0_FREERUN_CBCR: %x\n", reg);
-	reg = __read_register(dev, CVP_CC_MVS0C_FREERUN_CBCR);
+	reg = __read_register(dev, CVP_IO_REG(cc_mvs0c_freerun_cbcr));
 	dprintk(CVP_ERR, "CVP_CC_MVS0C_FREERUN_CBCR: %x\n", reg);
 
-	reg = __read_gcc_register(dev, CVP_GCC_EVA_AXI0_CBCR);
+	reg = __read_gcc_register(dev, CVP_IO_REG(gcc_eva_axi0_cbcr));
 	dprintk(CVP_ERR, "CVP_GCC_EVA_AXI0_CBCR: %x\n", reg);
-	reg = __read_gcc_register(dev, CVP_GCC_EVA_AXI0C_CBCR);
+	reg = __read_gcc_register(dev, CVP_IO_REG(gcc_eva_axi0c_cbcr));
 	dprintk(CVP_ERR, "CVP_GCC_EVA_AXI0C_CBCR: %x\n", reg);
-	reg = __read_gcc_register(dev, CVP_GCC_EVA_AHB_CBCR);
+	reg = __read_gcc_register(dev, CVP_IO_REG(gcc_eva_ahb_cbcr));
 	dprintk(CVP_ERR, "CVP_GCC_EVA_AHB_CBCR: %x\n", reg);
-	reg = __read_gcc_register(dev, CVP_GCC_EVA_XO_CBCR);
+	reg = __read_gcc_register(dev, CVP_IO_REG(gcc_eva_xo_cbcr));
 	dprintk(CVP_ERR, "CVP_GCC_EVA_XO_CBCR: %x\n", reg);
 }
 
@@ -5708,5 +5749,3 @@ error_fw_version:
 	dprintk(CVP_WARN, "%s: Failed to set fw version\n", __func__);
 	return fw_version;
 }
-
-

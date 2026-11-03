@@ -35,7 +35,10 @@ register_eva_module(
         "eva/vm/cvp_vm_msgq.c",
         "eva/vm/cvp_vm_resource.c",
         "eva/target/cvp_kaanapali_hal.c",
+		"eva/target/cvp_kaanapali_clock_ids.c",
         "eva/target/cvp_pakala_hal.c",
+		"eva/target/cvp_glymur_clock_ids.c",
+		"eva/target/cvp_nordau_clock_ids.c",
         "eva/target/cvp_hawi_hal.c"
     ],
     config_deps = {

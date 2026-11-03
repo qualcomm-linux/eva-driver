@@ -208,6 +208,8 @@ struct msm_cvp_platform_resources {
 	struct bus_set bus_set;
 	struct reset_set reset_set;
 	bool use_non_secure_pil;
+	/* Set at probe from /dev/kvm availability; selects the firmware load path. */
+	bool cvp_kvm_enable;
 	bool sw_power_collapsible;
 	bool dsp_enabled;
 	struct list_head context_banks;
@@ -243,4 +245,3 @@ static inline bool is_iommu_present(struct msm_cvp_platform_resources *res)
 
 int cvp_of_fdt_get_ddrtype(void);
 #endif
-

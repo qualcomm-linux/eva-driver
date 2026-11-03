@@ -6,8 +6,14 @@
 
 
 #include "cvp_kaanapali_hal.h"
+#include "cvp_kaanapali_io.h"
+#include "cvp_hfi_io.h"
 
 extern struct cvp_hal_ops hal_ops;
+
+const struct cvp_hfi_io_registers cvp_kaanapali_io_registers = {
+	CVP_HFI_IO_REGISTERS_INIT,
+};
 
 static int iris_pm_qos_aggregate_kaanapali(struct iris_hfi_device *device)
 {

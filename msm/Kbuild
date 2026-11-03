@@ -36,15 +36,7 @@ ccflags-y += -I$(EVA_ROOT)/../synx-kernel/msm/synx/ \
     -I$(EVA_ROOT)/../synx-kernel/include/uapi/synx/media/
 endif
 
-ifeq ($(CONFIG_ARCH_CANOE), y)
-$(info within KBUILD file CONFIG_ARCH_CANOE = $(CONFIG_ARCH_CANOE))
-KBUILD_CPPFLAGS += -DCONFIG_EVA_CANOE=1
-ccflags-y += -DCONFIG_EVA_CANOE=1 -DCVP_FIX_DDR_TYPE=1
-endif
 
-$(info within KBUILD file CONFIG_ARCH_GLYMUR = $(CONFIG_ARCH_GLYMUR))
-KBUILD_CPPFLAGS += -DCONFIG_EVA_GLYMUR=1
-ccflags-y += -DCONFIG_EVA_GLYMUR=1
 
 ifeq ($(CONFIG_EVA_LE), 1)
 ccflags-y += -DCONFIG_EVA_TVM=1 -Wno-error
@@ -70,9 +62,13 @@ msm-eva-objs := eva/cvp.o \
         eva/msm_cvp_synx.o \
         eva/msm_cvp_dma_buf.o \
         eva/target/cvp_kaanapali_hal.o \
+	 eva/target/cvp_kaanapali_clock_ids.o \
         eva/target/cvp_pakala_hal.o \
         eva/target/cvp_glymur_hal.o \
+	 eva/target/cvp_glymur_clock_ids.o \
         eva/target/cvp_hawi_hal.o \
+	eva/target/cvp_nordau_hal.o \
+	eva/target/cvp_nordau_clock_ids.o \
 	eva/cvp_fw_load.o \
 	eva/cvp_power.o \
 	eva/cvp_presil.o \
@@ -80,4 +76,3 @@ msm-eva-objs := eva/cvp.o \
 #	eva/vm/cvp_vm_msgq.o \
 #	eva/vm/cvp_vm_resource.o
 obj-m += msm-eva.o
-

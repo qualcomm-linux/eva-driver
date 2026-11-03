@@ -23,10 +23,8 @@
 #include "msm_cvp_debug.h"
 #include "cvp_hfi_api.h"
 #include "cvp_hfi.h"
-#include <dt-bindings/clock/qcom,glymur-evacc.h>
-#include <dt-bindings/clock/qcom,glymur-gcc.h>
-#include <dt-bindings/clock/qcom,kaanapali-evacc.h>
-#include <dt-bindings/clock/qcom,kaanapali-gcc.h>
+#include "cvp_hfi_io.h"
+#include "target/cvp_clock_ids.h"
 
 extern int of_fdt_get_ddrtype(void);
 
@@ -84,6 +82,7 @@ static struct msm_cvp_common_data sm8450_common_data[] = {
 	{
 		.key = "qcom,max-supported-instances",
 		.value = 16,
+    
 	},
 	{
 		.key = "qcom,max-ssr-allowed",
@@ -669,6 +668,71 @@ static struct msm_cvp_common_data sm8950_common_data[] = {
 	}
 };
 
+
+static struct msm_cvp_common_data sa8797p_common_data[] = {
+	{
+		.key = "qcom,pm-qos-latency-us",
+		.value = 50,		/* inherited sm8850 — verify w/ SA8797P power team */
+	},
+	{
+		.key = "qcom,sw-power-collapse",
+#ifdef USE_PRESIL
+		.value = 0,
+#else
+		.value = 0,
+#endif
+	},
+	{
+		.key = "qcom,domain-attr-non-fatal-faults",
+		.value = 0,
+	},
+	{
+		.key = "qcom,max-secure-instances",
+		.value = 2,
+	},
+	{
+		.key = "qcom,max-supported-instances",
+		.value = 32,		/* inherited sm8850 */
+	},
+	{
+		.key = "qcom,max-ssr-allowed",
+		.value = 1,	/*
+					* Maxinum number of SSR before BUG_ON
+					*/
+	},
+	{
+		.key = "qcom,power-collapse-delay",
+		.value = 3000,
+	},
+	{
+		.key = "qcom,hw-resp-timeout",
+#ifdef USE_PRESIL
+		.value = 180000,
+#else
+		.value = 2000,
+#endif
+	},
+	{
+		.key = "qcom,dsp-resp-timeout",
+		.value = 1000,
+	},
+	{
+		.key = "qcom,debug-timeout",
+		.value = 0,
+	},
+	{
+		.key = "qcom,dsp-enabled",
+		.value = 0,		/* inherited sm8850 */
+	},
+	{
+		.key = "CVP_GDSC_FRAMEWORK_TYPE",
+		.value = 1,    /* framework-type: 0x0 --> Regulator framework, 0x1 --> GenPD framework */
+	},
+	{
+      .key = "qcom,rcg_vnoc_clk_en_low",
+      .value = 0x8,
+   }
+};
 /* Default UBWC config for LPDDR5 */
 static struct msm_cvp_ubwc_config_data kona_ubwc_data[] = {
 	UBWC_CONFIG(1, 1, 1, 0, 0, 0, 8, 32, 16, 0, 0),
@@ -698,6 +762,18 @@ static struct msm_cvp_qos_setting pakala_noc_qos = {
 static const char * const cvp_glymur_cache_slice_names[] = {
     "cvp",
 };
+
+
+static struct msm_cvp_qos_setting nordau_noc_qos = {
+	.axi_qos = 0x99,
+	.prioritylut_low = 0x33333333,
+	.prioritylut_high = 0x33333333,
+	.urgency_low = 0x1033,
+	.urgency_low_ro = 0x1003,
+	.dangerlut_low = 0x0,
+	.safelut_low = 0xffff,
+};
+
 
 
 /*upstream properties*/
@@ -987,28 +1063,163 @@ static const struct cvp_iommu_context_bank kaanapali_cvp_context_banks[] = {
     },
 };
 
-/* clock-ids should have same sequence as clocks in DT*/
-static const u32 eva_glymur_clock_ids[] = {
-        GCC_EVA_AXI0C_CLK,
-        EVA_CC_SLEEP_CLK,
-        EVA_CC_MVS0C_FREERUN_CLK,
-		EVA_CC_MVS0C_CLK,
-		GCC_EVA_AXI0_CLK,
-        EVA_CC_MVS0_FREERUN_CLK,   
-        EVA_CC_MVS0_CLK,
+static const char * const cvp_nordau_cache_slice_names[] = {
+    "cvp",
+};
+
+static const struct cvp_subcache_desc cvp_nordau_desc = {
+    .num_slices = 0,
+    .cache_slice_names = NULL,
 };
 
 
-/* clock-ids should have same sequence as clocks in DT*/
-static const u32 eva_kaanapali_clock_ids[] = {
-        GCC_EVA_AXI0C_CLK,
-        EVA_CC_SLEEP_CLK,
-        EVA_CC_MVS0C_FREERUN_CLK,
-        EVA_CC_MVS0C_CLK,
-        GCC_EVA_AXI0_CLK,
-        EVA_CC_MVS0_FREERUN_CLK,
-        EVA_CC_MVS0_CLK,
+static const struct cvp_bus_desc cvp_bus_nordau_descs[] = {
+    {
+        .name = "eva-cfg",		/* [DT dtsi:43] */
+        .governor = "performance",	/* [INH] */
+        .min_bw = 1000,			/* [INH] */
+        .max_bw = 1000,			/* [INH] */
+    },
+    {
+        .name = "eva-ddr",		/* [DT dtsi:43] */
+        .governor = "performance",	/* [INH] */
+        .min_bw = 1000,			/* [INH] */
+        .max_bw = 6533000,		/* [INH] SoC DDR ceiling — verify for SA8797P */
+    },
 };
+
+
+static const struct reg_value_pair nordau_reg_presets_data[] = {
+    { .reg = 0xB0088, .value = 0x0 },
+};
+
+static const struct cvp_reg_presets cvp_nordau_reg_presets = {
+    .count = ARRAY_SIZE(nordau_reg_presets_data),
+    .tbl   = nordau_reg_presets_data,
+};
+
+
+const struct cvp_gcc_reg_region cvp_nordau_gcc_reg = {
+    .base = 0x110000,
+    .size   = 0x90000,
+};
+
+
+static const struct cvp_ipcc_reg_region cvp_nordau_ipcc_reg = {
+    .base = 0x400000,
+    .size   = 0x100000,
+};
+
+
+static const u32 cvp_nordau_reset_power_states[] = {
+    0x0,  /* reset-names "core" -> EVA_CC_MVS0C_CLK_ARES (nordau-cvp.dtsi:34) */
+};
+
+static const struct cvp_reset_power_set_desc cvp_nordau_reset_power_set_desc = {
+    .count  = ARRAY_SIZE(cvp_nordau_reset_power_states),
+    .pwr_stats = cvp_nordau_reset_power_states,
+};
+
+
+static const struct cvp_regspace_mappings cvp_nordau_regspace = {
+    .hwmutex = {
+        .iova = 0xFFB00000,	/* [INH] SoC SMMU VA — unverified */
+        .size = 0x2000,		/* [INH] */
+        .phys = 0x1f4a000,	/* [INH] SA8797P TCSR hwmutex — unverified */
+    },
+    .aon = {
+        .iova = 0xFF80F000,	/* [INH] SoC SMMU VA — unverified */
+
+        .size = 0xF000,
+        .phys = 0x0ABE0000,	/* [CSV] nordau_modules.csv:51 EVA_CVP_AON — VERIFIED */
+    },
+    .aon_timer = {
+        .iova = 0xFFA00000,	/* [INH] SoC SMMU VA — unverified */
+        .size = 0x1000,		/* [INH] */
+        .phys = 0xc220000,	/* [INH] SA8797P timer — unverified */
+    },
+};
+
+
+static const u32 nordau_pd_hw_pc[] = {
+    0x0,  /* "eva"  / EVA_CC_MVS0C_GDSC — controller: no HW power collapse [INH] */
+    0x1,  /* "core" / EVA_CC_MVS0_GDSC  — core: HW power collapse capable  [INH] */
+};
+
+static const struct cvp_power_domains nordau_power_domains = {
+    .pd_count = ARRAY_SIZE(nordau_pd_hw_pc),	/* [DT] 2 GDSCs, dtsi:14-15 */
+    .power_domain_idx = 2,			/* [DT] OPP rails start at index 2 */
+    .gdsc_has_hw_pc = nordau_pd_hw_pc,
+};
+
+
+static const u32 nordau_clock_props_data[] = {
+    0x0,  /* [0] eva_iface     GCC_EVA_AXI0C_CLK        — fixed */
+    0x0,  /* [1] core_iface    GCC_EVA_AXI0_CLK         — fixed */
+    0x0,  /* [2] sleep         EVA_CC_SLEEP_CLK         — fixed 32 kHz */
+    0x0,  /* [3] eva_freerun   EVA_CC_MVS0C_FREERUN_CLK — fixed */
+    0x0,  /* [4] core_freerun  EVA_CC_MVS0_FREERUN_CLK  — fixed */
+    0x1,  /* [5] eva0          EVA_CC_MVS0C_CLK         — HAS_SCALING [CSV:77-81] */
+    0x1,  /* [6] core0         EVA_CC_MVS0_CLK          — HAS_SCALING [CSV:47-51] */
+};
+
+static const struct cvp_clock_props nordau_clock_props = {
+    .clock_props = nordau_clock_props_data,
+    .count_clkProps     = ARRAY_SIZE(nordau_clock_props_data),
+};
+
+static const u32 nordau_allowed_clock_rates[] = {
+    280000000,	/* [CSV:48] SVS    */
+    500000000,	/* [CSV:49] SVS_L1 */
+    600000000,	/* [CSV:47] NOM    */
+    625000000,	/* [CSV:50,51] TURBO == TURBO_L1 — deduped */
+};
+
+static const struct cvp_allowed_clock_rates nordau_allowed_clocks = {
+    .clk_rates = nordau_allowed_clock_rates,
+    .count = ARRAY_SIZE(nordau_allowed_clock_rates),
+};
+
+
+static const char *const nordau_eva_opp_clk_names[] = {
+	"core0",	/* [DT dtsi:32] EVA_CC_MVS0_CLK  — 1st opp-hz value */
+	"eva0",		/* [DT dtsi:31] EVA_CC_MVS0C_CLK — 2nd opp-hz value */
+	NULL,
+};
+
+
+static const char *const nordau_opp_pd_table[] = { "mxc", "mmcx" };
+
+
+static const struct cvp_ipclite_mappings cvp_nordau_ipclite_desc = {
+    .iova_start = 0xFE500000,
+};
+
+
+static const struct cvp_iommu_context_bank nordau_cvp_context_banks[] = {
+    {
+        .name = "eva_hlos",             /* [DT dtsi:46] EVA_NON_SECURE SID 0x0920 */
+        .buffer_type = 0xfff,           /* [INH] */
+        .iova_start = 0x4b000000,       /* [INH] */
+        .iova_size  = 0x90000000,       /* [INH] */
+        .vmid = 0,                      /* [INH] non-secure */
+    },
+    {
+        .name = "eva_sec_nonpixel",     /* [DT dtsi:47] EVA_SECURE_NONPIXEL SID 0x0924 */
+        .buffer_type = 0x741,           /* [INH] */
+        .iova_start = 0x01000000,       /* [INH] */
+        .iova_size  = 0x25800000,       /* [INH] */
+        .vmid = 0xB,                    /* [INH] secure — confirm w/ security team */
+    },
+    {
+        .name = "eva_sec_pixel",        /* [DT dtsi:48] EVA_SECURE_PIXEL SID 0x0923 */
+        .buffer_type = 0x106,           /* [INH] */
+        .iova_start = 0x26800000,       /* [INH] */
+        .iova_size  = 0x24800000,       /* [INH] */
+        .vmid = 0xA,                    /* [INH] secure — confirm w/ security team */
+    },
+};
+
 
 static struct msm_cvp_platform_data default_data = {
 	.common_data = default_common_data,
@@ -1109,6 +1320,7 @@ static struct msm_cvp_platform_data sm8735_data = {
 };
 
 static struct msm_cvp_platform_data sm8850_data = {
+	.io_registers = &cvp_kaanapali_io_registers,
 	.common_data = sm8850_common_data,
 	.common_data_length = ARRAY_SIZE(sm8850_common_data),
 	.sku_version = 0,
@@ -1128,8 +1340,8 @@ static struct msm_cvp_platform_data sm8850_data = {
 	.reset_power_sets = &cvp_kaanapali_reset_power_set_desc,
 	.power_domains = &kaanapali_power_domains,
 	.clock_props = &kaanapali_clock_props,
-	.clock_ids = eva_kaanapali_clock_ids, 
-	.num_clock_ids = ARRAY_SIZE(eva_kaanapali_clock_ids),
+	.clock_ids = cvp_kaanapali_clock_ids,
+	.num_clock_ids = CVP_KAANAPALI_CLOCK_IDS_COUNT,
 	.allowed_clk_rates = &kaanapali_allowed_clocks,
 	.opp_clk_tbl = kaanapali_eva_opp_clk_names,
 	.opp_pd_tbl = kaanapali_opp_pd_table,
@@ -1142,6 +1354,7 @@ static struct msm_cvp_platform_data sm8850_data = {
 };
 
 static struct msm_cvp_platform_data glymur_data = {
+	.io_registers = &cvp_glymur_io_registers,
 	.common_data = sm8850_common_data,
 	.common_data_length = ARRAY_SIZE(sm8850_common_data),
 	.sku_version = 0,
@@ -1161,8 +1374,8 @@ static struct msm_cvp_platform_data glymur_data = {
     .reset_power_sets = &cvp_glymur_reset_power_set_desc,
     .power_domains = &glymur_power_domains,
     .clock_props = &glymur_clock_props,
-	.clock_ids = eva_glymur_clock_ids, 
-	.num_clock_ids = ARRAY_SIZE(eva_glymur_clock_ids),
+	.clock_ids = cvp_glymur_clock_ids,
+	.num_clock_ids = CVP_GLYMUR_CLOCK_IDS_COUNT,
     .allowed_clk_rates = &glymur_allowed_clocks,
     .opp_clk_tbl = glymur_eva_opp_clk_names,
     .opp_pd_tbl = glymur_opp_pd_table,
@@ -1218,6 +1431,41 @@ static struct msm_cvp_platform_data sm8950_data = {
 	.hal_version = HAWI_HAL_VER,
 };
 
+
+static struct msm_cvp_platform_data nordau_data = {
+	.io_registers = &cvp_nordau_io_registers,
+	.common_data = sa8797p_common_data,			/* [INH] SoC=SA8797P, array cloned from sm8850 — verify w/ power team */
+	.common_data_length = ARRAY_SIZE(sa8797p_common_data),
+	.sku_version = 0,					/* user-confirmed */
+	.vpu_ver = VPU_VERSION_5,				/* [INH] VPU gen unchanged — confirm NORDAU is VPU5 */
+	.ubwc_config = kona_ubwc_data,				/* [INH] reuse Kona UBWC — confirm NORDAU UBWC/DDR settings */
+	.noc_qos = &nordau_noc_qos,				/* [INH] ⚠️ HIGHEST RISK — see nordau_noc_qos comment */
+	.vm_id = 1,						/* [INH] pvm=1 — SoC-specific, confirm SA8797P integration guide */
+	.cvp_hfi = cvp_hfi_defs_v2,				/* [INH] HFI protocol v2 unchanged */
+	.cvp_hfi_msg = cvp_hfi_msg_defs_v2,			/* [INH] HFI protocol v2 unchanged */
+	.hfi_ver = 2,						/* [INH] HFI protocol v2 unchanged */
+	.hal_version = NORDAU_HAL_VER,				/* = 5, cvp_comm_def.h:40 (set by build-wiring) */
+	.pas_id = 26,						/* [INH] confirm w/ security team */
+	.gcc_regs = &cvp_nordau_gcc_reg,			/* [INH] needs SA8797P GCC map */
+	.ipcc_regs = &cvp_nordau_ipcc_reg,			/* [INH] needs SA8797P IPCC map */
+	.regspace_mappings = &cvp_nordau_regspace,		/* [CSV] aon.phys only; rest [INH] */
+	.reg_presets = &cvp_nordau_reg_presets,			/* [CSV] offset verified; value [INH] */
+	.reset_power_sets = &cvp_nordau_reset_power_set_desc,	/* [DT] 1 reset; value [INH] */
+	.power_domains = &nordau_power_domains,			/* [DT]+[CSV] pd_count=2, idx=2; hw_pc [INH] */
+	.clock_props = &nordau_clock_props,			/* [DT]+[CSV] re-indexed for NORDAU order */
+	.clock_ids = cvp_nordau_clock_ids,			/* [DT] dtsi:18-24 order */
+	.num_clock_ids = CVP_NORDAU_CLOCK_IDS_COUNT,	/* 7 — must equal DT clock count */
+	.allowed_clk_rates = &nordau_allowed_clocks,		/* [CSV] eva_cc_mvs0_clk, deduped */
+	.opp_clk_tbl = nordau_eva_opp_clk_names,		/* [DT] core0,eva0 per opp-hz pair order */
+	.opp_pd_tbl = nordau_opp_pd_table,			/* [DT] mxc,mmcx dtsi:14-15 */
+	.opp_pd_tbl_size = ARRAY_SIZE(nordau_opp_pd_table),	/* 2 */
+	.bus_descs = cvp_bus_nordau_descs,			/* [DT] order dtsi:38-43; bw [INH] */
+	.subcache_desc = &cvp_nordau_desc,			/* [INH] slice list not in QLI DT */
+	.ipclite_mappings = &cvp_nordau_ipclite_desc,		/* [INH] needs SMMU VA map */
+	.cb_data = nordau_cvp_context_banks,			/* [DT] SIDs/count; iova+vmid [INH] */
+	.cb_data_size = ARRAY_SIZE(nordau_cvp_context_banks),	/* 3 — matches dtsi:46-48 */
+};
+
 static const struct of_device_id msm_cvp_dt_match[] = {
 	{
 		.compatible = "qcom,waipio-cvp",
@@ -1266,6 +1514,11 @@ static const struct of_device_id msm_cvp_dt_match[] = {
 	{
 		.compatible = "qcom,pebble-cvp",
 		.data = &sm8950_data,
+	},
+    {
+
+		.compatible = "qcom,nordau-eva",
+		.data = &nordau_data,
 	},
 	{},
 };

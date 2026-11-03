@@ -5,6 +5,7 @@
  */
 
 #include "cvp_pakala_hal.h"
+#include "cvp_pakala_io.h"
 
 extern struct cvp_hal_ops hal_ops;
 

@@ -9,7 +9,6 @@
 
 #include "cvp_core_hfi.h"
 #include "cvp_hfi.h"
-#include "cvp_glymur_io.h"
 #include "msm_cvp_clocks.h"
 #include "msm_cvp_debug.h"
 #include <linux/delay.h>

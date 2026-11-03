@@ -50,6 +50,12 @@
 
 #define ARP_CHUNK_SIZE 204800
 
+/* Firmware rejects ARP buffers smaller than this value. */
+#define ARP_MAX_CHUNK_SIZE (8192 * 3 * 16)
+#define ARP_MAX_BUF_SIZE (ARP_MAX_CHUNK_SIZE * 2)
+#define ARP_NUM_BUFS 3
+#define ARP_MIN_BUFFER_SIZE (ARP_MAX_BUF_SIZE * ARP_NUM_BUFS)
+
 #define CVP_RT_PRIO_THRESHOLD 1
 
 #define MAX_CVP_ERROR_COUNT 65535
@@ -141,7 +147,10 @@ struct msm_cvp_qos_setting {
 	u32 safelut_low;
 };
 
+struct cvp_hfi_io_registers;
+
 struct msm_cvp_platform_data {
+	const struct cvp_hfi_io_registers *io_registers;
 	struct msm_cvp_common_data *common_data;
 	unsigned int common_data_length;
 	unsigned int sku_version;
