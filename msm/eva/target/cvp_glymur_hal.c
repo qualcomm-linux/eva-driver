@@ -176,14 +176,23 @@ static void __enter_video_ctl_noc_lpi(struct iris_hfi_device *device)
 	__write_register(device, CVP_AON_WRAPPER_CVP_VIDEO_CTL_NOC_LPI_CONTROL,
 			 0x0);
 	if (count == max_count) {
-		dprintk(
-		    CVP_WARN,
-		    "%s, CVP_VIDEO_CTL NOC not in qaccept status %x %x %x\n",
-		    __func__, lpi_status);
+		dprintk(CVP_WARN,
+			"%s , CVP_VIDEO_CTL Noc is not in LPI: lpi_status %x\n",
+			__func__, lpi_status);
 
 		/* Added for debug info purpose, not part of HPG */
 		call_iris_op(device, print_sbm_regs, device);
-	}
+	} else
+		dprintk(CVP_INFO, "%s, CVP_VIDEO_CTL Noc is in LPI: lpi_status %x (count %d)\n",
+			__func__, lpi_status, count);
+}
+
+static void __noc_lpi_glymur(struct iris_hfi_device *device,
+				enum enter_noc_lpi_caller caller)
+{
+	__enter_cpu_noc_lpi(device);
+	__enter_video_ctl_noc_lpi(device);
+	__enter_core_noc_lpi(device);
 }
 
 void setup_dsp_uc_memmap_vpu5_glymur(struct iris_hfi_device *device)
@@ -377,7 +386,6 @@ int __power_off_core_glymur(struct iris_hfi_device *device)
 		 */
 		__disable_gdsc(device, "core");
 		msm_cvp_disable_unprepare_clk(device, "core0");
-		msm_cvp_disable_unprepare_clk(device, "core_freerun");
 		return 0;
 	}
 
@@ -434,6 +442,7 @@ int __power_off_controller_glymur(struct iris_hfi_device *device)
 	u32 lpi_status, count = 0, max_count = 1000;
 	u32 lpi_control;
 	int rc;
+	u32 axi_cfg, fifo_rst;
 
 	/* HPG 3.7 Step 4  */
 	__write_register(device, CVP_CPU_CS_X2RPMh, 0x3);
@@ -464,6 +473,23 @@ int __power_off_controller_glymur(struct iris_hfi_device *device)
 		count);
 	if (count == max_count)
 		dprintk(CVP_WARN, "DBLP Release: lpi_status %x\n", lpi_status);
+	/*
+	 * Reset MVP QNS4PDXFIFO, same as Windows EvaDeInitCore (PC path),
+	 * done right after debug bridge LPI release.
+	 */
+
+		axi_cfg = __read_register(device, CVP_WRAPPER_AXI_CLOCK_CONFIG);
+		__write_register(device, CVP_WRAPPER_AXI_CLOCK_CONFIG, 0x3);
+		__write_register(device, CVP_WRAPPER_QNS4PDXFIFO_RESET, 0x1);
+		fifo_rst = __read_register(device,
+					   CVP_WRAPPER_QNS4PDXFIFO_RESET);
+		__write_register(device, CVP_WRAPPER_QNS4PDXFIFO_RESET, 0x0);
+		__write_register(device, CVP_WRAPPER_AXI_CLOCK_CONFIG, 0x0);
+		dprintk(CVP_WARN,
+			"QNS4PDXFIFO reset: axi_cfg before %#x, fifo_rst readback %#x (expect 0x1), after %#x/%#x\n",
+			axi_cfg, fifo_rst,
+			__read_register(device, CVP_WRAPPER_AXI_CLOCK_CONFIG),
+			__read_register(device, CVP_WRAPPER_QNS4PDXFIFO_RESET));
 
 	lpi_control =
 	    __read_register(device, CVP_AON_WRAPPER_CVP_NOC_LPI_CONTROL);
@@ -490,7 +516,7 @@ int __power_off_controller_glymur(struct iris_hfi_device *device)
 
 	rc = msm_cvp_disable_unprepare_clk(device, "eva0");
 	if (rc)
-		dprintk(CVP_ERR, "Failed to disable cvp_clk: %d\n", rc);
+		dprintk(CVP_ERR, "Failed to disable eva0_clk: %d\n", rc);
 
 	rc = msm_cvp_disable_unprepare_clk(device, "sleep");
 	if (rc)
@@ -498,6 +524,8 @@ int __power_off_controller_glymur(struct iris_hfi_device *device)
 
 	/* HPG 3.7 Step 13 and 14 */
 	__disable_gdsc(device, "eva");
+	/* Step #28: Override ARCG control to allow AXI0 clock pass through */
+	__write_register(device, CVP_AON_WRAPPER_CVP_NOC_ARCG_CONTROL, 0x1);
 
 	/* Below sequence are missing from HPG Section 3.7.
 	 * It disables GCC clks in power on sequence
@@ -983,5 +1011,6 @@ int set_glymur_hal_functions(void)
 	hal_ops.set_registers = __set_registers_glymur;
 	hal_ops.dump_noc_regs = __dump_noc_regs_glymur;
 	hal_ops.check_tensilica_in_reset = __check_tensilica_in_reset_glymur;
+	hal_ops.noc_lpi = __noc_lpi_glymur;
 	return 0;
 }
