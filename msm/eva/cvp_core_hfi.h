@@ -14,6 +14,7 @@
 #include "cvp_comm_def.h"
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
+#include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/pm_qos.h>
@@ -159,7 +160,7 @@ struct cvp_iface_q_info {
 
 #define iris_hfi_for_each_thing_reverse(__device, __thing, __thingy) \
 	iris_hfi_for_each_thing_reverse_continue(__device, __thing, __thingy, \
-			(__device)->res->__thingy##_set.count - 1)
+			(int)(__device)->res->__thingy##_set.count - 1)
 
 #define iris_hfi_for_each_thing_continue(__device, __thing, __thingy, __from) \
 	for (__thing = &(__device)->res->\
@@ -168,11 +169,13 @@ struct cvp_iface_q_info {
 			((__device)->res->__thingy##_set.count - __from); \
 		++__thing)
 
+/* Avoid indexing the table when the set is empty. */
 #define iris_hfi_for_each_thing_reverse_continue(__device, __thing, __thingy, \
 		__from) \
-	for (__thing = &(__device)->res->\
-			__thingy##_set.__thingy##_tbl[__from]; \
-		__thing >= &(__device)->res->__thingy##_set.__thingy##_tbl[0]; \
+	for (__thing = &(__device)->res->__thingy##_set.__thingy##_tbl\
+			[(int)(__from) >= 0 ? (__from) : 0]; \
+		(int)(__from) >= 0 && \
+			__thing >= &(__device)->res->__thingy##_set.__thingy##_tbl[0]; \
 		--__thing)
 
 /* Regular set helpers */
@@ -287,6 +290,8 @@ struct cvp_hal_ops {
 struct iris_hfi_device {
 	struct list_head sess_head;
 	u32 version;
+	struct completion hfi_version_completion;
+	bool hfi_version_valid;
 	u32 intr_status;
 	u64 clk_freq;
 	u32 last_packet_type;
@@ -339,10 +344,8 @@ int cvp_iris_hfi_initialize(struct cvp_hfi_ops *hdev,
 
 int load_cvp_fw_impl(struct iris_hfi_device *device);
 int unload_cvp_fw_impl(struct iris_hfi_device *device);
-#ifdef CVP_KVM_ENABLED
 int init_cvp_fw(struct iris_hfi_device *device);
 void uninit_cvp_fw(struct iris_hfi_device *device);
-#endif
 void cvp_clock_reg_print(struct iris_hfi_device *dev);
 struct msm_cvp_inst *cvp_get_inst_from_id(struct msm_cvp_core *core,
 	unsigned int session_id);

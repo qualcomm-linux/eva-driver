@@ -1992,6 +1992,7 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 	int rc = 0;
 	struct cvp_session_prop *session_prop;
 	u32 pkt_concurrency;
+	u32 arp_buf_size;
 	struct cvp_internal_buf *buf;
 	struct msm_cvp_platform_data *pdata = cvp_driver->cvp_core->platform_data;
 	uint32_t hfi_ver = pdata->hfi_ver;
@@ -2025,8 +2026,11 @@ int cvp_comm_set_arp_buffers(struct msm_cvp_inst *inst)
 			return -EINVAL;
 		}
 
-		buf = cvp_allocate_arp_bufs(inst,
-				ALIGN(ARP_CHUNK_SIZE, PAGE_SIZE) * pkt_concurrency);
+		arp_buf_size = ALIGN(ARP_CHUNK_SIZE, PAGE_SIZE) * pkt_concurrency;
+		if (arp_buf_size < ARP_MIN_BUFFER_SIZE)
+			arp_buf_size = ARP_MIN_BUFFER_SIZE;
+
+		buf = cvp_allocate_arp_bufs(inst, arp_buf_size);
 	}
 
 	if (!buf) {

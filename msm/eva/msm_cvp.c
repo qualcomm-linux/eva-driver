@@ -6,6 +6,7 @@
 
 #include "msm_cvp.h"
 #include "cvp_hfi.h"
+#include "cvp_hfi_io.h"
 #include "cvp_core_hfi.h"
 #include "msm_cvp_buf.h"
 #include "cvp_comm_def.h"
@@ -1640,6 +1641,19 @@ static int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 		switch (props->prop_data[i].prop_type) {
 		case EVA_KMD_PROP_HFI_VERSION:
 		{
+			if (inst->core->platform_data->io_registers ==
+				&cvp_nordau_io_registers &&
+				!READ_ONCE(hfi->hfi_version_valid)) {
+				rc = wait_for_completion_timeout(
+					&hfi->hfi_version_completion,
+					msecs_to_jiffies(
+						inst->core->resources.msm_cvp_hw_rsp_timeout));
+				if (!rc || !READ_ONCE(hfi->hfi_version_valid)) {
+					dprintk(CVP_ERR,
+						"Timed out waiting for firmware HFI version\n");
+					return -ETIMEDOUT;
+				}
+			}
 			props->prop_data[i].data = hfi->version;
 			break;
 		}
@@ -1657,11 +1671,30 @@ static int msm_cvp_get_sysprop(struct msm_cvp_inst *inst,
 		}
 		case EVA_KMD_PROP_SESSION_ERROR:
 		{
-			get_dma_buf(hfi->sfr.mem_data.dma_buf);
-			rc = dma_buf_fd(hfi->sfr.mem_data.dma_buf, O_RDONLY | O_CLOEXEC);
+			struct dma_buf *sfr_dmabuf;
+
+			/*
+			 * hfi->lock is the same lock iris_hfi_core_release() holds
+			 * while freeing device->sfr.mem_data (cvp_hfi.c
+			 * __interface_queues_release -> __smem_free). Without it,
+			 * a concurrent core_release can free/NULL this dma_buf
+			 * between the read and get_dma_buf(), causing a UAF.
+			 */
+			mutex_lock(&hfi->lock);
+			sfr_dmabuf = hfi->sfr.mem_data.dma_buf;
+			if (!sfr_dmabuf) {
+				mutex_unlock(&hfi->lock);
+				dprintk(CVP_WARN, "SFR dma_buf unavailable\n");
+				rc = -ENODEV;
+				break;
+			}
+			get_dma_buf(sfr_dmabuf);
+			mutex_unlock(&hfi->lock);
+
+			rc = dma_buf_fd(sfr_dmabuf, O_RDONLY | O_CLOEXEC);
 			if (rc < 0) {
 				dprintk(CVP_WARN, "Failed get dma_buf fd %d\n", rc);
-				dma_buf_put(hfi->sfr.mem_data.dma_buf);
+				dma_buf_put(sfr_dmabuf);
 				break;
 			}
 

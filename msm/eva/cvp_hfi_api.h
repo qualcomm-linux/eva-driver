@@ -294,11 +294,9 @@ typedef void (*msm_cvp_callback) (enum hal_command_response response,
 			void *callback);
 struct msm_cvp_fw {
 	int cookie;
-#ifdef CVP_KVM_ENABLED
 	struct device *dev;
 	struct qcom_scm_pas_context *ctx;
 	struct iommu_domain *iommu_domain;
-#endif
 };
 
 int cvp_hfi_process_msg_packet(u32 device_id,

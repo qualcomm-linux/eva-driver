@@ -6,6 +6,7 @@
 
 
 #include "cvp_hawi_hal.h"
+#include "cvp_hawi_io.h"
 
 extern struct cvp_hal_ops hal_ops;
 

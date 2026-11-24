@@ -38,6 +38,7 @@
 #include "target/cvp_pakala_hal.h"
 #include "target/cvp_glymur_hal.h"
 #include "target/cvp_hawi_hal.h"
+#include "target/cvp_nordau_hal.h"
 #include "cvp_comm_def.h"
 
 #define CLASS_NAME              "cvp"
@@ -293,6 +294,7 @@ static struct attribute_group msm_cvp_core_attr_group = {
 static const struct of_device_id msm_cvp_plat_match[] = {
 	{.compatible = "qcom,kaanapali-eva"},
 	{.compatible = "qcom,glymur-eva"},
+	{.compatible = "qcom,nordau-eva"},
 	#ifdef CVP_DSP_ENABLED
 	{.compatible = "qcom,msm-cvp,mem-cdsp"},
 	#endif
@@ -327,6 +329,18 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	}
 
 	core->platform_data = cvp_get_drv_data(&pdev->dev);
+	if (!core->platform_data) {
+		dprintk(CVP_ERR, "Failed to get CVP platform data\n");
+		rc = -ENODEV;
+		goto err_core_init;
+	}
+	/* The low-power default follows the DT-selected runtime HAL. */
+	msm_cvp_fw_low_power_mode =
+		core->platform_data->hal_version != NORDAU_HAL_VER;
+	/* HFI IO selection uses the runtime platform data during initialization. */
+	mutex_lock(&cvp_driver->lock);
+	cvp_driver->cvp_core = core;
+	mutex_unlock(&cvp_driver->lock);
 	dev_set_drvdata(&pdev->dev, core);
 	rc = msm_cvp_initialize_core(pdev, core);
 	if (rc) {
@@ -396,10 +410,6 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 
 	cvp_synx_ftbl_init(core);
 
-	mutex_lock(&cvp_driver->lock);
-	cvp_driver->cvp_core = core;
-	mutex_unlock(&cvp_driver->lock);
-
 	cvp_driver->debugfs_root = msm_cvp_debugfs_init_drv();
 	if (!cvp_driver->debugfs_root)
 		dprintk(CVP_ERR, "Failed to create debugfs for msm_cvp\n");
@@ -462,20 +472,22 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	} else {
 		dprintk(CVP_DSP, "DSP interface not enabled\n");
 	}
+	dprintk(CVP_DBG, "%s: hal_version %d\n", __func__,
+		core->platform_data->hal_version);
 
 	if (core->platform_data->hal_version == DEFAULT_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using default");
 		set_pakala_hal_functions();
 	} else if (core->platform_data->hal_version == KNP_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using knp");
 		set_kaanapali_hal_functions();
 	} else if (core->platform_data->hal_version == GLYMUR_HAL_VER) {
         set_glymur_hal_functions();
 	} else if (core->platform_data->hal_version == HAWI_HAL_VER) {
-		dprintk(CVP_DBG, "%s: using hawi");
 		set_hawi_hal_functions();
+	} else if (core->platform_data->hal_version == NORDAU_HAL_VER) {
+		set_nordau_hal_functions();
 	} else {
-		dprintk(CVP_ERR, "Invalid hal_version %d\n", core->platform_data->hal_version);
+		dprintk(CVP_ERR, "Invalid hal_version %d\n",
+			core->platform_data->hal_version);
 		rc = -EINVAL;
 	}
 
@@ -501,6 +513,10 @@ err_class_create:
 err_alloc_chrdev:
 	sysfs_remove_group(&pdev->dev.kobj, &msm_cvp_core_attr_group);
 err_core_init:
+	mutex_lock(&cvp_driver->lock);
+	if (cvp_driver->cvp_core == core)
+		cvp_driver->cvp_core = NULL;
+	mutex_unlock(&cvp_driver->lock);
 	dev_set_drvdata(&pdev->dev, NULL);
 	kfree(core);
 	return rc;
@@ -574,6 +590,10 @@ static int msm_cvp_remove(struct platform_device *pdev)
 	mutex_destroy(&core->idr_lock);
 	mutex_destroy(&core->lock);
 	mutex_destroy(&core->clk_lock);
+	mutex_lock(&cvp_driver->lock);
+	if (cvp_driver->cvp_core == core)
+		cvp_driver->cvp_core = NULL;
+	mutex_unlock(&cvp_driver->lock);
 	kfree(core);
 exit:
 #if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE

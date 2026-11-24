@@ -194,6 +194,8 @@ enum cvp_status cvp_hfi_process_sys_init_done_prop_read(
 	enum cvp_status status = CVP_ERR_NONE;
 	u32 rem_bytes, num_properties;
 	u8 *data_ptr;
+	struct msm_cvp_core *core;
+	bool nordau;
 
 	if (!pkt || !sys_init_done) {
 		dprintk(CVP_ERR,
@@ -218,9 +220,32 @@ enum cvp_status cvp_hfi_process_sys_init_done_prop_read(
 
 	data_ptr = (u8 *) &pkt->rg_property_data[0];
 	num_properties = pkt->num_properties;
+	core = cvp_driver ? cvp_driver->cvp_core : NULL;
+	nordau = core && core->platform_data &&
+		core->platform_data->io_registers == &cvp_nordau_io_registers;
 	dprintk(CVP_HFI,
 		"%s: data_start %pK, num_properties %#x\n",
 		__func__, data_ptr, num_properties);
+
+	if (nordau && num_properties &&
+		rem_bytes >= (2 * sizeof(u32)) &&
+		pkt->rg_property_data[0] == HFI_PROPERTY_SYS_HFI_VERSION) {
+		struct iris_hfi_device *hfi;
+
+		if (!core || !core->dev_ops || !core->dev_ops->hfi_device_data) {
+			dprintk(CVP_ERR, "%s: HFI device unavailable\n", __func__);
+			return CVP_ERR_FAIL;
+		}
+
+		hfi = core->dev_ops->hfi_device_data;
+		WRITE_ONCE(hfi->version, pkt->rg_property_data[1]);
+		WRITE_ONCE(hfi->hfi_version_valid, true);
+		complete_all(&hfi->hfi_version_completion);
+		dprintk(CVP_HFI, "Firmware HFI version %#x\n", hfi->version);
+	} else if (nordau) {
+		dprintk(CVP_WARN,
+			"%s: HFI version missing from SYS_INIT_DONE\n", __func__);
+	}
 
 	sys_init_done->capabilities = NULL;
 	return status;
